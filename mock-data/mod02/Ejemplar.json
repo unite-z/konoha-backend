@@ -1,1 +1,92 @@
-[]
+[
+  {
+    "id": 1,
+    "codigo": "EJ-00412",
+    "codigo_placa_antigua": null,
+    "especie_id": 1,
+    "origen": "Nativa",
+    "area_verde_id": 10,
+    "lugar_id": 10,
+    "cuartel_id": null,
+    "ubicacion": {
+      "type": "Point",
+      "coordinates": [
+        -77.0759,
+        -12.0669
+      ]
+    },
+    "altura_total_m": 18.0,
+    "altura_fuste_m": 6.5,
+    "dap_cm": 95.0,
+    "radio_copa_m": 7.0,
+    "estado_salud": "Bueno",
+    "estado_sanitario": "Estable / sin afectación registrada",
+    "situacion": "Activo",
+    "ejemplar_reemplazado_id": null,
+    "fecha_registro": "2026-02-10",
+    "fecha_creacion": "2026-02-10T09:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-02-10T09:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 2,
+    "codigo": "EJ-00105",
+    "codigo_placa_antigua": null,
+    "especie_id": 2,
+    "origen": "Introducida",
+    "area_verde_id": 1,
+    "lugar_id": 1,
+    "cuartel_id": 1,
+    "ubicacion": {
+      "type": "Point",
+      "coordinates": [
+        -77.0813,
+        -12.0714
+      ]
+    },
+    "altura_total_m": 4.5,
+    "altura_fuste_m": 3.0,
+    "dap_cm": 35.0,
+    "radio_copa_m": 2.5,
+    "estado_salud": "Bueno",
+    "estado_sanitario": "Estable / sin afectación registrada",
+    "situacion": "Activo",
+    "ejemplar_reemplazado_id": null,
+    "fecha_registro": "2026-02-10",
+    "fecha_creacion": "2026-02-10T09:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-02-10T09:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 3,
+    "codigo": "EJ-00733",
+    "codigo_placa_antigua": null,
+    "especie_id": 2,
+    "origen": "Introducida",
+    "area_verde_id": null,
+    "lugar_id": null,
+    "cuartel_id": null,
+    "ubicacion": {
+      "type": "Point",
+      "coordinates": [
+        -77.0754,
+        -12.0665
+      ]
+    },
+    "altura_total_m": 3.8,
+    "altura_fuste_m": 2.5,
+    "dap_cm": 28.0,
+    "radio_copa_m": 2.0,
+    "estado_salud": "Bueno",
+    "estado_sanitario": "Estable / sin afectación registrada",
+    "situacion": "Activo",
+    "ejemplar_reemplazado_id": null,
+    "fecha_registro": "2026-02-10",
+    "fecha_creacion": "2026-02-10T09:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-02-10T09:00:00-05:00",
+    "usuario_modificacion_id": 1
+  }
+]

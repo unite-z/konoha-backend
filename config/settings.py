@@ -112,11 +112,28 @@ REST_FRAMEWORK = {
     # del MOD-01 (RF-T-001, RF-T-004, RNF-007).
     "DEFAULT_AUTHENTICATION_CLASSES": [],
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
+    "EXCEPTION_HANDLER": "reportes_indicadores.api.manejador_excepciones.manejar_excepcion",
 }
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "API MOD-06 Reportes, indicadores e IA",
+    "DESCRIPTION": (
+        "API del MOD-06: RF-REP-002, RF-REP-004, RF-REP-006 y RF-IA-001. Las consultas no modifican registros "
+        "operativos. Las propuestas de IA requieren validación humana (RN-IA-001)"
+    ),
     "VERSION": "0.1.0",
+}
+
+
+# --- Logging ------------------------------------------------------------------
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {"consola": {"class": "logging.StreamHandler"}},
+    "loggers": {
+        "reportes_indicadores": {"handlers": ["consola"], "level": "INFO"},
+    },
 }
 
 

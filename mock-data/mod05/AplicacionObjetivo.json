@@ -1,1 +1,52 @@
-[]
+[
+  {
+    "id": 1,
+    "aplicacion_id": 1,
+    "area_verde_id": 4,
+    "ejemplar_id": null,
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 2,
+    "aplicacion_id": 1,
+    "area_verde_id": 5,
+    "ejemplar_id": null,
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 3,
+    "aplicacion_id": 1,
+    "area_verde_id": 6,
+    "ejemplar_id": null,
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 4,
+    "aplicacion_id": 2,
+    "area_verde_id": 2,
+    "ejemplar_id": null,
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 5,
+    "aplicacion_id": 2,
+    "area_verde_id": null,
+    "ejemplar_id": 2,
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  }
+]

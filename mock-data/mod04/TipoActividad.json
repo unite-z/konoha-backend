@@ -1,1 +1,317 @@
-[]
+[
+  {
+    "id": 1,
+    "clase_id": 1,
+    "nombre": "Preparación del terreno",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 2,
+    "clase_id": 1,
+    "nombre": "Incorporación de sustrato",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 3,
+    "clase_id": 1,
+    "nombre": "Instalación de plantas",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 4,
+    "clase_id": 1,
+    "nombre": "Instalación de césped",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 5,
+    "clase_id": 1,
+    "nombre": "Colocación de cobertura ornamental",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 6,
+    "clase_id": 1,
+    "nombre": "Instalación de tutores",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 7,
+    "clase_id": 2,
+    "nombre": "Reposición de plantas",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 8,
+    "clase_id": 2,
+    "nombre": "Recuperación de áreas verdes",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 9,
+    "clase_id": 2,
+    "nombre": "Renovación de jardineras",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 10,
+    "clase_id": 2,
+    "nombre": "Mejoramiento del suelo",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 11,
+    "clase_id": 2,
+    "nombre": "Renovación de cobertura ornamental",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 12,
+    "clase_id": 2,
+    "nombre": "Resiembra",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 13,
+    "clase_id": 2,
+    "nombre": "Reubicación de macetas",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 14,
+    "clase_id": 3,
+    "nombre": "Canteo",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 15,
+    "clase_id": 3,
+    "nombre": "Deshierbo",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 16,
+    "clase_id": 3,
+    "nombre": "Escarda",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 17,
+    "clase_id": 3,
+    "nombre": "Limpieza de hojarasca",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 18,
+    "clase_id": 3,
+    "nombre": "Limpieza de plantas",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 19,
+    "clase_id": 3,
+    "nombre": "Aireación del suelo",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 20,
+    "clase_id": 3,
+    "nombre": "Limpieza integral de jardineras",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 21,
+    "clase_id": 3,
+    "nombre": "Fertilización",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 22,
+    "clase_id": 3,
+    "nombre": "Aplicación de enmiendas",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 23,
+    "clase_id": 3,
+    "nombre": "Traslado de macetas",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 24,
+    "clase_id": 4,
+    "nombre": "Poda de mantenimiento",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 25,
+    "clase_id": 4,
+    "nombre": "Poda de formación",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 26,
+    "clase_id": 4,
+    "nombre": "Poda sanitaria",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 27,
+    "clase_id": 4,
+    "nombre": "Poda de despeje/reducción",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 28,
+    "clase_id": 5,
+    "nombre": "Propagación por división de matas",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 29,
+    "clase_id": 5,
+    "nombre": "Propagación por esquejes",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 30,
+    "clase_id": 5,
+    "nombre": "Trasplante",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 31,
+    "clase_id": 5,
+    "nombre": "Siembra de plantas",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 32,
+    "clase_id": 5,
+    "nombre": "Plantación de árboles",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 33,
+    "clase_id": 5,
+    "nombre": "Plantación de arbustos",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 34,
+    "clase_id": 5,
+    "nombre": "Plantación de cubresuelos",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 35,
+    "clase_id": 5,
+    "nombre": "Plantación en macetas",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 36,
+    "clase_id": 5,
+    "nombre": "Trasplante a macetas",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 37,
+    "clase_id": 5,
+    "nombre": "Cambio de maceta",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 38,
+    "clase_id": 6,
+    "nombre": "Riego manual",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 39,
+    "clase_id": 6,
+    "nombre": "Riego nocturno",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 40,
+    "clase_id": 6,
+    "nombre": "Riego de establecimiento",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 41,
+    "clase_id": 6,
+    "nombre": "Verificación del sistema de riego",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 42,
+    "clase_id": 8,
+    "nombre": "Recolección de hojarasca",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 43,
+    "clase_id": 8,
+    "nombre": "Recolección de ramas",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 44,
+    "clase_id": 8,
+    "nombre": "Triturado de residuos",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 45,
+    "clase_id": 8,
+    "nombre": "Disposición o aprovechamiento de residuos",
+    "descripcion": null,
+    "activo": true
+  }
+]

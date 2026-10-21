@@ -1,1 +1,162 @@
-[]
+[
+  {
+    "id": 1,
+    "nombre": "Tontódromo",
+    "referencia": null,
+    "ubicacion": {
+      "type": "Point",
+      "coordinates": [
+        -77.0814,
+        -12.0715
+      ]
+    },
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 2,
+    "nombre": "Educación",
+    "referencia": null,
+    "ubicacion": {
+      "type": "Point",
+      "coordinates": [
+        -77.0808,
+        -12.071
+      ]
+    },
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 3,
+    "nombre": "Arte Antiguo",
+    "referencia": null,
+    "ubicacion": {
+      "type": "Point",
+      "coordinates": [
+        -77.0802,
+        -12.0705
+      ]
+    },
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 4,
+    "nombre": "Biblioteca Central",
+    "referencia": null,
+    "ubicacion": {
+      "type": "Point",
+      "coordinates": [
+        -77.0796,
+        -12.07
+      ]
+    },
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 5,
+    "nombre": "Jardín Comedor Central",
+    "referencia": null,
+    "ubicacion": {
+      "type": "Point",
+      "coordinates": [
+        -77.079,
+        -12.0695
+      ]
+    },
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 6,
+    "nombre": "Psicología",
+    "referencia": null,
+    "ubicacion": {
+      "type": "Point",
+      "coordinates": [
+        -77.0784,
+        -12.069
+      ]
+    },
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 7,
+    "nombre": "Cedares",
+    "referencia": null,
+    "ubicacion": {
+      "type": "Point",
+      "coordinates": [
+        -77.0778,
+        -12.0685
+      ]
+    },
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 8,
+    "nombre": "OCAI",
+    "referencia": null,
+    "ubicacion": {
+      "type": "Point",
+      "coordinates": [
+        -77.0772,
+        -12.068
+      ]
+    },
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 9,
+    "nombre": "Mac Gregor",
+    "referencia": null,
+    "ubicacion": {
+      "type": "Point",
+      "coordinates": [
+        -77.0766,
+        -12.0675
+      ]
+    },
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 10,
+    "nombre": "Bosque Húmedo",
+    "referencia": null,
+    "ubicacion": {
+      "type": "Point",
+      "coordinates": [
+        -77.076,
+        -12.067
+      ]
+    },
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  }
+]

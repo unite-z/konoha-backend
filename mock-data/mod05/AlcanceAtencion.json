@@ -1,1 +1,146 @@
-[]
+[
+  {
+    "id": 1,
+    "atencion_id": 1,
+    "area_verde_id": 10,
+    "ejemplar_id": null,
+    "metrado": null,
+    "unidad_medida_id": null,
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 2,
+    "atencion_id": 1,
+    "area_verde_id": null,
+    "ejemplar_id": 1,
+    "metrado": null,
+    "unidad_medida_id": null,
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 3,
+    "atencion_id": 2,
+    "area_verde_id": 7,
+    "ejemplar_id": null,
+    "metrado": null,
+    "unidad_medida_id": null,
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 4,
+    "atencion_id": 3,
+    "area_verde_id": 4,
+    "ejemplar_id": null,
+    "metrado": null,
+    "unidad_medida_id": null,
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 5,
+    "atencion_id": 3,
+    "area_verde_id": 5,
+    "ejemplar_id": null,
+    "metrado": null,
+    "unidad_medida_id": null,
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 6,
+    "atencion_id": 3,
+    "area_verde_id": 6,
+    "ejemplar_id": null,
+    "metrado": null,
+    "unidad_medida_id": null,
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 7,
+    "atencion_id": 4,
+    "area_verde_id": 7,
+    "ejemplar_id": null,
+    "metrado": null,
+    "unidad_medida_id": null,
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 8,
+    "atencion_id": 4,
+    "area_verde_id": 8,
+    "ejemplar_id": null,
+    "metrado": null,
+    "unidad_medida_id": null,
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 9,
+    "atencion_id": 5,
+    "area_verde_id": 1,
+    "ejemplar_id": null,
+    "metrado": null,
+    "unidad_medida_id": null,
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 10,
+    "atencion_id": 5,
+    "area_verde_id": 4,
+    "ejemplar_id": null,
+    "metrado": null,
+    "unidad_medida_id": null,
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 11,
+    "atencion_id": 5,
+    "area_verde_id": 7,
+    "ejemplar_id": null,
+    "metrado": null,
+    "unidad_medida_id": null,
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 12,
+    "atencion_id": 6,
+    "area_verde_id": 9,
+    "ejemplar_id": null,
+    "metrado": null,
+    "unidad_medida_id": null,
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  }
+]

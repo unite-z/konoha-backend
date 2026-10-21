@@ -1,1 +1,30 @@
-[]
+[
+  {
+    "id": 1,
+    "nombre_original": "informe-fitosanitario-ejemplo.pdf",
+    "tipo_mime": "application/pdf",
+    "tamano_bytes": null,
+    "ruta_almacenamiento": "archivos/informe-fitosanitario-ejemplo.pdf",
+    "hash_contenido": null,
+    "comprimido": false,
+    "fecha_captura": null,
+    "fecha_creacion": "2026-10-12T10:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-10-12T10:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 2,
+    "nombre_original": "informe-corte-cesped-ejemplo.pdf",
+    "tipo_mime": "application/pdf",
+    "tamano_bytes": null,
+    "ruta_almacenamiento": "archivos/informe-corte-cesped-ejemplo.pdf",
+    "hash_contenido": null,
+    "comprimido": false,
+    "fecha_captura": null,
+    "fecha_creacion": "2026-10-05T10:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-10-05T10:00:00-05:00",
+    "usuario_modificacion_id": 1
+  }
+]

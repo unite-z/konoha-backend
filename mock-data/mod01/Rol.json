@@ -1,0 +1,32 @@
+[
+  {
+    "id": 1,
+    "nombre": "Jefe de sección",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 2,
+    "nombre": "Ingeniero de campo",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 3,
+    "nombre": "Practicante",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 4,
+    "nombre": "Capataz",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 5,
+    "nombre": "Operario",
+    "descripcion": "Previsto, sin acceso en la primera fase",
+    "activo": false
+  }
+]

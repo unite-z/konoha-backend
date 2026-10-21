@@ -2,9 +2,11 @@
 
 Datos simulados (mock) que usa el back-end cuando `DATA_SOURCE=mock` en `backend/.env`. El front-end nunca lee estos archivos: siempre consulta la API.
 
+Datos de ejemplo coherentes con los documentos del equipo; no son datos reales de operación.
+
 ## Reglas de formato
 
-- **Un archivo por entidad**, con el nombre **exacto** de la entidad del Modelo de BD v1 (PascalCase, sin tildes) y extensión `.json`. Cada archivo es un **arreglo JSON**. Por ahora todos contienen `[]`: los datos se cargarán después.
+- **Un archivo por entidad**, con el nombre **exacto** de la entidad del Modelo de BD v1 (PascalCase, sin tildes) y extensión `.json`. Cada archivo es un **arreglo JSON**.
 - La subcarpeta indica el **módulo propietario** de la entidad según el Modelo de BD v1 (tabla 2).
 - Atributos en `snake_case`, **exactamente** como en el diccionario de datos.
 - Tipos:
@@ -17,15 +19,36 @@ Datos simulados (mock) que usa el back-end cuando `DATA_SOURCE=mock` en `backend
   - JSON → objeto.
   - Geometría → objeto GeoJSON con el orden **longitud, latitud** en SRID 4326 (por ejemplo `{"type": "Point", "coordinates": [-77.0796, -12.0672]}`).
 - Valores de enumerados: el texto exacto de la tabla 6 del Modelo de BD v1 (por ejemplo `"En corte"`, `"Conforme / cerrado"`, `"PersonalPropio"`).
-- Entidades de negocio: incluyen además `fecha_creacion`, `usuario_creacion_id`, `fecha_modificacion` y `usuario_modificacion_id`. Los catálogos (TipoServicio, ClaseActividad, TipoActividad, UnidadMedida, Plaga, ProductoAgronomico, SectorMantenimiento, DefinicionIndicador) y las tablas de asociación (ParticipacionActividad) no los llevan.
+- Entidades de negocio: incluyen además `fecha_creacion`, `usuario_creacion_id`, `fecha_modificacion` y `usuario_modificacion_id`. Los catálogos (Rol, TipoServicio, ClaseActividad, TipoActividad, UnidadMedida, Plaga, ProductoAgronomico, SectorMantenimiento, DefinicionIndicador) y las tablas de asociación (ParticipacionActividad) no los llevan.
 - Ningún dato personal real. `Usuario.credencial_hash` siempre vacío en los mocks.
 - Los informes de proveedor de prueba (PDF) van en `archivos/`.
+- `SugerenciaIA.json` y `ReporteGenerado.json` son las únicas entidades que escribe el back-end del MOD-06. `SugerenciaIA.json` empieza en `[]`; para volver al estado inicial, deja el archivo otra vez en `[]`.
+
+## Notas sobre los datos de ejemplo
+
+- **Entidades que no se cargan en este corte** (sus ids aparecen como claves foráneas sin archivo): TipoUso, TipoCobertura, Especie, UnidadInstitucional, Incidencia, Encargo, CampanaPoda y TipoIntervencion. Esas claves van en `null`, salvo:
+  - `AreaVerde.tipo_uso_id`: valores 1 a 4 (1 recreativo, 2 institucional, 3 ornamental, 4 deportivo);
+  - `Ejemplar.especie_id`: 1 (*Ceiba speciosa*) y 2 (*Roystonea regia*).
+- **Plaga** y **ProductoAgronomico** quedan en `[]`: los documentos no dan nombres de ejemplo.
+- **TipoServicio:** `es_periodico`, `es_ruidoso` y `es_riesgo` toman los valores que dan los documentos (Corte de césped periódico y ruidoso; Control fitosanitario y Poda mayor programada periódicos; Poda de altura a demanda no periódica y de riesgo). Donde el documento no indica nada, el valor es `false`.
+- **Contrato:** datos económicos en `null` (RI-34); `modalidad: "Tarifario"` solo como valor de ejemplo.
+- **Ciclo 8** (`"Programado"`, sin `fecha_inicio_real`): su programación tiene `fecha_inicio_prevista` 2026-11-09, fuera del rango 01/01–20/10/2026, porque un ciclo programado y no iniciado es, por definición, futuro.
+- **Apoyo eventual (excepción intencional a RI-21):** el Operario 10 (Cuadrilla 2) participa el 14/10/2026 en una actividad de la Cuadrilla 1 (CU-MOD04-011 1a).
+- **RF-IA-001:** el PDF del informe no se incluye (no hay informe real de proveedor; pendiente con la contraparte). Coloca en `mock-data/archivos/` un informe de proveedor en PDF con el nombre `informe-fitosanitario-ejemplo.pdf` para probar RF-IA-001 de forma manual.
+
+## Escenarios de prueba
+
+- **RF-REP-002 (CP-TR-MOD06-009):** ciclos 1 (sin ciclo anterior), 2 (28 días, dentro), 3 (38 días, tolerado), 4 (53 días, fuera de frecuencia), 5 (4 días de corte y 2 de limpieza, excede el máximo), 6 (Primavera, límite no configurado), 7 (`"En corte"`, sin fecha de fin de corte) y 8 (`"Programado"`, no evaluable). No hay FrecuenciaServicio de Primavera a propósito.
+- **RF-REP-004:** partes del 13 al 17/10/2026; la Cuadrilla 3 no tiene parte el 15/10 («Sin parte aún»); el Operario 03 participa en dos actividades el 13/10; la actividad de la Cuadrilla 2 del 17/10 no tiene `tiempo_minutos`.
+- **RF-REP-006 (CP-TR-MOD06-014):** AT-2026-031 (poda de altura en Bosque Húmedo, sin sector) con alcance por área y por ejemplar que apuntan a la misma área (cuenta 1); AT-2026-032 en `"OC referenciada"` (no cuenta); aplicación fitosanitaria 1 vinculada a AT-2026-033 (no se duplica) y aplicación 2 sin atención (cuenta por sí misma); poda menor con actividad (no se duplica), poda de altura con atención (no se duplica) y poda menor sobre el ejemplar EJ-00733 sin área («Sin espacio»).
+- **RF-IA-001 (CP-TR-MOD06-010):** ReporteProveedor 1 (control fitosanitario, formato vigente, PDF), 2 (corte de césped, sin formato vigente → 422) y 3 (sin informe adjunto → 404).
 
 ## Entidades y atributos
 
 ### mod01
 
 - **Usuario:** id, nombre_usuario, correo, credencial_hash, rol_id, personal_id, activo, ultimo_acceso
+- **Rol:** id, nombre, descripcion, activo (Jefe de sección, Ingeniero de campo, Practicante, Capataz y Operario; este último con `activo: false`, «previsto, sin acceso en la primera fase»)
 
 ### mod02
 

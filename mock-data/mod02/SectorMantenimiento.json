@@ -1,1 +1,23 @@
-[]
+[
+  {
+    "id": 1,
+    "nombre": "Sector 1",
+    "descripcion": null,
+    "atencion_a_demanda": false,
+    "activo": true
+  },
+  {
+    "id": 2,
+    "nombre": "Sector 2",
+    "descripcion": null,
+    "atencion_a_demanda": false,
+    "activo": true
+  },
+  {
+    "id": 3,
+    "nombre": "Sector 3",
+    "descripcion": null,
+    "atencion_a_demanda": false,
+    "activo": true
+  }
+]

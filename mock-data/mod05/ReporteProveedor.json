@@ -1,1 +1,41 @@
-[]
+[
+  {
+    "id": 1,
+    "atencion_id": 4,
+    "revision": 1,
+    "fecha_recepcion": "2026-10-12",
+    "metrado_reportado": null,
+    "unidad_medida_id": null,
+    "resumen": null,
+    "fecha_creacion": "2026-10-12T10:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-10-12T10:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 2,
+    "atencion_id": 5,
+    "revision": 1,
+    "fecha_recepcion": "2026-10-05",
+    "metrado_reportado": null,
+    "unidad_medida_id": null,
+    "resumen": null,
+    "fecha_creacion": "2026-10-05T10:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-10-05T10:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 3,
+    "atencion_id": 6,
+    "revision": 1,
+    "fecha_recepcion": "2026-10-19",
+    "metrado_reportado": null,
+    "unidad_medida_id": null,
+    "resumen": null,
+    "fecha_creacion": "2026-10-19T10:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-10-19T10:00:00-05:00",
+    "usuario_modificacion_id": 1
+  }
+]

@@ -1,1 +1,12 @@
-[]
+[
+  {
+    "id": 1,
+    "nombre": "Ruta de jardines 2026",
+    "descripcion": null,
+    "vigente": true,
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  }
+]

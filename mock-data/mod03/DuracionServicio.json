@@ -1,1 +1,14 @@
-[]
+[
+  {
+    "id": 1,
+    "tipo_servicio_id": 1,
+    "duracion_maxima_dias": 3,
+    "dias_limpieza": 1,
+    "hora_inicio": null,
+    "hora_fin": null,
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  }
+]

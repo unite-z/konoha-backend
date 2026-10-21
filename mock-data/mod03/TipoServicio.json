@@ -1,1 +1,56 @@
-[]
+[
+  {
+    "id": 1,
+    "nombre": "Corte de césped",
+    "ejecutor": "Tercerizado",
+    "es_periodico": true,
+    "es_ruidoso": true,
+    "es_riesgo": false,
+    "activo": true
+  },
+  {
+    "id": 2,
+    "nombre": "Control fitosanitario",
+    "ejecutor": "Tercerizado",
+    "es_periodico": true,
+    "es_ruidoso": false,
+    "es_riesgo": false,
+    "activo": true
+  },
+  {
+    "id": 3,
+    "nombre": "Poda mayor programada",
+    "ejecutor": "Tercerizado",
+    "es_periodico": true,
+    "es_ruidoso": false,
+    "es_riesgo": false,
+    "activo": true
+  },
+  {
+    "id": 4,
+    "nombre": "Poda de altura a demanda",
+    "ejecutor": "Tercerizado",
+    "es_periodico": false,
+    "es_ruidoso": false,
+    "es_riesgo": true,
+    "activo": true
+  },
+  {
+    "id": 5,
+    "nombre": "Mantenimiento de jardines",
+    "ejecutor": "PersonalPropio",
+    "es_periodico": false,
+    "es_ruidoso": false,
+    "es_riesgo": false,
+    "activo": true
+  },
+  {
+    "id": 6,
+    "nombre": "Poda menor",
+    "ejecutor": "PersonalPropio",
+    "es_periodico": false,
+    "es_ruidoso": false,
+    "es_riesgo": false,
+    "activo": true
+  }
+]

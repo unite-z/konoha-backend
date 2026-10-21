@@ -1,1 +1,17 @@
-[]
+[
+  {
+    "id": 1,
+    "simbolo": "und",
+    "nombre": "Unidad"
+  },
+  {
+    "id": 2,
+    "simbolo": "m",
+    "nombre": "Metro"
+  },
+  {
+    "id": 3,
+    "simbolo": "m2",
+    "nombre": "Metro cuadrado"
+  }
+]

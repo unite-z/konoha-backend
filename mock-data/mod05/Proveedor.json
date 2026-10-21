@@ -1,1 +1,30 @@
-[]
+[
+  {
+    "id": 1,
+    "razon_social": "Terraverde Ingenieros SAC",
+    "ruc": null,
+    "proveedor_principal_id": null,
+    "contacto": null,
+    "telefono": null,
+    "correo": null,
+    "activo": true,
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 2,
+    "razon_social": "Cruz Verde Fumigación y Limpieza Industrial S.A.",
+    "ruc": null,
+    "proveedor_principal_id": null,
+    "contacto": null,
+    "telefono": null,
+    "correo": null,
+    "activo": true,
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  }
+]

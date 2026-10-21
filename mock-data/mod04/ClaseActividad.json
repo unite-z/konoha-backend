@@ -1,1 +1,56 @@
-[]
+[
+  {
+    "id": 1,
+    "nombre": "Habilitación de jardines",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 2,
+    "nombre": "Rehabilitación y rediseño de jardines",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 3,
+    "nombre": "Mantenimiento de jardines",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 4,
+    "nombre": "Poda",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 5,
+    "nombre": "Propagación y plantación",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 6,
+    "nombre": "Riego",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 7,
+    "nombre": "Manejo fitosanitario",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 8,
+    "nombre": "Manejo de residuos vegetales",
+    "descripcion": null,
+    "activo": true
+  },
+  {
+    "id": 9,
+    "nombre": "Inspección y monitoreo",
+    "descripcion": null,
+    "activo": true
+  }
+]

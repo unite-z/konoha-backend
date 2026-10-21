@@ -1,1 +1,86 @@
-[]
+[
+  {
+    "id": 1,
+    "nombre_usuario": "jefe.seccion",
+    "correo": "jefe.seccion@example.org",
+    "credencial_hash": "",
+    "rol_id": 1,
+    "personal_id": 1,
+    "activo": true,
+    "ultimo_acceso": null,
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 2,
+    "nombre_usuario": "ingeniero.campo",
+    "correo": "ingeniero.campo@example.org",
+    "credencial_hash": "",
+    "rol_id": 2,
+    "personal_id": null,
+    "activo": true,
+    "ultimo_acceso": null,
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 3,
+    "nombre_usuario": "practicante",
+    "correo": "practicante@example.org",
+    "credencial_hash": "",
+    "rol_id": 3,
+    "personal_id": null,
+    "activo": true,
+    "ultimo_acceso": null,
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 4,
+    "nombre_usuario": "capataz.andres",
+    "correo": "capataz.andres@example.org",
+    "credencial_hash": "",
+    "rol_id": 4,
+    "personal_id": 2,
+    "activo": true,
+    "ultimo_acceso": null,
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 5,
+    "nombre_usuario": "capataz.oscar",
+    "correo": "capataz.oscar@example.org",
+    "credencial_hash": "",
+    "rol_id": 4,
+    "personal_id": 3,
+    "activo": true,
+    "ultimo_acceso": null,
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 6,
+    "nombre_usuario": "capataz.alfonso",
+    "correo": "capataz.alfonso@example.org",
+    "credencial_hash": "",
+    "rol_id": 4,
+    "personal_id": 4,
+    "activo": true,
+    "ultimo_acceso": null,
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  }
+]

@@ -1,1 +1,32 @@
-[]
+[
+  {
+    "id": 1,
+    "programacion_id": 9,
+    "atencion_id": 3,
+    "tipo": "Estacional",
+    "estacion": "Primavera",
+    "fecha": "2026-09-24",
+    "hora_inicio": "07:00",
+    "hora_fin": "13:00",
+    "observaciones": null,
+    "fecha_creacion": "2026-09-24T13:30:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-09-24T13:30:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 2,
+    "programacion_id": 9,
+    "atencion_id": null,
+    "tipo": "PorObservacion",
+    "estacion": "Primavera",
+    "fecha": "2026-10-05",
+    "hora_inicio": "07:30",
+    "hora_fin": "10:00",
+    "observaciones": null,
+    "fecha_creacion": "2026-10-05T10:30:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-10-05T10:30:00-05:00",
+    "usuario_modificacion_id": 1
+  }
+]

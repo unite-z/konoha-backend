@@ -1,1 +1,20 @@
-[]
+[
+  {
+    "id": 1,
+    "codigo": "RF-REP-002",
+    "nombre": "Cumplimiento del corte de césped",
+    "descripcion_calculo": "Por cada ciclo con fecha de inicio real en el periodo: días naturales desde el inicio del ciclo anterior frente a la frecuencia práctica y máxima de la estación (dentro, tolerado o fuera de frecuencia), y días de corte (fin de corte − inicio + 1) y de limpieza frente a la duración máxima y los días de limpieza configurados. Sin fechas o límites no se calcula el cumplimiento.",
+    "meta": null,
+    "unidad": "días",
+    "activo": true
+  },
+  {
+    "id": 2,
+    "codigo": "RF-REP-006",
+    "nombre": "Atenciones por espacio y sector",
+    "descripcion_calculo": "Número de atenciones realizadas en el periodo por sector, espacio y cuartel (si está registrado). Cuentan las actividades de personal propio, las atenciones tercerizadas ejecutadas (por cada área de su alcance), las aplicaciones fitosanitarias sin atención y las podas no registradas por otro origen. Cada evento se cuenta una sola vez por área.",
+    "meta": null,
+    "unidad": "atenciones",
+    "activo": true
+  }
+]

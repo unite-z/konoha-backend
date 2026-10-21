@@ -1,1 +1,32 @@
-[]
+[
+  {
+    "id": 1,
+    "nombre": "Cuadrilla 1",
+    "capataz_id": 2,
+    "activa": true,
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 2,
+    "nombre": "Cuadrilla 2",
+    "capataz_id": 3,
+    "activa": true,
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 3,
+    "nombre": "Cuadrilla 3",
+    "capataz_id": 4,
+    "activa": true,
+    "fecha_creacion": "2026-01-02T08:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-01-02T08:00:00-05:00",
+    "usuario_modificacion_id": 1
+  }
+]
