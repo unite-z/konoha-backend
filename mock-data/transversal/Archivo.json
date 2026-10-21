@@ -3,9 +3,9 @@
     "id": 1,
     "nombre_original": "informe-fitosanitario-ejemplo.pdf",
     "tipo_mime": "application/pdf",
-    "tamano_bytes": null,
+    "tamano_bytes": 98077,
     "ruta_almacenamiento": "archivos/informe-fitosanitario-ejemplo.pdf",
-    "hash_contenido": null,
+    "hash_contenido": "4d3d391913fa169e548d6a5940ef0d9cbd752989d6a40c5595f2de8105b1c22a",
     "comprimido": false,
     "fecha_captura": null,
     "fecha_creacion": "2026-10-12T10:00:00-05:00",
@@ -25,6 +25,34 @@
     "fecha_creacion": "2026-10-05T10:00:00-05:00",
     "usuario_creacion_id": 1,
     "fecha_modificacion": "2026-10-05T10:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 3,
+    "nombre_original": "informe-fitosanitario-incompleto.pdf",
+    "tipo_mime": "application/pdf",
+    "tamano_bytes": 56826,
+    "ruta_almacenamiento": "archivos/informe-fitosanitario-incompleto.pdf",
+    "hash_contenido": "be0eed86d3e9290dbba12b1e0fabcb61e942eb3675beb325e3f1380176357fca",
+    "comprimido": false,
+    "fecha_captura": null,
+    "fecha_creacion": "2026-10-05T10:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-10-05T10:00:00-05:00",
+    "usuario_modificacion_id": 1
+  },
+  {
+    "id": 4,
+    "nombre_original": "informe-fitosanitario-extenso.pdf",
+    "tipo_mime": "application/pdf",
+    "tamano_bytes": 112932,
+    "ruta_almacenamiento": "archivos/informe-fitosanitario-extenso.pdf",
+    "hash_contenido": "36410c3046126ab6a6f7aaf595f5b384ea01ad75247d2935c89109b1942d20df",
+    "comprimido": false,
+    "fecha_captura": null,
+    "fecha_creacion": "2026-10-13T10:00:00-05:00",
+    "usuario_creacion_id": 1,
+    "fecha_modificacion": "2026-10-13T10:00:00-05:00",
     "usuario_modificacion_id": 1
   }
 ]
