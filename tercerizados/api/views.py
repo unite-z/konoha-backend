@@ -4,11 +4,13 @@ from rest_framework.generics import GenericAPIView
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
-from rest_framework.serializers import ModelSerializer
+from rest_framework.serializers import CharField, ModelSerializer
 from drf_spectacular.utils import extend_schema, OpenApiTypes
-from .. import servicios, repositorios as repo, models as m, archivos
+from django.utils import timezone
+from django.db.models import Q
+from .. import filtros as f, servicios, repositorios as repo, models as m, archivos
 from ..errores import NoEncontrado, AlmacenamientoNoDisponible
-from ..permisos import PermisoModulo
+from ..permisos import EstaAutenticado, PermisoModulo, rol_de
 from . import serializers as s
 
 
@@ -31,13 +33,28 @@ class Base(GenericAPIView):
         return self.get_paginated_response(serializer(pagina, many=True).data)
 
 
+class UsuarioActual(Base):
+    """Quién es el usuario autenticado. Sirve también para comprobar credenciales al ingresar."""
+    permission_classes = [EstaAutenticado]
+    serializer_class = s.UsuarioActualSalida
+    pagination_class = None
+
+    @extend_schema(tags=['MOD-05'], responses={200: s.UsuarioActualSalida, 403: s.ErrorSalida},
+                   description='Credenciales inválidas o ausentes responden 403. Un usuario válido sin rol del módulo recibe `rol: null`.')
+    def get(self, request):
+        usuario = request.user
+        return Response(s.UsuarioActualSalida({'id': usuario.pk, 'usuario': usuario.get_username(),
+            'nombre': s.nombre_usuario(usuario), 'rol': rol_de(usuario)}).data)
+
+
 class Atenciones(Base):
     serializer_class = s.AtencionSalida
     solo_jefe = True
 
-    @extend_schema(tags=['MOD-05'], responses=s.AtencionSalida(many=True))
+    @extend_schema(tags=['MOD-05'], responses=s.AtencionSalida(many=True),
+                   parameters=f.parametros_openapi(repo.FILTROS_ATENCIONES, repo.BUSQUEDA_ATENCIONES))
     def get(self, request):
-        return self.listado(repo.atenciones(), s.AtencionSalida)
+        return self.listado(repo.atenciones(request.query_params), s.AtencionSalida)
 
     @extend_schema(tags=['MOD-05'], request=s.CrearEntrada, responses={201: s.AtencionSalida, 400: s.ErrorSalida, 404: s.ErrorSalida})
     def post(self, request):
@@ -50,7 +67,7 @@ class AtencionDetalle(Base):
 
     @extend_schema(tags=['MOD-05'])
     def get(self, request, atencion_id):
-        return Response(s.AtencionSalida(repo.obtener(m.AtencionTercerizada, atencion_id)).data)
+        return Response(s.AtencionSalida(repo.atencion(atencion_id)).data)
 
 
 class Accion(Base):
@@ -141,15 +158,30 @@ class Descargar(Base):
         return response
 
 
+def _vigente(consulta, valor):
+    hoy = timezone.localdate()  # America/Lima
+    vigente = Q(vigencia_inicio__lte=hoy, vigencia_fin__gte=hoy)
+    return consulta.filter(vigente) if valor else consulta.exclude(vigente)
+
+
 # Consultas de selección; TODO: mantenimiento de proveedores/contratos en su módulo propietario.
-def catalogo(modelo, campos):
-    meta = type('Meta', (), {'model': modelo, 'fields': campos})
-    serializer = type(f'{modelo.__name__}Catalogo', (ModelSerializer,), {'Meta': meta})
+def catalogo(modelo, campos, *, orden=('pk',), buscar=(), filtros=(), relaciones=(), extras=None):
+    """Catálogo de solo lectura paginado, con búsqueda `q` y filtros declarados.
+
+    `extras` agrega campos de texto de solo lectura `{nombre: 'ruta.del.atributo'}` (nombres de relaciones).
+    """
+    declarados = {nombre: CharField(source=ruta, read_only=True, allow_null=True, default=None)
+                  for nombre, ruta in (extras or {}).items()}
+    meta = type('Meta', (), {'model': modelo, 'fields': [*campos, *declarados]})
+    serializer = type(f'{modelo.__name__}Catalogo', (ModelSerializer,), {'Meta': meta, **declarados})
 
     class Catalogo(Base):
         serializer_class = serializer
 
-        @extend_schema(tags=['MOD-05 Catálogos'], responses=serializer(many=True))
+        @extend_schema(tags=['MOD-05 Catálogos'], responses=serializer(many=True),
+                       parameters=f.parametros_openapi(filtros, buscar))
         def get(self, request):
-            return self.listado(modelo.objects.order_by('pk'), serializer)
+            consulta = modelo.objects.select_related(*relaciones).order_by(*orden)
+            consulta = f.filtrar(consulta, request.query_params, filtros, buscar)
+            return self.listado(consulta, serializer)
     return Catalogo.as_view()

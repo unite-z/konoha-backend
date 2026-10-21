@@ -44,6 +44,7 @@ Swagger: `/api/docs/`; esquema: `/api/schema/`. Base: `/api/tercerizados/`. List
 
 | Ruta | Método | Rol de escritura |
 |---|---|---|
+| `me/` | GET | Cualquier usuario autenticado |
 | `atenciones/` | GET, POST | Jefe |
 | `atenciones/{id}/` | GET | — |
 | `atenciones/{id}/orden-compra/` | PATCH | Jefe, ingeniero, practicante autorizado |
@@ -54,6 +55,31 @@ Swagger: `/api/docs/`; esquema: `/api/schema/`. Base: `/api/tercerizados/`. List
 | `atenciones/{id}/reportes/` | GET, POST multipart | Jefe, ingeniero, practicante autorizado |
 | `atenciones/{id}/reportes/{reporte_id}/` | GET | — |
 | `atenciones/{id}/reportes/{reporte_id}/documentos/{documento_id}/descarga/` | GET | — |
+
+### Usuario actual (`GET me/`)
+
+Devuelve `{id, usuario, nombre, rol}`. `rol` es el de mayor jerarquía entre `Jefe de sección`, `Ingeniero de campo` y `Practicante autorizado`; es `null` si el usuario es válido pero no pertenece a ninguno (no tiene acceso al resto del módulo). Credenciales ausentes o inválidas, y usuarios inactivos, responden 403. Permite a un cliente comprobar credenciales al ingresar y decidir qué acciones mostrar; el servidor sigue validando cada operación.
+
+### Filtros y búsqueda
+
+Todos los listados aceptan `page`. Los parámetros desconocidos se ignoran, un valor vacío equivale a no filtrar y un valor no válido responde 400 con `{parametro: [mensaje]}`. La búsqueda `q` (máx. 100 caracteres) exige que cada palabra aparezca en alguno de los campos indicados, sin distinguir mayúsculas; distingue tildes. Los filtros se combinan con AND y la paginación cuenta solo los registros filtrados.
+
+| Listado | `q` busca en | Filtros |
+|---|---|---|
+| `atenciones/` | código, descripción, OC, número de contrato, proveedor, servicio, unidad solicitante | `estado`, `origen`, `contrato_id` |
+| `catalogos/contratos/` | número, proveedor, servicio | `vigente` (fecha de Lima), `proveedor_id`, `tipo_servicio_id` |
+| `catalogos/proveedores/` | razón social | `activo` |
+| `catalogos/tipos-servicio/` | nombre | `activo`, `es_riesgo`, `ejecutor` |
+| `catalogos/areas-verdes/` | nombre | `activo` |
+| `catalogos/ejemplares/` | código, área verde | `area_verde_id` |
+| `catalogos/unidades-medida/` | nombre, símbolo | — |
+| `catalogos/unidades-institucionales/` | nombre | `activo`, `provisional` |
+
+Booleanos: `true`/`1` o `false`/`0`. `vigente=true` solo mira fechas; la creación vuelve a validar proveedor y servicio activos y modalidad tercerizada. Los catálogos se ordenan por nombre o código (luego por `id`).
+
+### Nombres en las respuestas
+
+Además de los IDs (que se conservan), las respuestas traen nombres para no resolver catálogos en el cliente: atenciones (`contrato_numero`, `proveedor_id`, `proveedor_nombre`, `tipo_servicio_nombre`, `unidad_solicitante_nombre`, `unidad_solicitante_provisional`, `solicitado_por_nombre`, `usuario_creacion_nombre`), alcances (`area_verde_nombre`, `ejemplar_codigo`, `ejemplar_area_verde_nombre`, `unidad_medida_nombre`, `unidad_medida_simbolo`), historial (`usuario_nombre`), reportes (`usuario_creacion_nombre`), contratos (`proveedor_nombre`, `tipo_servicio_nombre`) y ejemplares (`area_verde_nombre`). El nombre de un usuario es su nombre completo o, si no lo tiene, su usuario. Alcances e historial salen en orden estable (por `id`; historial por fecha).
 
 Los tres roles pueden consultar. Los catálogos de solo lectura están bajo `catalogos/`: `proveedores/`, `contratos/`, `tipos-servicio/`, `areas-verdes/`, `ejemplares/`, `unidades-medida/`, `unidades-institucionales/`. No se exponen importes económicos ni rutas privadas de archivos.
 
@@ -146,6 +172,8 @@ Las pruebas cubren API, autenticación real, permisos, restricciones, auditoría
 ## TODO y límites
 
 - Registrar/mantener proveedores y contratos por API; hoy solo precarga y consulta.
+- Búsqueda insensible a tildes (requiere la extensión `unaccent` de PostgreSQL); hoy distingue tildes.
+- Exponer el registro de auditoría (motivo y valores anteriores de correcciones de OC y origen); hoy solo se guarda. Urgente; probablemente de otro módulo.
 - Formularios estructurados y completitud por servicio, después de validarlos con el usuario.
 - Integrar usuarios, referencias y catálogos con los módulos propietarios mediante una migración de IDs, sin duplicarlos.
 - Integrar origen con incidencias/programación y almacenamiento de objetos.
