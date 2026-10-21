@@ -58,7 +58,6 @@ INSTALLED_APPS = [
     "rest_framework",
     "drf_spectacular",
     "reportes_indicadores",
-    "tercerizados",
 ]
 
 MIDDLEWARE = [
@@ -86,9 +85,7 @@ WSGI_APPLICATION = "config.wsgi.application"
 
 # --- Base de datos ------------------------------------------------------------
 
-TERCERIZADOS_ENABLED = os.getenv("TERCERIZADOS_ENABLED", "False").lower() in ("true", "1", "yes")
-
-if DATA_SOURCE == "db" or TERCERIZADOS_ENABLED:
+if DATA_SOURCE == "db":
     # Pasar a `django.contrib.gis.db.backends.postgis` cuando se active GeoDjango (ADR-001).
     DATABASES = {
         "default": {
@@ -155,14 +152,3 @@ USE_TZ = True
 # --- Archivos estáticos -------------------------------------------------------
 
 STATIC_URL = "static/"
-
-# MOD-05 usa PostgreSQL aunque MOD-06 siga leyendo mocks. Sin MEDIA_URL pública.
-TERCERIZADOS_MAX_ARCHIVO_BYTES = int(os.getenv("TERCERIZADOS_MAX_ARCHIVO_BYTES", str(20 * 1024 * 1024)))
-STORAGES = {
-    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
-    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
-    "tercerizados": {
-        "BACKEND": "django.core.files.storage.FileSystemStorage",
-        "OPTIONS": {"location": (os.getenv("TERCERIZADOS_ARCHIVOS_DIR") or str(BASE_DIR / "private-media")), "base_url": None},
-    },
-}
