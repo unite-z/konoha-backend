@@ -1,0 +1,22 @@
+name: limpiar-imagenes
+
+# Conserva las 10 versiones más recientes de konoha-api en GHCR y borra el resto.
+# Prod corre una versión reciente (pasa antes por UAT), así que queda dentro de esas 10.
+on:
+  schedule:
+    - cron: '0 12 * * 1'
+  workflow_dispatch:
+
+permissions:
+  packages: write
+
+jobs:
+  limpiar:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/delete-package-versions@e5bc658cc4c965c472efe991f8beea3981499c55 # v5.0.0
+        with:
+          package-name: konoha-api
+          package-type: container
+          min-versions-to-keep: 10

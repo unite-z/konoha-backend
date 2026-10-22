@@ -21,6 +21,13 @@ cp .env.example .env
 - Si añades una migración: el siguiente `V<n>` libre, expand/contract, y explícalo en el PR.
 - Si cambias el contrato JSON: avisa en el PR del frontend que lo consume.
 
+## Formato pendiente
+
+Spotless formatea el fichero entero en cuanto alguien lo toca (`ratchetFrom`). Está previsto un PR único que formatee todo el código de una vez, coordinado para cuando no haya ramas abiertas. Hasta entonces:
+
+- si tocas un fichero antiguo, el formato del fichero entero va en un commit aparte (`style(AV-n): aplica formato`), para que la revisión vea por separado el cambio real;
+- no formatees ficheros que no tocas.
+
 ## Checklist de revisión
 
 - [ ] Hay pruebas y cubren el caso que motiva el cambio.

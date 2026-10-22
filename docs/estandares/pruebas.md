@@ -26,7 +26,8 @@
   ./mvnw verify
   ```
 
-- En CI, la misma imagen corre como servicio del job.
+- En Mac con Apple Silicon, usa `imresamu/postgis:16-3.4` (multiarquitectura) en lugar de `postgis/postgis`, que corre emulada.
+- En CI, `postgis/postgis:16-3.4` corre como servicio del job.
 
 ## Matriz de permisos (gate)
 

@@ -39,6 +39,8 @@ createuser -P areas_verdes            # pide una contraseña: anótala
 createdb -O areas_verdes areas_verdes_mod05
 ```
 
+En Mac con Apple Silicon, `postgis/postgis` solo existe para x86 y corre emulada (lenta). La alternativa multiarquitectura es `imresamu/postgis:16-3.4`, con los mismos parámetros. CI y los servidores usan `postgis/postgis`.
+
 No hay que crear tablas: Flyway las crea en el primer arranque.
 
 ### 3. Configurar y arrancar
