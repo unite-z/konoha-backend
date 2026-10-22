@@ -53,7 +53,7 @@ public class RestriccionesController {
     /** Periodo máximo de una consulta, para acotar la respuesta (un año y un mes). */
     static final int DIAS_MAXIMOS = 400;
 
-    private static final String CONSULTA =
+    static final String CONSULTA =
             """
             SELECT r.*, t.nombre tipo, t.efecto, t.aplica_servicios_ruidosos
             FROM mod03_restriccion_calendario r

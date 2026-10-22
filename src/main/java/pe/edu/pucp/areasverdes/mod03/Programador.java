@@ -18,7 +18,13 @@ final class Programador {
             LocalDate fechaInicio,
             LocalDate fechaFin,
             String efecto,
-            boolean soloRuidosos) {}
+            boolean soloRuidosos) {
+
+        static Bloqueo de(RestriccionesController.Restriccion r) {
+            return new Bloqueo(
+                    r.id(), r.fechaInicio(), r.fechaFin(), r.efecto(), r.aplicaServiciosRuidosos());
+        }
+    }
 
     private static final MonthDay OTONO = MonthDay.of(3, 21);
     private static final MonthDay INVIERNO = MonthDay.of(6, 21);
