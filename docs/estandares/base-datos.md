@@ -2,6 +2,8 @@
 
 PostgreSQL con PostGIS. El esquema lo gestiona **solo Flyway**: nadie crea ni altera tablas a mano en UAT ni en prod.
 
+Diagrama del esquema implementado: [docs/base-datos/](../base-datos/README.md).
+
 ## Migraciones
 
 - Ruta: `src/main/resources/db/migration/`.
