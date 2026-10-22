@@ -106,6 +106,44 @@ public class ProgramacionServicios {
         return id;
     }
 
+    /** Cambio de estado con su fecha real (hoy si no se indica): inicio, fin o cancelación. */
+    public record Cambio(LocalDate fecha) {}
+
+    private record Transicion(String desde, String hasta, String columna) {}
+
+    private static final Map<String, Transicion> TRANSICIONES =
+            Map.of(
+                    "inicio", new Transicion("Programada", "EnCurso", "fecha_inicio_real"),
+                    "fin", new Transicion("EnCurso", "Completada", "fecha_fin_real"),
+                    "cancelacion", new Transicion("Programada", "Cancelada", null));
+
+    /** Aplica la transición (inicio, fin o cancelación) si el estado actual lo permite. */
+    @Transactional
+    public void cambiar(long id, String accion, LocalDate fecha, Usuario usuario) {
+        Acceso.gestionar(usuario);
+        Transicion t = TRANSICIONES.get(accion);
+        String fechaReal = t.columna() == null ? "" : t.columna() + " = :fecha, ";
+        int filas =
+                jdbc.update(
+                        ("UPDATE mod03_programacion_servicio SET estado = :hasta, %s"
+                                        + " fecha_modificacion = now(), usuario_modificacion_id ="
+                                        + " :usuario WHERE id = :id AND estado = :desde")
+                                .formatted(fechaReal),
+                        new MapSqlParameterSource()
+                                .addValue("id", id)
+                                .addValue("desde", t.desde())
+                                .addValue("hasta", t.hasta())
+                                .addValue("fecha", fecha)
+                                .addValue("usuario", usuario.id()));
+        if (filas == 0) {
+            throw new ErrorPlanificacion(
+                    409,
+                    "transicion-invalida",
+                    "Solo se puede registrar %s de una programación en estado %s"
+                            .formatted(accion, t.desde()));
+        }
+    }
+
     private static boolean afecta(Restriccion r, LocalDate inicio, LocalDate fin, boolean ruidoso) {
         return !Programador.conflictos(List.of(Bloqueo.de(r)), inicio, fin, ruidoso).isEmpty();
     }
