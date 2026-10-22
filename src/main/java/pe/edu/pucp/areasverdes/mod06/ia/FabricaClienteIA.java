@@ -20,6 +20,6 @@ public class FabricaClienteIA {
     }
 
     public ClienteIA obtenerClienteIa() {
-        return new ClienteGemini(propiedades.geminiApiKey(), propiedades.geminiModel(), null);
+        return new ClienteGemini(propiedades.geminiApiKey(), propiedades.geminiModel(), propiedades.geminiThinkingLevel(), null);
     }
 }

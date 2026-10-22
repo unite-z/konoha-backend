@@ -21,7 +21,9 @@ import pe.edu.pucp.areasverdes.mod06.permisos.Permisos;
  * Base de las pruebas de API ({@code api_client} de {@code conftest.py}): Spring Boot con MockMvc y los dobles de
  * {@link DoblesPrueba}. Sin base de datos, sin red y sin Gemini.
  */
-@SpringBootTest(properties = {"mod06.data-source=mock", "mod06.gemini-api-key=", "mod06.gemini-model="})
+// RF-IA-001 lee el reporte de la misma FuenteDatos de prueba (FuenteDatosMemoria), no del MOD-05.
+@SpringBootTest(properties = {"mod06.data-source=mock", "mod06.gemini-api-key=", "mod06.gemini-model=",
+    "mod06.ia.fuente-reportes=mock"})
 @AutoConfigureMockMvc
 @Import(DoblesPrueba.class)
 public abstract class PruebaApi {

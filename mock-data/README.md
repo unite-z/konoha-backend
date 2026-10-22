@@ -89,7 +89,7 @@ Datos de ejemplo coherentes con los documentos del equipo; no son datos reales d
 - **AlcanceAtencion:** id, atencion_id, area_verde_id, ejemplar_id, metrado, unidad_medida_id
 - **ReporteProveedor:** id, atencion_id, revision, fecha_recepcion, metrado_reportado, unidad_medida_id, resumen
 - **FormatoReporteServicio:** id, tipo_servicio_id, version, vigente
-- **CampoFormatoReporte:** id, formato_id, nombre_campo, tipo_dato, obligatorio
+- **CampoFormatoReporte:** id, formato_id, nombre_campo, tipo_dato, obligatorio, subcampos (opcional, solo para `tipo_dato` JSON: lista de `{nombre, tipo_dato, descripcion}` que describe cada elemento de la lista; lo usa RF-IA-001 para pedir a la IA datos estructurados. No está en el Modelo de BD v1)
 - **Plaga:** id, nombre, nombre_cientifico, tipo_organismo (Insecto | Hongo | Otro), activo
 - **ProductoAgronomico:** id, nombre, categoria, unidad_dosis, activo
 - **AplicacionFitosanitaria:** id, programacion_id, atencion_id, tipo (Estacional | AdicionalAtencionEspecial | PorObservacion), estacion, fecha, hora_inicio, hora_fin, observaciones
