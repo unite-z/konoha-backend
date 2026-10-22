@@ -48,4 +48,5 @@ Necesitan PostgreSQL con PostGIS en una base terminada en `_test` (`MOD05_TEST_D
 - [AGENTS.md](AGENTS.md): estado, mapa, gates y reglas, para personas y agentes.
 - [CONTRIBUTING.md](CONTRIBUTING.md): cómo contribuir.
 - [docs/estandares/](docs/estandares/): Java, API, base de datos, pruebas y almacenamiento.
+- [docs/base-datos/](docs/base-datos/README.md): modelo entidad-relación implementado (draw.io).
 - Estándares comunes y ADR: en `konoha-infra`.
