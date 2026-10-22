@@ -14,7 +14,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.DataClassRowMapper;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -106,5 +108,15 @@ public class RestriccionesController {
                 CONSULTA.formatted("r.id IN (:ids)"),
                 Map.of("ids", calendario.crear(nueva, usuario)),
                 new DataClassRowMapper<>(Restriccion.class));
+    }
+
+    @Operation(summary = "Da de baja una restricción o, con serie=true, toda su serie (jefe)")
+    @DeleteMapping({"/restricciones/{id}", "/restricciones/{id}/"})
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void baja(
+            @AuthenticationPrincipal Usuario usuario,
+            @PathVariable long id,
+            @RequestParam(defaultValue = "false") boolean serie) {
+        calendario.baja(id, serie, usuario);
     }
 }
