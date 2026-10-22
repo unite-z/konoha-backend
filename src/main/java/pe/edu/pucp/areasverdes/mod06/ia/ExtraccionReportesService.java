@@ -16,6 +16,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import pe.edu.pucp.areasverdes.mod06.comun.Fechas;
 import pe.edu.pucp.areasverdes.mod06.comun.Py;
@@ -136,15 +137,32 @@ public class ExtraccionReportesService {
     private final SelectorFuenteDatos selector;
     private final FabricaClienteIA fabricaCliente;
     private final Clock reloj;
+    private final SelectorFuenteReportesProveedor selectorReportes;
 
     public ExtraccionReportesService(SelectorFuenteDatos selector, FabricaClienteIA fabricaCliente, Clock reloj) {
+        this(selector, fabricaCliente, reloj, null);
+    }
+
+    @Autowired
+    public ExtraccionReportesService(SelectorFuenteDatos selector, FabricaClienteIA fabricaCliente, Clock reloj,
+                                     SelectorFuenteReportesProveedor selectorReportes) {
         this.selector = selector;
         this.fabricaCliente = fabricaCliente;
         this.reloj = reloj;
+        this.selectorReportes = selectorReportes;
     }
 
     private FuenteDatos fuente(FuenteDatos fuente) {
         return fuente != null ? fuente : selector.obtenerFuenteDatos();
+    }
+
+    /**
+     * Fuente del reporte, su atención, su informe y sus bytes ({@code IA_FUENTE_REPORTES}). Si se pasa una
+     * {@code FuenteDatos} explícita (pruebas), se usa esa, como antes.
+     */
+    private FuenteReportesProveedor reportes(FuenteDatos explicita, FuenteDatos f) {
+        if (explicita != null || selectorReportes == null) return new FuenteReportesProveedorMock(f);
+        return selectorReportes.obtener(f);
     }
 
     // =============================================================================
@@ -163,10 +181,11 @@ public class ExtraccionReportesService {
      */
     public Map<String, Object> solicitarExtraccion(Object reporteId, Object usuarioId, FuenteDatos fuente, ClienteIA cliente) {
         FuenteDatos f = fuente(fuente);
+        FuenteReportesProveedor r = reportes(fuente, f);
 
-        Map<String, Object> reporte = f.obtener("ReporteProveedor", reporteId);
+        Map<String, Object> reporte = r.obtenerReporte(reporteId);
         if (reporte == null) throw new RecursoNoEncontrado(MENSAJE_REPORTE_NO_EXISTE);
-        Map<String, Object> atencion = f.obtener("AtencionTercerizada", reporte.get("atencion_id"));
+        Map<String, Object> atencion = r.obtenerAtencion(reporte.get("atencion_id"));
         if (atencion == null) throw new RecursoNoEncontrado(MENSAJE_ATENCION_NO_EXISTE);
         Object tipoServicioId = atencion.get("tipo_servicio_id");
 
@@ -176,12 +195,12 @@ public class ExtraccionReportesService {
         if (campos.isEmpty()) throw new ConfiguracionFaltante(MENSAJE_FORMATO_SIN_CAMPOS);
         Map<String, Object> esquema = construirEsquema(campos);
 
-        Map<String, Object> archivo = archivoDelReporte(f, Py.item(reporte, "id"));
+        Map<String, Object> archivo = archivoDelReporte(r, Py.item(reporte, "id"));
         if (!Py.eq(archivo.get("tipo_mime"), MIME_PDF)) throw new TipoArchivoNoAdmitido(MENSAJE_NO_PDF);
 
         // El cliente se obtiene antes de leer el archivo: si la IA no está configurada se informa de inmediato.
         ClienteIA c = cliente != null ? cliente : fabricaCliente.obtenerClienteIa();
-        byte[] pdf = f.leerContenidoArchivo(archivo);
+        byte[] pdf = r.leerContenidoArchivo(archivo);
         String instruccion = leerInstruccion();
 
         String solicitadoEn = Fechas.ahoraIso(reloj);
@@ -484,6 +503,9 @@ public class ExtraccionReportesService {
             }
             Map<String, Object> esquemaCampo = new LinkedHashMap<>(ESQUEMA_POR_TIPO.get(t));
             esquemaCampo.put("description", Py.str(Py.or(campo.get("nombre_campo"), "")));
+            if (t.equals("JSON") && campo.get("subcampos") != null) {
+                esquemaCampo.put("items", esquemaSubcampos(campo));
+            }
             propiedades.put(claveCampo(Py.item(campo, "id")), esquemaCampo);
         }
         Map<String, Object> esquema = new LinkedHashMap<>();
@@ -491,6 +513,36 @@ public class ExtraccionReportesService {
         esquema.put("properties", propiedades);
         esquema.put("required", new ArrayList<>(propiedades.keySet()));
         return esquema;
+    }
+
+    /**
+     * Esquema de cada elemento de una lista JSON cuyo campo define {@code subcampos}
+     * ({@code [{"nombre", "tipo_dato", "descripcion"}]}). Sin subcampos, el elemento es un objeto libre
+     * ({@code {"type": "object"}}) y Gemini tiende a devolverlo vacío. Los subcampos admiten cualquier tipo salvo
+     * {@code JSON} y todos aceptan {@code null}. Un subcampo mal definido → {@link ConfiguracionFaltante} (422).
+     */
+    private static Map<String, Object> esquemaSubcampos(Map<String, Object> campo) {
+        String errorFormato = "Los subcampos del campo '" + Py.str(campo.get("nombre_campo"))
+            + "' del formato no son válidos; corrige el formato estándar del servicio (RF-SER-009)";
+        if (!(campo.get("subcampos") instanceof List<?> subcampos) || subcampos.isEmpty()) {
+            throw new ConfiguracionFaltante(errorFormato);
+        }
+        Map<String, Object> propiedades = new LinkedHashMap<>();
+        for (Object s : subcampos) {
+            if (!(s instanceof Map<?, ?> sub) || !(sub.get("nombre") instanceof String nombre) || nombre.isBlank()
+                || !(sub.get("tipo_dato") instanceof String tipo) || tipo.equals("JSON") || !ESQUEMA_POR_TIPO.containsKey(tipo)
+                || propiedades.containsKey(nombre)) {
+                throw new ConfiguracionFaltante(errorFormato);
+            }
+            Map<String, Object> esquemaSub = new LinkedHashMap<>(ESQUEMA_POR_TIPO.get(tipo));
+            esquemaSub.put("description", sub.get("descripcion") instanceof String d && !d.isBlank() ? d : nombre);
+            propiedades.put(nombre, esquemaSub);
+        }
+        Map<String, Object> items = new LinkedHashMap<>();
+        items.put("type", "object");
+        items.put("properties", propiedades);
+        items.put("required", new ArrayList<>(propiedades.keySet()));
+        return items;
     }
 
     /** {@code true} si {@code valor} (no nulo) corresponde al tipo lógico {@code tipoDato} del Modelo de BD v1. */
@@ -574,12 +626,11 @@ public class ExtraccionReportesService {
         return mejor;
     }
 
-    private static Map<String, Object> archivoDelReporte(FuenteDatos fuente, Object reporteId) {
-        List<Map<String, Object>> asociaciones = new ArrayList<>(fuente.listar("ArchivoAsociado",
-            "entidad", ENTIDAD_REPORTE, "registro_id", reporteId, "categoria", CATEGORIA_ARCHIVO_REPORTE));
+    private static Map<String, Object> archivoDelReporte(FuenteReportesProveedor fuente, Object reporteId) {
+        List<Map<String, Object>> asociaciones = new ArrayList<>(fuente.archivosAsociados(reporteId, CATEGORIA_ARCHIVO_REPORTE));
         asociaciones.sort((a, b) -> Py.compare(Py.item(b, "id"), Py.item(a, "id")));
         for (Map<String, Object> asociacion : asociaciones) {
-            Map<String, Object> archivo = fuente.obtener("Archivo", asociacion.get("archivo_id"));
+            Map<String, Object> archivo = fuente.obtenerArchivo(asociacion.get("archivo_id"));
             if (archivo != null) return archivo;
         }
         throw new RecursoNoEncontrado(MENSAJE_SIN_ARCHIVO);

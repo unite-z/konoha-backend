@@ -37,6 +37,9 @@ mod06:
   mock-data-dir: ${MOCK_DATA_DIR:../mock-data}
   gemini-api-key: ${GEMINI_API_KEY:}
   gemini-model: ${GEMINI_MODEL:}
+  gemini-thinking-level: ${GEMINI_THINKING_LEVEL:low}
+  ia:
+    fuente-reportes: ${IA_FUENTE_REPORTES:mod05}
 logging:
   level:
     pe.edu.pucp.areasverdes.mod06: INFO

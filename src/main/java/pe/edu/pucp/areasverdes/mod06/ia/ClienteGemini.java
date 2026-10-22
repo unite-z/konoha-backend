@@ -6,15 +6,20 @@ import com.google.genai.gaos.models.interactions.CreateModelInteraction;
 import com.google.genai.gaos.models.interactions.CreateModelInteractionResponseFormat;
 import com.google.genai.gaos.models.interactions.DocumentContent;
 import com.google.genai.gaos.models.interactions.DocumentContentMimeType;
+import com.google.genai.gaos.models.interactions.GenerationConfig;
 import com.google.genai.gaos.models.interactions.Interaction;
 import com.google.genai.gaos.models.interactions.InteractionsInput;
+import com.google.genai.gaos.models.interactions.ModelOutputStep;
 import com.google.genai.gaos.models.interactions.ResponseFormat;
+import com.google.genai.gaos.models.interactions.Step;
 import com.google.genai.gaos.models.interactions.TextContent;
+import com.google.genai.gaos.models.interactions.ThinkingLevel;
 import com.google.genai.gaos.models.interactions.TextResponseFormat;
 import com.google.genai.gaos.models.interactions.TextResponseFormatMimeType;
 import com.google.genai.gaos.models.operations.CreateInteractionRequestBody;
 import java.util.Base64;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import org.slf4j.Logger;
@@ -57,32 +62,65 @@ public class ClienteGemini implements ClienteIA {
     /** Llamada al SDK ({@code client.interactions.create}); en las pruebas se sustituye por un doble. */
     @FunctionalInterface
     public interface Sdk {
-        /** Devuelve {@code interaction.output_text} (vacío si la respuesta no trae texto). */
+        /** Devuelve el texto de la respuesta ({@link #textoDeSalida}); vacío si no trae texto. */
         Optional<String> crearInteraccion(CreateModelInteraction parametros) throws Exception;
     }
 
     private final String modelo;
+    private final ThinkingLevel nivelRazonamiento;
     private final Sdk sdk;
 
     /**
      * Crea el cliente del SDK con la clave <b>explícita</b> ({@code GEMINI_API_KEY}) y el modelo
-     * ({@code GEMINI_MODEL}). {@code sdk} permite inyectar un doble en las pruebas.
+     * ({@code GEMINI_MODEL}), sin fijar el nivel de razonamiento. {@code sdk} permite inyectar un doble en las pruebas.
      */
     public ClienteGemini(String apiKey, String modelo, Sdk sdk) {
+        this(apiKey, modelo, null, sdk);
+    }
+
+    /**
+     * Igual que el anterior, con el nivel de razonamiento ({@code GEMINI_THINKING_LEVEL}: {@code minimal},
+     * {@code low}, {@code medium} o {@code high}). Vacío o {@code null}: no se envía y decide el modelo.
+     */
+    public ClienteGemini(String apiKey, String modelo, String nivelRazonamiento, Sdk sdk) {
         String clave = apiKey == null ? "" : apiKey;
         String nombreModelo = modelo == null ? "" : modelo;
         if (clave.isEmpty() || nombreModelo.isEmpty()) {
             log.error("Análisis con IA no configurado: falta {} en backend/.env", clave.isEmpty() ? "GEMINI_API_KEY" : "GEMINI_MODEL");
             throw new ServicioIANoDisponible(MENSAJE_IA_NO_CONFIGURADA);
         }
+        String nivel = nivelRazonamiento == null ? "" : Py.strip(nivelRazonamiento).toLowerCase(Locale.ROOT);
+        if (!nivel.isEmpty() && !ThinkingLevel.of(nivel).isKnown()) {
+            log.error("Análisis con IA mal configurado: GEMINI_THINKING_LEVEL debe ser minimal, low, medium o high");
+            throw new ServicioIANoDisponible(MENSAJE_IA_NO_CONFIGURADA);
+        }
         this.modelo = nombreModelo;
+        this.nivelRazonamiento = nivel.isEmpty() ? null : ThinkingLevel.of(nivel);
         if (sdk != null) {
             this.sdk = sdk;
         } else {
             Client cliente = Client.builder().apiKey(clave).build();
             this.sdk = parametros -> cliente.interactions.create(CreateInteractionRequestBody.of(parametros))
-                .interaction().flatMap(Interaction::outputText);
+                .interaction().flatMap(ClienteGemini::textoDeSalida);
         }
+    }
+
+    /**
+     * Texto de la respuesta. Los modelos con razonamiento (por ejemplo {@code gemini-3.x}) dejan
+     * {@code output_text} vacío y ponen la respuesta en los pasos {@code model_output} de {@code steps}; en ese caso se
+     * unen los textos de esos pasos (los pasos {@code thought} se ignoran).
+     */
+    static Optional<String> textoDeSalida(Interaction interaccion) {
+        Optional<String> directo = interaccion.outputText().filter(t -> !t.isBlank());
+        if (directo.isPresent()) return directo;
+        StringBuilder texto = new StringBuilder();
+        for (Step paso : interaccion.steps().orElse(List.of())) {
+            if (!(paso instanceof ModelOutputStep salida)) continue;
+            for (Content contenido : salida.content().orElse(List.of())) {
+                if (contenido instanceof TextContent t) t.text().ifPresent(texto::append);
+            }
+        }
+        return texto.isEmpty() ? Optional.empty() : Optional.of(texto.toString());
     }
 
     @Override
@@ -97,13 +135,19 @@ public class ClienteGemini implements ClienteIA {
 
     /** Parámetros de la interacción: documento PDF en línea, texto de la solicitud y salida JSON con esquema. */
     static CreateModelInteraction parametros(String modelo, byte[] pdf, Map<String, Object> esquema, String instruccion) {
+        return parametros(modelo, null, pdf, esquema, instruccion);
+    }
+
+    /** Igual que el anterior; con {@code nivel} no nulo se envía {@code generation_config.thinking_level}. */
+    static CreateModelInteraction parametros(String modelo, ThinkingLevel nivel, byte[] pdf, Map<String, Object> esquema,
+                                             String instruccion) {
         List<Content> entrada = List.of(
             DocumentContent.builder()
                 .data(Base64.getEncoder().encodeToString(pdf))
                 .mimeType(DocumentContentMimeType.APPLICATION_PDF)
                 .build(),
             TextContent.builder().text(TEXTO_SOLICITUD).build());
-        return CreateModelInteraction.builder()
+        CreateModelInteraction.Builder parametros = CreateModelInteraction.builder()
             .model(modelo)
             .systemInstruction(instruccion)
             .input(InteractionsInput.ofContent(entrada))
@@ -111,8 +155,9 @@ public class ClienteGemini implements ClienteIA {
                 TextResponseFormat.builder()
                     .mimeType(TextResponseFormatMimeType.APPLICATION_JSON)
                     .schema(esquema)
-                    .build())))
-            .build();
+                    .build())));
+        if (nivel != null) parametros.generationConfig(GenerationConfig.builder().thinkingLevel(nivel).build());
+        return parametros.build();
     }
 
     /**
@@ -125,7 +170,7 @@ public class ClienteGemini implements ClienteIA {
     public Map<String, Object> extraerJson(byte[] pdf, Map<String, Object> esquema, String instruccion) {
         Optional<String> respuesta;
         try {
-            respuesta = sdk.crearInteraccion(parametros(modelo, pdf, esquema, instruccion));
+            respuesta = sdk.crearInteraccion(parametros(modelo, nivelRazonamiento, pdf, esquema, instruccion));
         } catch (Exception exc) { // cualquier error del SDK o de red
             log.error("Fallo en la llamada a Gemini ({})", exc.getClass().getSimpleName());
             throw new ServicioIANoDisponible(MENSAJE_IA_FALLO);

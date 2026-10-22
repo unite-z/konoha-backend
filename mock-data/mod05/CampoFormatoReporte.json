@@ -16,6 +16,33 @@
     "nombre_campo": "Productos aplicados",
     "tipo_dato": "JSON",
     "obligatorio": true,
+    "subcampos": [
+      {
+        "nombre": "producto",
+        "tipo_dato": "Texto",
+        "descripcion": "Nombre del producto aplicado"
+      },
+      {
+        "nombre": "categoria",
+        "tipo_dato": "Texto",
+        "descripcion": "Categoría del producto: insecticida, fungicida, fertilizante, etc."
+      },
+      {
+        "nombre": "dosis",
+        "tipo_dato": "Texto",
+        "descripcion": "Dosis aplicada tal como figura en el informe, con su unidad"
+      },
+      {
+        "nombre": "cantidad",
+        "tipo_dato": "Decimal",
+        "descripcion": "Cantidad total aplicada"
+      },
+      {
+        "nombre": "unidad",
+        "tipo_dato": "Texto",
+        "descripcion": "Unidad de la cantidad total aplicada"
+      }
+    ],
     "fecha_creacion": "2026-01-02T08:00:00-05:00",
     "usuario_creacion_id": 1,
     "fecha_modificacion": "2026-01-02T08:00:00-05:00",
@@ -27,6 +54,28 @@
     "nombre_campo": "Plagas atendidas",
     "tipo_dato": "JSON",
     "obligatorio": true,
+    "subcampos": [
+      {
+        "nombre": "plaga",
+        "tipo_dato": "Texto",
+        "descripcion": "Nombre común de la plaga"
+      },
+      {
+        "nombre": "nombre_cientifico",
+        "tipo_dato": "Texto",
+        "descripcion": "Nombre científico de la plaga"
+      },
+      {
+        "nombre": "tipo_organismo",
+        "tipo_dato": "Texto",
+        "descripcion": "Insecto, Hongo u Otro"
+      },
+      {
+        "nombre": "espacio",
+        "tipo_dato": "Texto",
+        "descripcion": "Espacio o área verde donde se atendió"
+      }
+    ],
     "fecha_creacion": "2026-01-02T08:00:00-05:00",
     "usuario_creacion_id": 1,
     "fecha_modificacion": "2026-01-02T08:00:00-05:00",
@@ -38,6 +87,23 @@
     "nombre_campo": "Evidencias por espacio",
     "tipo_dato": "JSON",
     "obligatorio": true,
+    "subcampos": [
+      {
+        "nombre": "espacio",
+        "tipo_dato": "Texto",
+        "descripcion": "Espacio o área verde"
+      },
+      {
+        "nombre": "evidencia",
+        "tipo_dato": "Texto",
+        "descripcion": "Descripción de la evidencia (fotografía, observación)"
+      },
+      {
+        "nombre": "fecha",
+        "tipo_dato": "Fecha",
+        "descripcion": "Fecha de la evidencia"
+      }
+    ],
     "fecha_creacion": "2026-01-02T08:00:00-05:00",
     "usuario_creacion_id": 1,
     "fecha_modificacion": "2026-01-02T08:00:00-05:00",
