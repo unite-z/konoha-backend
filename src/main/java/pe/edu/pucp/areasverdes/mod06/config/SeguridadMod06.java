@@ -17,9 +17,9 @@ public class SeguridadMod06 {
 
     @Bean
     @Order(1)
-    SecurityFilterChain seguridadMod06(HttpSecurity http) throws Exception {
+    SecurityFilterChain cadenaSeguridadMod06(HttpSecurity http) throws Exception {
         http.securityMatcher("/api/v1", "/api/v1/**", "/api/schema", "/api/schema/**", "/api/docs", "/api/docs/**",
-                "/swagger-ui.html", "/swagger-ui/**")
+                "/api/swagger-ui", "/api/swagger-ui/**", "/swagger-ui.html", "/swagger-ui/**")
             .authorizeHttpRequests(a -> a.anyRequest().permitAll())
             .csrf(c -> c.disable())
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
