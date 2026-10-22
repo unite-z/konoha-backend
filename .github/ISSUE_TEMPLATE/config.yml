@@ -1,0 +1,6 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Tablero del equipo en Linear
+    # TODO: poner la URL del workspace de Linear cuando exista.
+    url: https://linear.app/
+    about: Las historias y tareas se gestionan en Linear. Aquí solo van bugs detectados en UAT o en prod sin ticket.

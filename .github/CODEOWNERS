@@ -1,0 +1,14 @@
+# Quién revisa qué. Cada ruta necesita al menos dos personas: nadie aprueba su propio PR.
+# La última regla que coincide es la que manda.
+# TODO: sustituir cada @TODO-... por usuarios de GitHub del equipo y descomentar.
+
+# *                                                  @TODO-coordinacion @TODO-backend
+# /src/main/java/pe/edu/pucp/areasverdes/mod05/      @TODO-mod05-a @TODO-mod05-b
+# /src/test/java/pe/edu/pucp/areasverdes/mod05/      @TODO-mod05-a @TODO-mod05-b
+# /src/main/java/pe/edu/pucp/areasverdes/mod06/      @TODO-mod06-a @TODO-mod06-b
+# /src/test/java/pe/edu/pucp/areasverdes/mod06/      @TODO-mod06-a @TODO-mod06-b
+# /src/main/java/pe/edu/pucp/areasverdes/comun/      @TODO-coordinacion @TODO-backend
+# /src/main/resources/db/migration/                  @TODO-coordinacion @TODO-datos
+# /pom.xml                                           @TODO-coordinacion @TODO-backend
+# /.github/                                          @TODO-coordinacion @TODO-infra
+# /docs/                                             @TODO-coordinacion @TODO-backend

@@ -1,0 +1,11 @@
+.git
+.github
+.githooks
+.bin
+target
+private-media
+docs
+*.md
+.env
+.env.*
+!.env.example

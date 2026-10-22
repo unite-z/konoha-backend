@@ -1,6 +1,6 @@
-# MOD-05 — Spring Boot / Java
+# MOD-05: Spring Boot y Java
 
-Backend independiente para RF-SER-003, RF-SER-004, RF-SER-005, RF-SER-006 y RF-SER-011. Reemplaza la app Django `tercerizados`. Comparte el back-end `backend/` con el MOD-06, que conserva su comportamiento anterior.
+Backend independiente para RF-SER-003, RF-SER-004, RF-SER-005, RF-SER-006 y RF-SER-011. Reemplaza la app Django `tercerizados`. Comparte el back-end con el MOD-06, que conserva su comportamiento anterior.
 
 ## Arranque local
 
@@ -8,7 +8,7 @@ Requisitos: JDK 21 y PostgreSQL 14 o posterior. No hace falta instalar Maven: `.
 
 Crear una **base nueva**, por ejemplo `areas_verdes_mod05`, y un usuario propietario. No reutilizar el esquema Django ni sus usuarios. No se realiza conversión de datos antiguos.
 
-Desde `backend/`:
+Desde la raíz del repo:
 
 ```sh
 cp .env.example .env
@@ -60,17 +60,17 @@ El frontend conserva `VITE_API_TERCERIZADOS_URL=/api/tercerizados`. Su proxy Vit
 
 | Ruta (relativa a `/api/tercerizados/`) | Métodos | Escritura |
 |---|---|---|
-| `me/` | GET | — |
+| `me/` | GET | No aplica |
 | `atenciones/` | GET, POST | Jefe |
-| `atenciones/{id}/` | GET | — |
+| `atenciones/{id}/` | GET | No aplica |
 | `atenciones/{id}/orden-compra/` | PATCH | Jefe, ingeniero, practicante autorizado |
 | `atenciones/{id}/inicio/` | POST | Los tres roles |
 | `atenciones/{id}/fin/` | POST | Los tres roles |
 | `atenciones/{id}/origen/` | PATCH | Jefe |
 | `atenciones/{id}/acuerdo-unidad/` | PATCH | Jefe |
 | `atenciones/{id}/reportes/` | GET, POST multipart | Los tres roles |
-| `atenciones/{id}/reportes/{reporte}/` | GET | — |
-| `atenciones/{id}/reportes/{reporte}/documentos/{documento}/descarga/` | GET | — |
+| `atenciones/{id}/reportes/{reporte}/` | GET | No aplica |
+| `atenciones/{id}/reportes/{reporte}/documentos/{documento}/descarga/` | GET | No aplica |
 
 Los grupos conservan exactamente los nombres `Jefe de sección`, `Ingeniero de campo`, `Practicante autorizado`. Solo estos tres roles pueden consultar el módulo; `/me/` admite a cualquier usuario activo autenticado para informar si tiene acceso.
 
@@ -123,7 +123,7 @@ Catálogos de solo lectura bajo `catalogos/`, todos con `q` y `page`:
 | `tipos-servicio/` | `activo`, `es_riesgo`, `ejecutor` |
 | `areas-verdes/` | `activo` |
 | `ejemplares/` | `area_verde_id` |
-| `unidades-medida/` | — |
+| `unidades-medida/` | No aplica |
 | `unidades-institucionales/` | `activo`, `provisional` |
 
 Booleanos aceptan `true/false` o `1/0`. Filtros vacíos se omiten; valores inválidos dan 400. Página inexistente da 404; `page=last` selecciona la última.

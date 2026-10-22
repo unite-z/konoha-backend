@@ -1,0 +1,24 @@
+name: Historia o tarea
+description: Solo si aún no está en Linear. Lo normal es crearla allí.
+labels: [tipo-historia]
+body:
+  - type: input
+    id: requisito
+    attributes:
+      label: Requisito o historia
+      placeholder: HU-MOD04-012, RF-SER-005
+  - type: textarea
+    id: objetivo
+    attributes:
+      label: Como / quiero / para
+      placeholder: Como Ingeniero de campo quiero registrar una poda sin conexión para no perder el trabajo en zonas sin cobertura.
+    validations:
+      required: true
+  - type: textarea
+    id: aceptacion
+    attributes:
+      label: Criterios de aceptación
+      placeholder: |
+        - Dado ... cuando ... entonces ...
+    validations:
+      required: true

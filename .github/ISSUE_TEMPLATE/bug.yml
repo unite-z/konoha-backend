@@ -1,0 +1,32 @@
+name: Bug
+description: Algo no funciona como debería en UAT o en prod
+labels: [tipo-bug]
+body:
+  - type: dropdown
+    id: entorno
+    attributes:
+      label: Entorno
+      options: [uat, prod, local]
+    validations:
+      required: true
+  - type: textarea
+    id: pasos
+    attributes:
+      label: Pasos para reproducirlo
+      placeholder: |
+        1. Entrar como Ingeniero de campo
+        2. Abrir ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: esperado
+    attributes:
+      label: Qué esperabas y qué pasó
+    validations:
+      required: true
+  - type: textarea
+    id: evidencia
+    attributes:
+      label: Evidencia
+      description: Capturas, hora aproximada y URL. Sin contraseñas ni datos personales.
