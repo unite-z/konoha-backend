@@ -14,6 +14,11 @@ updates:
     commit-message:
       prefix: chore
       include: scope
+    ignore:
+      # Las versiones mayores se hacen a mano, en su propio ticket: el CI en verde no basta
+      # (p. ej. PostGIS 16 a 17 no arranca sobre los datos existentes).
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
@@ -27,3 +32,10 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    ignore:
+      # Las versiones mayores se hacen a mano, en su propio ticket: el CI en verde no basta
+      # (p. ej. PostGIS 16 a 17 no arranca sobre los datos existentes).
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+      # Imagen solo de compilación: Dependabot propone cambiar de JDK en el sufijo del tag.
+      - dependency-name: "maven"
