@@ -46,7 +46,7 @@ public class Mod06Propiedades {
     public Mod06Propiedades(String dataSource, String mockDataDir, String geminiApiKey, String geminiModel,
                             String geminiThinkingLevel, Ia ia) {
         this.dataSource = dataSource == null ? "mock" : dataSource;
-        this.mockDataDir = mockDataDir == null ? "../mock-data" : mockDataDir;
+        this.mockDataDir = mockDataDir == null ? "mock-data" : mockDataDir;
         this.geminiApiKey = geminiApiKey == null ? "" : geminiApiKey;
         this.geminiModel = geminiModel == null ? "" : geminiModel;
         this.geminiThinkingLevel = geminiThinkingLevel == null ? "" : geminiThinkingLevel;

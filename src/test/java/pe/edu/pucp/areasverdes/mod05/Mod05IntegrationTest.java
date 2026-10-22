@@ -260,7 +260,7 @@ class Mod05IntegrationTest {
         assertEquals(1,repo.jdbc().queryForObject("SELECT count(*) FROM mod05_historialestado WHERE estado_nuevo=:estado",Map.of("estado",Atencion.REPORTE),Integer.class));
     }
     @Test void precargaIdempotenteYConflictos() {
-        Path mocks=Path.of("../mock-data");
+        Path mocks=Path.of("mock-data");
         assertThrows(IllegalArgumentException.class,()->seed.cargar(mocks,PASSWORD)); // IDs ya ocupados por referencias distintas.
         assertEquals("Proveedor Demo",repo.get("proveedor",1).get("razon_social"));
         repo.jdbc().getJdbcTemplate().execute("TRUNCATE mod05_usuario,mod05_proveedor,mod05_tiposervicio,mod05_areaverde,mod05_unidadmedida,mod05_unidadinstitucional,mod05_archivo RESTART IDENTITY CASCADE");
