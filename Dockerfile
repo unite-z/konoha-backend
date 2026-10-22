@@ -1,7 +1,7 @@
 # Imagen de la api. Se construye en CI y se publica en GHCR por SHA (konoha-api:<sha>).
 
 # Build con la imagen oficial de Maven: el mvnw del repo necesita unzip, que la imagen de Temurin no trae.
-FROM maven:3.9.11-eclipse-temurin-21 AS build
+FROM maven:3.9-eclipse-temurin-26 AS build
 WORKDIR /build
 COPY pom.xml .
 RUN mvn -B -ntp -q dependency:go-offline
