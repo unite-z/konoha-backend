@@ -85,6 +85,19 @@
     </dependency>
   </dependencies>
 
+  <profiles>
+    <!-- Pruebas que no levantan Spring ni necesitan base de datos (unos segundos). Las usa el hook pre-push.
+         Convención: las pruebas que levantan Spring terminan en IntegrationTest o ApiTest; las tres
+         restantes se listan aquí hasta que se renombren. -->
+    <profile>
+      <id>pruebas-rapidas</id>
+      <properties>
+        <test>!*IntegrationTest,!*ApiTest,!ApiReportesTest,!ContratoHttpTest,!FuentesDatosTest</test>
+        <surefire.failIfNoSpecifiedTests>false</surefire.failIfNoSpecifiedTests>
+      </properties>
+    </profile>
+  </profiles>
+
   <build>
     <plugins>
       <plugin>
