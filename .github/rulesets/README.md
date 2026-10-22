@@ -10,6 +10,15 @@
 
 Es igual en los tres repos. **No está aplicado**: se aplica cuando lo apruebe quien coordina el equipo.
 
+## Aprobaciones: dos opciones
+
+Lo decide quien coordina al aplicar el ruleset, cambiando `required_approving_review_count` en `main.json`:
+
+| Opción | Valor | Cuándo |
+|---|---|---|
+| **Una aprobación** (recomendada) | `1` | Lo normal: el curso pide un revisor en cada entrega y una segunda mirada detecta los errores baratos |
+| PR obligatorio sin aprobación | `0` | Solo si el equipo se atasca esperando revisiones. Se mantienen el PR, `ci-ok`, la historia lineal y el bloqueo del push directo. Con `0`, pon también `require_code_owner_review` a `false` |
+
 ## Requisitos antes de aplicarlo
 
 1. La cuenta dueña tiene GitHub Pro (en el plan gratuito, los rulesets no se aplican en repos privados).

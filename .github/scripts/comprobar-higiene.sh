@@ -15,7 +15,7 @@ oculto_kebab='^\.[a-z0-9]+(-[a-z0-9]+)*(\.[a-z0-9]+)*$'
 pascal='^[A-Z][A-Za-z0-9]*$'
 camel='^[a-z][A-Za-z0-9]*$'
 fijos=' README.md CLAUDE.md CONTRIBUTING.md SECURITY.md CODEOWNERS Dockerfile LICENSE .env.example
-  docker-compose.yml pull_request_template.md ISSUE_TEMPLATE mvnw mvnw.cmd pom.xml package.json
+  AGENTS.md docker-compose.yml pull_request_template.md ISSUE_TEMPLATE mvnw mvnw.cmd pom.xml package.json
   package-lock.json vite.config.ts index.html main.tsx App.tsx vite-env.d.ts maven-wrapper.properties
   .terraform.lock.hcl Caddyfile .oxlintrc.json .gitleaks.toml .nvmrc .tflint.hcl '
 

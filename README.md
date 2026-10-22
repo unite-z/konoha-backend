@@ -45,7 +45,7 @@ Necesitan PostgreSQL con PostGIS en una base terminada en `_test` (`MOD05_TEST_D
 
 ## Documentación
 
-- [CLAUDE.md](CLAUDE.md): mapa del repo y reglas, para personas y agentes.
+- [AGENTS.md](AGENTS.md): estado, mapa, gates y reglas, para personas y agentes.
 - [CONTRIBUTING.md](CONTRIBUTING.md): cómo contribuir.
 - [docs/estandares/](docs/estandares/): Java, API, base de datos, pruebas y almacenamiento.
 - Estándares comunes y ADR: en `konoha-infra`.
