@@ -1,0 +1,2 @@
+org.springframework.boot.diagnostics.FailureAnalyzer=\
+pe.edu.pucp.areasverdes.mod06.config.ConfiguracionInvalida$Analizador

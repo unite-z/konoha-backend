@@ -1,0 +1,42 @@
+# Back-end Áreas Verdes: MOD-05 «Atenciones tercerizadas» y MOD-06 «Reportes, indicadores e IA».
+# Se reutiliza el mismo backend/.env (importado como properties) con los mismos nombres de variables.
+server:
+  port: ${PORT:8000}
+  forward-headers-strategy: framework
+spring:
+  config:
+    import: "optional:file:.env[.properties]"
+  application:
+    name: areas-verdes-backend
+  datasource:
+    url: ${MOD05_DB_URL:jdbc:postgresql://localhost:5432/areas_verdes_mod05}
+    username: ${MOD05_DB_USER:areas_verdes}
+    password: ${MOD05_DB_PASSWORD:}
+  servlet:
+    multipart:
+      max-file-size: ${MOD05_MAX_FILE_SIZE:20MB}
+      max-request-size: ${MOD05_MAX_REQUEST_SIZE:100MB}
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+      fail-on-null-for-primitives: true
+      accept-float-as-int: false
+    serialization:
+      write-dates-as-timestamps: false
+springdoc:
+  api-docs:
+    path: /api/schema
+  swagger-ui:
+    path: /api/docs
+mod05:
+  archivos: ${MOD05_ARCHIVOS_DIR:./private-media}
+  max-archivo-bytes: ${MOD05_MAX_ARCHIVO_BYTES:20971520}
+  mock-data: ${MOD05_MOCK_DATA:../mock-data}
+mod06:
+  data-source: ${DATA_SOURCE:mock}
+  mock-data-dir: ${MOCK_DATA_DIR:../mock-data}
+  gemini-api-key: ${GEMINI_API_KEY:}
+  gemini-model: ${GEMINI_MODEL:}
+logging:
+  level:
+    pe.edu.pucp.areasverdes.mod06: INFO

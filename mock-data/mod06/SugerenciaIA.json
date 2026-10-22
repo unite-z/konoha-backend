@@ -1,1 +1,95 @@
-[]
+[
+  {
+    "tipo": "ExtraccionReporte",
+    "entidad": "ReporteProveedor",
+    "registro_id": 1,
+    "archivo_id": 1,
+    "contenido": {
+      "version_contenido": 1,
+      "entrada": {
+        "reporte_proveedor_id": 1,
+        "atencion_id": 4,
+        "tipo_servicio_id": 2,
+        "formato_id": 1,
+        "formato_version": 1,
+        "archivo_id": 1,
+        "campos_solicitados": [
+          {
+            "campo_id": 1,
+            "nombre_campo": "Metrado",
+            "tipo_dato": "Decimal",
+            "obligatorio": true
+          },
+          {
+            "campo_id": 2,
+            "nombre_campo": "Productos aplicados",
+            "tipo_dato": "JSON",
+            "obligatorio": true
+          },
+          {
+            "campo_id": 3,
+            "nombre_campo": "Plagas atendidas",
+            "tipo_dato": "JSON",
+            "obligatorio": true
+          },
+          {
+            "campo_id": 4,
+            "nombre_campo": "Evidencias por espacio",
+            "tipo_dato": "JSON",
+            "obligatorio": true
+          },
+          {
+            "campo_id": 5,
+            "nombre_campo": "Ruta recorrida",
+            "tipo_dato": "Texto largo",
+            "obligatorio": true
+          }
+        ]
+      },
+      "ia": {
+        "proveedor": "Gemini (Google AI Studio)",
+        "modelo": "gemini-3.8-flash",
+        "solicitado_en": "2026-10-21T18:58:18-05:00",
+        "duracion_ms": 56690
+      },
+      "propuesta": {
+        "campo_1": {
+          "nombre_campo": "Metrado",
+          "valor": 7152.0
+        },
+        "campo_2": {
+          "nombre_campo": "Productos aplicados",
+          "valor": [
+            {}
+          ]
+        },
+        "campo_3": {
+          "nombre_campo": "Plagas atendidas",
+          "valor": [
+            {}
+          ]
+        },
+        "campo_4": {
+          "nombre_campo": "Evidencias por espacio",
+          "valor": [
+            {}
+          ]
+        },
+        "campo_5": {
+          "nombre_campo": "Ruta recorrida",
+          "valor": "06:30 - 08:30: Tontódromo\n08:30 - 09:30: Jardín Comedor Central\n09:30 - 11:30: Biblioteca Central\n11:30 - 12:30: Arte Antiguo\n13:30 - 14:30: Educación\n14:30 - 15:30: Psicología\n15:30 - 16:00: Desmovilización y lavado de equipos"
+        }
+      },
+      "campos_obligatorios_faltantes": [],
+      "decision": null
+    },
+    "estado": "Propuesta",
+    "validador_id": null,
+    "fecha_validacion": null,
+    "fecha_creacion": "2026-10-21T18:59:15-05:00",
+    "usuario_creacion_id": null,
+    "fecha_modificacion": "2026-10-21T18:59:15-05:00",
+    "usuario_modificacion_id": null,
+    "id": 1
+  }
+]
