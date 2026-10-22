@@ -21,6 +21,10 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <springdoc.version>2.8.9</springdoc.version>
     <google-genai.version>1.78.0</google-genai.version>
+    <spotless.version>2.44.4</spotless.version>
+    <google-java-format.version>1.27.0</google-java-format.version>
+    <!-- Spotless solo formatea y comprueba lo que cambia respecto a esta referencia. -->
+    <spotless.ratchetFrom>origin/main</spotless.ratchetFrom>
   </properties>
 
   <dependencies>
@@ -44,6 +48,10 @@
       <version>${google-genai.version}</version>
     </dependency>
     <!-- MOD-05 «Atenciones tercerizadas»: JDBC, HTTP Basic, Flyway y PostgreSQL. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-jdbc</artifactId>
@@ -82,6 +90,30 @@
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>com.diffplug.spotless</groupId>
+        <artifactId>spotless-maven-plugin</artifactId>
+        <version>${spotless.version}</version>
+        <configuration>
+          <ratchetFrom>${spotless.ratchetFrom}</ratchetFrom>
+          <java>
+            <googleJavaFormat>
+              <version>${google-java-format.version}</version>
+              <style>AOSP</style>
+              <reflowLongStrings>true</reflowLongStrings>
+            </googleJavaFormat>
+            <removeUnusedImports/>
+          </java>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <goal>check</goal>
+            </goals>
+            <phase>verify</phase>
+          </execution>
+        </executions>
       </plugin>
     </plugins>
   </build>

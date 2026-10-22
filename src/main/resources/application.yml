@@ -23,6 +23,18 @@ spring:
       accept-float-as-int: false
     serialization:
       write-dates-as-timestamps: false
+management:
+  endpoints:
+    web:
+      # Solo /api/health, para el healthcheck de Docker y el smoke test del despliegue.
+      base-path: /api
+      discovery:
+        enabled: false
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
 springdoc:
   api-docs:
     path: /api/schema
