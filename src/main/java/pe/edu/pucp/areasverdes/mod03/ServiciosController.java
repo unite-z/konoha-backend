@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import pe.edu.pucp.areasverdes.mod03.ConfiguracionServicios.NuevaDuracion;
 import pe.edu.pucp.areasverdes.mod03.ConfiguracionServicios.NuevaFrecuencia;
 import pe.edu.pucp.areasverdes.mod05.Usuario;
 
@@ -48,6 +49,16 @@ public class ServiciosController {
             @PathVariable String estacion,
             @Valid @RequestBody NuevaFrecuencia nueva) {
         configuracion.frecuencia(id, estacion, nueva, usuario);
+        return servicios.periodicos().stream().filter(s -> s.id() == id).findFirst().orElseThrow();
+    }
+
+    @Operation(summary = "Configura la duración máxima de un servicio (jefe de sección)")
+    @PutMapping({"/servicios/{id}/duracion", "/servicios/{id}/duracion/"})
+    public ServicioPeriodico configurarDuracion(
+            @AuthenticationPrincipal Usuario usuario,
+            @PathVariable long id,
+            @Valid @RequestBody NuevaDuracion nueva) {
+        configuracion.duracion(id, nueva, usuario);
         return servicios.periodicos().stream().filter(s -> s.id() == id).findFirst().orElseThrow();
     }
 }
