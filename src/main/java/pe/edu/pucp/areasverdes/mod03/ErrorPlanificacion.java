@@ -1,9 +1,13 @@
 package pe.edu.pucp.areasverdes.mod03;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -44,6 +48,25 @@ public class ErrorPlanificacion extends RuntimeException {
         ResponseEntity<Map<String, Object>> dominio(ErrorPlanificacion e) {
             return ResponseEntity.status(e.estado)
                     .body(Map.of("codigo", e.codigo, "detalle", e.getMessage()));
+        }
+
+        @ExceptionHandler(MethodArgumentNotValidException.class)
+        ResponseEntity<Map<String, Object>> validacion(MethodArgumentNotValidException e) {
+            Map<String, List<String>> errores = new LinkedHashMap<>();
+            for (var campo : e.getFieldErrors()) {
+                String nombre = campo.getField().replaceAll("([A-Z])", "_$1").toLowerCase();
+                errores.computeIfAbsent(nombre, k -> new ArrayList<>())
+                        .add(campo.getDefaultMessage());
+            }
+            return ResponseEntity.badRequest()
+                    .body(
+                            Map.of(
+                                    "codigo",
+                                    "validacion",
+                                    "detalle",
+                                    "Revisa los datos",
+                                    "errores",
+                                    errores));
         }
     }
 }
