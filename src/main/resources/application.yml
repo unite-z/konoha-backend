@@ -17,6 +17,8 @@ spring:
       max-file-size: ${MOD05_MAX_FILE_SIZE:20MB}
       max-request-size: ${MOD05_MAX_REQUEST_SIZE:100MB}
   jackson:
+    # Claves JSON en snake_case en toda la API (ADR 0005). Los campos Java siguen en camelCase.
+    property-naming-strategy: SNAKE_CASE
     deserialization:
       fail-on-unknown-properties: true
       fail-on-null-for-primitives: true
