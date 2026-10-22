@@ -60,6 +60,7 @@ Es lo mismo que exige `ci-ok`:
   - está documentado en OpenAPI;
   - devuelve los errores en el formato de `docs/estandares/api.md`;
   - es idempotente si lo usa la cola sin conexión de la PWA.
+- JSON en snake_case (ADR 0005), por la configuración global de Jackson. Nada de `@JsonProperty` para renombrar ni de componentes Java en snake_case en código nuevo.
 - Archivos: a través de `ArchivoStorage`, nunca directamente a disco o a S3. En S3, el guard de `S3_PREFIX` es obligatorio.
 - Fechas en `America/Lima` y con `java.time`. Importes y medidas en `BigDecimal`.
 - Inyección por constructor, DTO como `record`, `@Transactional` en el servicio.
@@ -84,9 +85,10 @@ Cambiarlas exige un ADR nuevo que sustituya al anterior.
 | Alertas solo dentro de la aplicación (SES denegado en el lab) | `konoha-infra`: `docs/adr/0003-despliegue-ec2-compose.md` |
 | Flyway con numeración correlativa y expand/contract | `docs/estandares/base-datos.md` |
 | Propiedad de entidades por módulo (`core_` para MOD-01) | `docs/estandares/base-datos.md` |
-| Prefijo de tickets `AV` (provisional, en un solo sitio) | `konoha-infra`: `docs/estandares/git-y-prs.md` |
+| Claves JSON y parámetros de la API en snake_case | `konoha-infra`: `docs/adr/0005-claves-json-snake-case.md` |
+| Prefijo de tickets `AV`; el primer issue es AV-1 | `konoha-infra`: `docs/estandares/git-y-prs.md` |
 
-Pendientes de decisión (no las cambies por tu cuenta): formato de errores ProblemDetail (ADR 0004, propuesto) y claves JSON (ADR 0005).
+Pendiente de decisión (no la cambies por tu cuenta): formato de errores ProblemDetail (ADR 0004, propuesto).
 
 ## Seguridad abierta: no empeorar
 
@@ -101,7 +103,7 @@ Ningún PR puede ampliar estas brechas (por ejemplo, abrir más rutas sin autent
 ## Deuda conocida (no la arregles de paso: tiene ticket propio)
 
 - Dos formatos de error (MOD-05 `{codigo, detalle}`; MOD-06 emula DRF en `api/drf`). Objetivo: ProblemDetail (ADR 0004).
-- JSON en snake_case. Objetivo: camelCase (ADR 0005).
+- MOD-05 nombra los componentes de sus `record` en snake_case y MOD-06 serializa a mano con mapas (`Serializadores`). Con la estrategia global de Jackson, ninguna de las dos cosas hace falta. Se simplifican cuando se toquen, sin cambiar el contrato.
 - Dos configuraciones de seguridad (`mod05/Seguridad` y `mod06/config/SeguridadMod06`) y la zona `LIMA` definida dos veces (`AreasVerdesApplication` y `Mod05Application`).
 - Variables con prefijo de módulo (`MOD05_DB_*`) para una base compartida.
 - MOD-05 en `/api/tercerizados/`, fuera de `/api/v1/`.

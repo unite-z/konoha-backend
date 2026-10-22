@@ -37,7 +37,7 @@ Deuda: hoy MOD-05 responde 403 también sin credenciales, y MOD-05 y MOD-06 usan
 
 ## Formato JSON
 
-- **Claves en camelCase** en los módulos nuevos. MOD-05 y MOD-06 siguen en snake_case hasta su migración. Ver ADR 0005 (`konoha-infra/docs/adr/`).
+- **Claves en snake_case, obligatorio** en entrada y salida (ADR 0005 en `konoha-infra/docs/adr/`). Lo aplica la configuración global de Jackson (`spring.jackson.property-naming-strategy: SNAKE_CASE`): los campos Java van en camelCase y no hace falta `@JsonProperty`.
 - Fechas `AAAA-MM-DD`. Instantes en ISO 8601 con zona (`2026-10-22T09:30:00-05:00`). Las reglas de calendario van en `America/Lima`.
 - Importes y metrados como texto decimal (`"12.50"`), para no perder precisión.
 - Los valores enumerados son estables y están documentados en OpenAPI. Se puede cambiar su etiqueta en pantalla, nunca su valor.
@@ -50,7 +50,7 @@ Deuda: hoy MOD-05 responde 403 también sin credenciales, y MOD-05 y MOD-06 usan
 ```
 
 - `?page=N`, empezando en 1. Tamaño fijo de 25, que es lo que espera el frontend.
-- Filtros como parámetros de consulta en camelCase (o snake_case en los módulos aún no migrados). Para ordenar: `?orden=campo` o `?orden=-campo`, con lista blanca en el servidor.
+- Filtros como parámetros de consulta en snake_case (`?area_verde_id=3`). Para ordenar: `?orden=campo` o `?orden=-campo`, con lista blanca en el servidor.
 
 ## Idempotencia
 

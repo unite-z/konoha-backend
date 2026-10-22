@@ -38,7 +38,7 @@ pe.edu.pucp.areasverdes
 ## Spring
 
 - **Inyección por constructor**, campos `final`. Nada de `@Autowired` en campos.
-- DTO como `record`, con Bean Validation (`@NotNull`, `@Size`...). Los controladores validan con `@Valid` y no contienen reglas de negocio.
+- DTO como `record` con componentes en camelCase y Bean Validation (`@NotNull`, `@Size`...). El JSON sale en snake_case por la configuración global de Jackson. Los controladores validan con `@Valid` y no contienen reglas de negocio.
 - `@Transactional` en el servicio, no en el controlador ni en el repositorio.
 - Configuración con `@ConfigurationProperties`. Claves propias en kebab-case (`areas-verdes.almacenamiento.prefijo`), alimentadas por variables de entorno en SCREAMING_SNAKE_CASE.
 - Los errores de negocio son excepciones propias que el manejador global traduce a HTTP (ver `api.md`). Nunca se devuelve un `ResponseEntity` de error a mano desde un servicio.
