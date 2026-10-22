@@ -9,7 +9,7 @@ COPY src ./src
 RUN mvn -B -ntp -q -DskipTests -Dspotless.skip=true package \
     && cp target/*.jar /build/app.jar
 
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:25-jre
 ARG REVISION=desconocida
 LABEL org.opencontainers.image.source="konoha-backend" \
       org.opencontainers.image.revision="${REVISION}"
