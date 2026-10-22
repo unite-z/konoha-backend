@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Hook local. Se activa con: git config core.hooksPath .githooks
+# El control de verdad es CI; esto solo avisa antes.
+set -euo pipefail
+
+staged="$(git diff --cached --name-only --diff-filter=ACMR)"
+[[ -z "$staged" ]] && exit 0
+
+# Ficheros de entorno con secretos.
+if grep -qE '(^|/)\.env$|(^|/)[^/]*\.env$|\.tfstate' <<< "$staged"; then
+  echo "pre-commit: estás añadiendo un .env o un .tfstate. Quítalo con 'git restore --staged <fichero>'." >&2
+  exit 1
+fi
+
+# Binarios de más de 5 MB.
+while IFS= read -r f; do
+  if [[ -f "$f" ]] && (( $(wc -c < "$f") > 5242880 )); then
+    echo "pre-commit: $f pesa más de 5 MB. Los binarios grandes no van en el repo." >&2
+    exit 1
+  fi
+done <<< "$staged"
+
+# Secretos, si gitleaks está instalado.
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks git --pre-commit --staged --redact --no-banner .
+else
+  echo "pre-commit: gitleaks no está instalado; CI revisará los secretos." >&2
+fi
+
+# Comprobaciones propias del repo, si existen.
+if [[ -x .githooks/pre-commit-repo ]]; then
+  .githooks/pre-commit-repo "$staged"
+fi

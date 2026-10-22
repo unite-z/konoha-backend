@@ -51,7 +51,7 @@ Las pruebas necesitan PostGIS y las variables `MOD05_TEST_DB_*` (ver `docs/estan
 
 - Dos formatos de error (MOD-05 `{codigo, detalle}`; MOD-06 emula DRF en `api/drf`). Objetivo: ProblemDetail (ADR 0004).
 - JSON en snake_case. Objetivo: camelCase (ADR 0005).
-- Dos configuraciones de seguridad (`mod05/Seguridad` y `mod06/config/SeguridadMod06`) y dos clases `main`.
+- Dos configuraciones de seguridad (`mod05/Seguridad` y `mod06/config/SeguridadMod06`) y la zona `LIMA` definida dos veces (`AreasVerdesApplication` y `Mod05Application`).
 - Variables con prefijo de módulo (`MOD05_DB_*`) para una base compartida.
 - MOD-05 en `/api/tercerizados/`, fuera de `/api/v1/`.
 - Archivos en disco (`private-media`). Objetivo: S3.

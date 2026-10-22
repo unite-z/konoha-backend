@@ -1,0 +1,117 @@
+name: ci
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+# Un push nuevo cancela la ejecución anterior del mismo PR: ahorra minutos.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  cambios:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      backend: ${{ steps.filtro.outputs.backend }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - id: filtro
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [[ -z "$BASE" ]]; then echo "backend=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if git diff --name-only "$BASE"...HEAD | grep -qE '^(src/|mock-data/|pom\.xml$|mvnw|\.mvn/|Dockerfile$|\.github/workflows/ci\.yml$)'; then
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "backend=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  higiene:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: título del PR y rama
+        env:
+          TITULO: ${{ github.event.pull_request.title }}
+          RAMA: ${{ github.head_ref }}
+          AUTOR: ${{ github.event.pull_request.user.login }}
+          PREFIJO_TICKET: ${{ vars.PREFIJO_TICKET || 'AV' }}
+        run: .github/scripts/comprobar-pr.sh
+      - name: nombres, artefactos y marcas de no fusionar
+        run: .github/scripts/comprobar-higiene.sh "${{ github.event.pull_request.base.sha }}"
+      - name: gitleaks en los commits del PR
+        run: |
+          .github/scripts/instalar-gitleaks.sh
+          .bin/gitleaks git --redact --no-banner --log-opts="${{ github.event.pull_request.base.sha }}..HEAD" .
+
+  backend:
+    needs: cambios
+    if: needs.cambios.outputs.backend == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgis:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: areas_verdes
+          POSTGRES_PASSWORD: solo-pruebas
+          POSTGRES_DB: mod05_spring_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U areas_verdes"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      MOD05_TEST_DB_URL: jdbc:postgresql://localhost:5432/mod05_spring_test
+      MOD05_TEST_DB_USER: areas_verdes
+      MOD05_TEST_DB_PASSWORD: solo-pruebas
+    steps:
+      # Historia completa: Spotless compara con origin/main (ratchetFrom).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: caché de la distribución de Maven del wrapper
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.m2/wrapper
+          key: maven-wrapper-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+      - name: formato, compilación y pruebas
+        run: ./mvnw -B -ntp verify
+      - name: informes de pruebas si falla
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: informes-surefire
+          path: target/surefire-reports/
+          retention-days: 7
+
+  # Único check obligatorio en main. Pasa si nada ha fallado; los jobs saltados cuentan como correctos.
+  ci-ok:
+    if: always()
+    needs: [cambios, higiene, backend]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - env:
+          RESULTADOS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Resultados: $RESULTADOS"
+          if [[ " $RESULTADOS " == *" failure "* || " $RESULTADOS " == *" cancelled "* ]]; then exit 1; fi

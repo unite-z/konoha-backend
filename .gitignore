@@ -1,1 +1,4 @@
 target/
+
+# Herramientas descargadas por CI
+.bin/

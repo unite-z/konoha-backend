@@ -1,0 +1,9 @@
+# Reglas por defecto de gitleaks más excepciones justificadas del repo.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Valores de ejemplo y de prueba, nunca credenciales reales"
+paths = [
+  '''(^|/)\.env\.example$''',
+]
