@@ -22,7 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import pe.edu.pucp.areasverdes.mod05.Usuario;
 
-/** Alta de restricciones del calendario (HU-MOD03-003), sueltas o en serie semanal. */
+/** Alta y baja de restricciones del calendario (HU-MOD03-003), sueltas o en serie semanal. */
 @Service
 public class CalendarioRestricciones {
 
@@ -105,6 +105,29 @@ public class CalendarioRestricciones {
         }
         jdbc.update(AUDITAR, Map.of("ids", ids, "accion", "crear", "usuario", usuario.id()));
         return ids;
+    }
+
+    /** Da de baja la restricción o, con {@code serie}, todas las de su serie. Devuelve cuántas. */
+    @Transactional
+    public int baja(long id, boolean serie, Usuario usuario) {
+        Acceso.gestionar(usuario);
+        List<Long> ids =
+                jdbc.queryForList(
+                        """
+                        UPDATE mod03_restriccion_calendario SET activo = false,
+                            fecha_modificacion = now(), usuario_modificacion_id = :usuario
+                        WHERE activo AND (id = :id OR (:serie AND serie =
+                            (SELECT serie FROM mod03_restriccion_calendario WHERE id = :id)))
+                        RETURNING id
+                        """,
+                        Map.of("id", id, "serie", serie, "usuario", usuario.id()),
+                        Long.class);
+        if (ids.isEmpty()) {
+            throw new ErrorPlanificacion(
+                    404, "restriccion-no-encontrada", "No existe esa restricción");
+        }
+        jdbc.update(AUDITAR, Map.of("ids", ids, "accion", "baja", "usuario", usuario.id()));
+        return ids.size();
     }
 
     /** Fechas de inicio de cada repetición: días de la semana pedidos dentro del periodo. */

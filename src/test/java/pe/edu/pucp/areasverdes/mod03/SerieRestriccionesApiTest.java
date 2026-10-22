@@ -4,6 +4,7 @@ import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -12,7 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.ResultActions;
 
-/** HU-MOD03-003, «Restricción repetida cada jueves». */
+/** HU-MOD03-003, «Restricción repetida cada jueves», y baja de una serie. */
 class SerieRestriccionesApiTest extends ApiPlanificacion {
 
     ResultActions juevesDeNoviembre(String hasta) throws Exception {
@@ -44,14 +45,24 @@ class SerieRestriccionesApiTest extends ApiPlanificacion {
     }
 
     @Test
-    void generaUnaRestriccionDeAvisoPorCadaJuevesConAuditoria() throws Exception {
+    void generaUnaRestriccionDeAvisoPorCadaJuevesYLaDaDeBajaEntera() throws Exception {
         juevesDeNoviembre("2026-11-30")
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.length()").value(4))
                 .andExpect(jsonPath("$[0].fecha_inicio").value("2026-11-05"))
                 .andExpect(jsonPath("$[3].fecha_inicio").value("2026-11-26"))
                 .andExpect(jsonPath("$[*].efecto").value(everyItem(is("Advertencia"))));
+        long primera =
+                jdbc.getJdbcTemplate()
+                        .queryForObject(
+                                "SELECT min(id) FROM mod03_restriccion_calendario", Long.class);
+        http.perform(
+                        delete("/api/v1/planificacion/restricciones/{id}/", primera)
+                                .param("serie", "true")
+                                .with(httpBasic("jefe", CLAVE)))
+                .andExpect(status().isNoContent());
         assertEquals(4, auditorias("crear"));
+        assertEquals(4, auditorias("baja"));
     }
 
     @Test
@@ -59,5 +70,13 @@ class SerieRestriccionesApiTest extends ApiPlanificacion {
         juevesDeNoviembre("2026-11-03")
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.codigo").value("recurrencia-invalida"));
+    }
+
+    @Test
+    void laBajaDeUnaRestriccionInexistenteResponde404() throws Exception {
+        http.perform(
+                        delete("/api/v1/planificacion/restricciones/999/")
+                                .with(httpBasic("jefe", CLAVE)))
+                .andExpect(status().isNotFound());
     }
 }
