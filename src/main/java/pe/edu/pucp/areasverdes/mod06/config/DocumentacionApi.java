@@ -39,5 +39,16 @@ public class DocumentacionApi {
         String docs() {
             return "forward:/api/docs";
         }
+
+        /** Rutas de documentación que tenía el MOD-05 antes de la fusión; ahora muestran la documentación común. */
+        @GetMapping({"/api/tercerizados/schema", "/api/tercerizados/schema/"})
+        String esquemaMod05() {
+            return "forward:/api/schema";
+        }
+
+        @GetMapping({"/api/tercerizados/docs", "/api/tercerizados/docs/"})
+        String docsMod05() {
+            return "forward:/api/docs";
+        }
     }
 }

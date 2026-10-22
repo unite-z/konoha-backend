@@ -11,6 +11,8 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import pe.edu.pucp.areasverdes.mod06.comun.JsonPy;
 import pe.edu.pucp.areasverdes.mod06.permisos.Permisos;
@@ -23,6 +25,19 @@ import pe.edu.pucp.areasverdes.mod06.permisos.Permisos;
 @AutoConfigureMockMvc
 @Import(DoblesPrueba.class)
 public abstract class PruebaApi {
+
+    /**
+     * El contexto incluye el MOD-05, que necesita PostgreSQL. Se usa la misma base exclusiva {@code *_test} que
+     * {@code Mod05IntegrationTest}, nunca la de desarrollo. El MOD-06 no lee ni escribe en ella.
+     */
+    @DynamicPropertySource
+    static void baseDatosPrueba(DynamicPropertyRegistry p) {
+        String url = System.getenv().getOrDefault("MOD05_TEST_DB_URL", "jdbc:postgresql://127.0.0.1:55432/mod05_spring_test");
+        if (!url.endsWith("_test")) throw new IllegalStateException("Las pruebas requieren una base exclusiva terminada en _test");
+        p.add("spring.datasource.url", () -> url);
+        p.add("spring.datasource.username", () -> System.getenv().getOrDefault("MOD05_TEST_DB_USER", System.getProperty("user.name")));
+        p.add("spring.datasource.password", () -> System.getenv().getOrDefault("MOD05_TEST_DB_PASSWORD", ""));
+    }
 
     @Autowired
     protected MockMvc http;

@@ -5,6 +5,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -31,8 +33,10 @@ import pe.edu.pucp.areasverdes.mod06.comun.errores.TransicionNoPermitida;
  *   <li>Cualquier otro error: 500 con la página de error de Django.</li>
  * </ul>
  *
- * <p>Limitado al paquete {@code mod06} para no interferir con el MOD-05 en la fusión.
+ * <p>Limitado al paquete {@code mod06} para no interferir con el MOD-05 en la fusión. Va primero porque el
+ * manejador del MOD-05 es global y, si no, atendería también los errores del MOD-06.
  */
+@Order(Ordered.HIGHEST_PRECEDENCE)
 @RestControllerAdvice(basePackages = "pe.edu.pucp.areasverdes.mod06")
 public class ManejadorExcepciones {
 
