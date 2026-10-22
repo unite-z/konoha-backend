@@ -21,7 +21,7 @@ Lo decide quien coordina al aplicar el ruleset, cambiando `required_approving_re
 
 ## Requisitos antes de aplicarlo
 
-1. La cuenta dueña tiene GitHub Pro (en el plan gratuito, los rulesets no se aplican en repos privados).
+1. El repo es público, o su dueño tiene un plan de pago: en el plan gratuito, los rulesets no se aplican en repos privados. Los repos de `unite-z` son públicos.
 2. Hay al menos dos colaboradores con permiso de escritura (nadie puede aprobar su propio PR).
 3. `CODEOWNERS` tiene **al menos dos personas por ruta**. Si una ruta tiene un único dueño, sus propios PR no se pueden fusionar. Mientras falten usuarios, aplica el ruleset con `"require_code_owner_review": false`.
 4. CI ha pasado al menos una vez en un PR, para que GitHub conozca el check `ci-ok`.
