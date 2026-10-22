@@ -31,6 +31,7 @@ Las pruebas necesitan PostGIS y las variables `MOD05_TEST_DB_*` (ver `docs/estan
 ## Reglas no negociables
 
 - **Nunca se edita una migración ya fusionada.** Se corrige con una nueva. Toda migración tiene que ser compatible con la versión anterior de la api (expand/contract).
+- **Cada entidad tiene un módulo dueño** (usuarios y roles: MOD-01 con tablas `core_`; áreas verdes y ejemplares: MOD-02). Nunca crees una copia de una tabla ajena: referénciala. Ver `docs/estandares/base-datos.md`.
 - **SQL siempre parametrizado.** Ninguna entrada del usuario se concatena en una consulta.
 - **El backend decide los permisos.** Todo endpoint nuevo entra en la matriz de permisos por rol, o CI falla.
 - **Las pruebas nunca llaman a Gemini.** Se usa `ClienteIAFalso`.
@@ -54,6 +55,7 @@ Las pruebas necesitan PostGIS y las variables `MOD05_TEST_DB_*` (ver `docs/estan
 - Variables con prefijo de módulo (`MOD05_DB_*`) para una base compartida.
 - MOD-05 en `/api/tercerizados/`, fuera de `/api/v1/`.
 - Archivos en disco (`private-media`). Objetivo: S3.
+- `V1__mod05.sql` duplica entidades ajenas (`mod05_usuario`, `mod05_usuario_rol`, `mod05_areaverde`, `mod05_ejemplar`). Objetivo: consolidarlas en las tablas de su dueño.
 
 ## Flujo de trabajo
 
