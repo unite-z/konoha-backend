@@ -1,6 +1,7 @@
 package pe.edu.pucp.areasverdes.mod03;
 
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -9,9 +10,15 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import pe.edu.pucp.areasverdes.mod03.Programador.Bloqueo;
+import pe.edu.pucp.areasverdes.mod03.RestriccionesController.Restriccion;
 import pe.edu.pucp.areasverdes.mod05.Usuario;
 
-/** Alta de programaciones de servicios periódicos (HU-MOD03-004, RN-002). */
+/**
+ * Alta de programaciones (HU-MOD03-004, RN-002 y RN-003). Ante una advertencia exige justificación,
+ * que queda como constancia; ante una prohibición, además, confirmación expresa. Sin ellas no
+ * guarda.
+ */
 @Service
 public class ProgramacionServicios {
 
@@ -19,7 +26,9 @@ public class ProgramacionServicios {
             @NotNull(message = "Indica el servicio") Long tipoServicioId,
             Long proveedorId,
             @NotNull(message = "Indica el inicio") LocalDate fechaInicioPrevista,
-            @NotNull(message = "Indica el fin") LocalDate fechaFinPrevista) {}
+            @NotNull(message = "Indica el fin") LocalDate fechaFinPrevista,
+            @Size(max = 300, message = "Máximo 300 caracteres") String justificacion,
+            Boolean confirmarProhibicion) {}
 
     private record Duracion(boolean ruidoso, Integer maxima, Integer limpieza) {}
 
@@ -56,6 +65,17 @@ public class ProgramacionServicios {
         }
         Programador.exigirDuracion(
                 Programador.dias(inicio, fin), servicio.maxima(), servicio.limpieza());
+        List<Restriccion> conflictos =
+                jdbc
+                        .query(
+                                RestriccionesController.CONSULTA.formatted(
+                                        "r.fecha_inicio <= :hasta AND r.fecha_fin >= :desde"),
+                                Map.of("desde", inicio, "hasta", fin),
+                                new DataClassRowMapper<>(Restriccion.class))
+                        .stream()
+                        .filter(r -> afecta(r, inicio, fin, servicio.ruidoso()))
+                        .toList();
+        exigirConstancia(conflictos, nueva);
         var datos =
                 new MapSqlParameterSource()
                         .addValue("servicio", nueva.tipoServicioId())
@@ -63,16 +83,54 @@ public class ProgramacionServicios {
                         .addValue("estacion", Programador.estacion(inicio))
                         .addValue("inicio", inicio)
                         .addValue("fin", fin)
-                        .addValue("usuario", usuario.id());
-        return jdbc.queryForObject(
-                """
-                INSERT INTO mod03_programacion_servicio(tipo_servicio_id, proveedor_id, estacion,
-                    fecha_inicio_prevista, fecha_fin_prevista, creado_por_id, usuario_creacion_id,
-                    usuario_modificacion_id)
-                VALUES (:servicio, :proveedor, :estacion, :inicio, :fin,
-                    :usuario, :usuario, :usuario) RETURNING id
-                """,
-                datos,
-                Long.class);
+                        .addValue("usuario", usuario.id())
+                        .addValue("justificacion", nueva.justificacion());
+        long id =
+                jdbc.queryForObject(
+                        """
+                        INSERT INTO mod03_programacion_servicio(tipo_servicio_id, proveedor_id, estacion,
+                            fecha_inicio_prevista, fecha_fin_prevista, creado_por_id, usuario_creacion_id,
+                            usuario_modificacion_id)
+                        VALUES (:servicio, :proveedor, :estacion, :inicio, :fin,
+                            :usuario, :usuario, :usuario) RETURNING id
+                        """,
+                        datos,
+                        Long.class);
+        for (Restriccion r : conflictos) {
+            jdbc.update(
+                    "INSERT INTO mod03_confirmacion_restriccion(programacion_id, restriccion_id,"
+                            + " usuario_id, justificacion) VALUES (:id, :restriccion, :usuario,"
+                            + " :justificacion)",
+                    datos.addValue("id", id).addValue("restriccion", r.id()));
+        }
+        return id;
+    }
+
+    private static boolean afecta(Restriccion r, LocalDate inicio, LocalDate fin, boolean ruidoso) {
+        return !Programador.conflictos(List.of(Bloqueo.de(r)), inicio, fin, ruidoso).isEmpty();
+    }
+
+    /** Escenarios «Aviso por actividad extracurricular» y «Prohibición por examen de admisión». */
+    private static void exigirConstancia(List<Restriccion> conflictos, NuevaProgramacion nueva) {
+        if (conflictos.isEmpty()) {
+            return;
+        }
+        String motivos =
+                String.join(
+                        ", ",
+                        conflictos.stream().map(r -> r.tipo() + " el " + r.fechaInicio()).toList());
+        if (nueva.justificacion() == null || nueva.justificacion().isBlank()) {
+            throw new ErrorPlanificacion(
+                    409,
+                    "restricciones-sin-justificar",
+                    "Coincide con " + motivos + ". Justifica la fecha o elige otra");
+        }
+        if (!Boolean.TRUE.equals(nueva.confirmarProhibicion())
+                && conflictos.stream().anyMatch(r -> "Prohibicion".equals(r.efecto()))) {
+            throw new ErrorPlanificacion(
+                    409,
+                    "confirmacion-requerida",
+                    "Coincide con " + motivos + ", que lo prohíbe. Confírmalo expresamente");
+        }
     }
 }
