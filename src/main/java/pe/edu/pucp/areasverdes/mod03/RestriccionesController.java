@@ -97,14 +97,14 @@ public class RestriccionesController {
                 new DataClassRowMapper<>(Restriccion.class));
     }
 
-    @Operation(summary = "Registra una restricción del calendario (jefe de sección)")
+    @Operation(summary = "Registra una restricción o una serie semanal (jefe de sección)")
     @PostMapping({"/restricciones", "/restricciones/"})
     @ResponseStatus(HttpStatus.CREATED)
     public List<Restriccion> crear(
             @AuthenticationPrincipal Usuario usuario, @Valid @RequestBody NuevaRestriccion nueva) {
         return jdbc.query(
                 CONSULTA.formatted("r.id IN (:ids)"),
-                Map.of("ids", List.of(calendario.crear(nueva, usuario))),
+                Map.of("ids", calendario.crear(nueva, usuario)),
                 new DataClassRowMapper<>(Restriccion.class));
     }
 }
