@@ -43,6 +43,16 @@ cp .env.example .env      # completar MOD05_DB_PASSWORD; GEMINI_API_KEY solo par
 
 Necesitan PostgreSQL con PostGIS en una base terminada en `_test` (`MOD05_TEST_DB_*` como variables de entorno). Cómo levantarla con Docker: [docs/estandares/pruebas.md](docs/estandares/pruebas.md).
 
+## Catastro de ejemplares
+
+La migración `V10` crea el modelo de ejemplares y especies de MOD-02 y mantiene la vista `mod05_ejemplar` para las referencias de MOD-05. Tras arrancar el backend contra la base local para que Flyway aplique la migración, valida el Excel original:
+
+```sh
+python3 scripts/importar-catastro.py "/ruta/catastro campus.xlsx"
+```
+
+La validación no escribe en la base. Para importar, define `MOD05_DB_URL`, `MOD05_DB_USER` y `MOD05_DB_PASSWORD` y añade `--aplicar`. La importación usa `Referencia` como clave externa idempotente, conserva `Código` cuando está informado y deja la placa antigua vacía.
+
 ## Documentación
 
 - [AGENTS.md](AGENTS.md): estado, mapa, gates y reglas, para personas y agentes.
