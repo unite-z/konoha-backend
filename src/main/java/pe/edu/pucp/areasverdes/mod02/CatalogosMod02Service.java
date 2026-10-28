@@ -179,8 +179,8 @@ public class CatalogosMod02Service {
                 "SELECT s.id, s.nombre, s.activo, s.atencion_a_demanda, u.nombre capataz_nombre,"
                     + " coalesce(sum(a.superficie_m2), 0)::text superficie_m2 FROM mod02_sector s"
                     + " LEFT JOIN mod02_historial_capataz_sector hc ON hc.sector_id = s.id AND"
-                    + " hc.fecha_fin IS NULL LEFT JOIN mod05_usuario u ON u.id = hc.capataz_id LEFT"
-                    + " JOIN mod02_historial_area_sector ha ON ha.sector_id = s.id AND ha.fecha_fin"
+                    + " hc.fecha_fin IS NULL LEFT JOIN mod05_usuario u ON u.id = hc.capataz_id"
+                    + " LEFT JOIN mod02_historial_area_sector ha ON ha.sector_id = s.id AND ha.fecha_fin"
                     + " IS NULL LEFT JOIN mod02_area_verde a ON a.id = ha.area_verde_id AND"
                     + " a.activo WHERE (:incluir OR s.activo) GROUP BY s.id, u.nombre ORDER BY"
                     + " lower(s.nombre), s.id",

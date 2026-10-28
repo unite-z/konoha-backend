@@ -199,6 +199,30 @@ class CatalogosMod02ApiTest {
                 .isEqualTo(1);
     }
 
+    @Test
+    void creaYListaSectorSinAreasAsignadas() throws Exception {
+        String sectorJson =
+                http.perform(
+                                post("/api/v1/inventario/sectores")
+                                        .with(httpBasic("jefe", CLAVE))
+                                        .contentType("application/json")
+                                        .content("{\"nombre\":\"Sector sin áreas\"}"))
+                        .andExpect(status().isCreated())
+                        .andExpect(jsonPath("$.nombre").value("Sector sin áreas"))
+                        .andExpect(jsonPath("$.superficie_m2").value("0"))
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+        long sectorId =
+                ((Number) com.jayway.jsonpath.JsonPath.read(sectorJson, "$.id")).longValue();
+
+        http.perform(
+                        get("/api/v1/inventario/sectores")
+                                .with(httpBasic("jefe", CLAVE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id == " + sectorId + ")]").isNotEmpty());
+    }
+
     private void crearUsuario(String usuario, String rol) {
         long id =
                 jdbc.queryForObject(
