@@ -8,13 +8,15 @@ Este fichero es la guía para personas y agentes. Estándares comunes y ADR: en 
 
 - Sprint 0 (en curso): repos, estándares, CI y despliegue preparados. Aún sin EC2: `deploy-uat.yml` se salta hasta que `DESPLIEGUE_ACTIVO=true`.
 - MOD-05 y MOD-06: borrador importado y funcionando en local. MOD-06 lee datos `mock`.
-- Pendiente de arranque: tablas de MOD-01 (`core_`) y MOD-02, PostGIS y almacenamiento en S3.
+- MOD-01: sesión, usuarios, roles, permisos, auditoría común, adjuntos y repositorio en `/api/v1/core/` (tablas `core_`). Ver `docs/modulos/mod01.md`.
+- Pendiente de arranque: tablas de MOD-02, PostGIS y almacenamiento en S3.
 
 ## Mapa
 
 | Ruta | Qué hay |
 |---|---|
 | `src/main/java/pe/edu/pucp/areasverdes/mod05/` | MOD-05 «Atenciones tercerizadas»: `/api/tercerizados/`, HTTP Basic, JDBC y Flyway |
+| `src/main/java/pe/edu/pucp/areasverdes/mod01/` | MOD-01 «Core y seguridad»: `/api/v1/core/`, sesión con cookie, permisos (`Autorizacion`) y auditoría común (`RegistradorAuditoria`) |
 | `src/main/java/pe/edu/pucp/areasverdes/mod06/` | MOD-06 «Reportes, indicadores e IA»: `/api/v1/`, datos `mock` o `db`, Gemini |
 | `src/main/java/pe/edu/pucp/areasverdes/comun/` | Lo compartido entre módulos (hoy, la seguridad de `/api/health`) |
 | `src/main/resources/db/migration/` | Migraciones Flyway |
@@ -92,7 +94,7 @@ Pendiente de decisión (no la cambies por tu cuenta): formato de errores Problem
 
 ## Seguridad abierta: no empeorar
 
-- MOD-05 usa HTTP Basic con usuarios propios, hasta que exista la autenticación de MOD-01.
+- MOD-05 y MOD-03 usan HTTP Basic con `mod05_usuario`. La sesión de MOD-01 ya existe (`/api/v1/core/`); pasarlos a ella va con la consolidación de usuarios.
 - MOD-06 no tiene autenticación (`/api/v1/**` abierto).
 - Archivos en el disco del contenedor, sin el guard de `S3_PREFIX`.
 - MOD-05 responde 403 cuando faltan credenciales (debería ser 401).
@@ -132,6 +134,7 @@ Los planes, notas y borradores de trabajo de personas y agentes van en `.notas/`
 | `SECURITY.md` | Cómo avisar de una vulnerabilidad |
 | `docs/arranque-local.md` | Instalación paso a paso en macOS y Windows |
 | `docs/estandares/*.md` | Java, API, base de datos, pruebas y almacenamiento |
+| `docs/modulos/mod01.md` | Contrato de MOD-01: sesión, endpoints y códigos de permiso para los demás módulos |
 | `docs/modulos/mod05.md` | Documentación funcional de MOD-05 |
 | `mock-data/README.md` | Formato de los datos simulados |
 
