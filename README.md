@@ -50,3 +50,7 @@ Necesitan PostgreSQL con PostGIS en una base terminada en `_test` (`MOD05_TEST_D
 - [docs/estandares/](docs/estandares/): Java, API, base de datos, pruebas y almacenamiento.
 - [docs/base-datos/](docs/base-datos/README.md): modelo entidad-relación implementado (draw.io).
 - Estándares comunes y ADR: en `konoha-infra`.
+
+## MOD-04: operación de campo
+
+Entrega de cuadrillas, capataces y operarios, con sesión común de MOD-01. API `/api/v1/operacion-campo/`, permisos en servidor y auditoría común. La migración nueva V11 se revisa antes de publicar; V1–V10 no se alteran. Precarga de demostración solo en perfil dev con `--mod04.seed=true` y `MOD04_DEMO_PASSWORD`. Participantes llega en el PR siguiente. El registro requiere conexión; la cola sin conexión queda fuera de estos requisitos.
