@@ -272,7 +272,7 @@ class Mod05IntegrationTest {
                         + "/documentos/"
                         + r1.at("/documentos/0/id").asLong()
                         + "/descarga/";
-        http.perform(get(download)).andExpect(status().isForbidden());
+        http.perform(get(download)).andExpect(status().isUnauthorized());
         http.perform(get(download).with(httpBasic("jefe", PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Cache-Control", "private, no-store"))
@@ -474,22 +474,30 @@ class Mod05IntegrationTest {
     @ValueSource(strings = {"jefe", "ingeniero", "practicante", "sinrol", "inactivo"})
     void permisosYMe(String user) throws Exception {
         http.perform(get("/api/tercerizados/me/").with(httpBasic(user, PASSWORD)))
-                .andExpect(status().is(user.equals("inactivo") ? 403 : 200));
+                .andExpect(status().is(user.equals("inactivo") ? 401 : 200));
         http.perform(get(BASE).with(httpBasic(user, PASSWORD)))
-                .andExpect(status().is(Set.of("sinrol", "inactivo").contains(user) ? 403 : 200));
+                .andExpect(
+                        status().is(
+                                        user.equals("inactivo")
+                                                ? 401
+                                                : user.equals("sinrol") ? 403 : 200));
         http.perform(
                         post(BASE)
                                 .with(httpBasic(user, PASSWORD))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(json.writeValueAsBytes(input())))
-                .andExpect(status().is(user.equals("jefe") ? 201 : 403));
+                .andExpect(
+                        status().is(
+                                        user.equals("jefe")
+                                                ? 201
+                                                : user.equals("inactivo") ? 401 : 403));
     }
 
     @Test
     void anonimoCredencialInvalidaYJerarquia() throws Exception {
-        http.perform(get(BASE)).andExpect(status().isForbidden());
+        http.perform(get(BASE)).andExpect(status().isUnauthorized());
         http.perform(get(BASE).with(httpBasic("jefe", "incorrecta")))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
         repo.jdbc()
                 .update(
                         "INSERT INTO mod05_usuario_rol VALUES (:id,:rol)",
