@@ -98,7 +98,9 @@ La asignación por rol sigue la matriz de las Historias de Usuario (sección 2.1
   - cada cuenta se queda con un solo rol, con prioridad jefe > ingeniero > practicante;
   - las cuentas sin rol entran inactivas.
 - Hasta la consolidación (ticket propio), MOD-03 y MOD-05 siguen autenticando con HTTP Basic contra `mod05_usuario`. Una cuenta nueva de MOD-01 todavía no entra en esos módulos.
-- Las cuentas de prueba salen con el perfil `dev` y `MOD01_DEMO_PASSWORD`: `jefe@`, `ingeniero@`, `practicante@` y `capataz@pucp.edu.pe`.
+- En local, con el perfil `dev`, se entra con las cuentas de MOD-05 (`mod05_jefe` y su clave de `MOD05_DEMO_PASSWORD`): la precarga copia a `core_usuario` las que falten, con el mismo `id`. En una base nueva, la precarga de MOD-05 corre después de las migraciones y la copia de `V6` no las ve.
+- Con `MOD01_DEMO_PASSWORD`, además, una cuenta de prueba por rol, capataz incluido: `jefe@`, `ingeniero@`, `practicante@` y `capataz@pucp.edu.pe`.
+- En local por http, `CORE_COOKIE_SEGURA=false` en `.env` (Safari no guarda cookies `Secure` en `http://localhost`). UAT y prod usan su `api.env` de `konoha-infra` y mantienen `true`.
 - La tarea de vigencia corre cada hora y desactiva las cuentas vencidas. El aviso de 7 días se muestra como destacado `vence-pronto` en la lista (alertas solo dentro de la aplicación, ADR 0003).
 
 ## Pendientes
