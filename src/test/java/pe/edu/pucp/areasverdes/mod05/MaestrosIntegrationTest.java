@@ -343,6 +343,11 @@ class MaestrosIntegrationTest {
         assertTrue(creado.get("vigente").asBoolean());
         var lista = send("GET", "contratos/", null, "practicante", 200);
         assertEquals(2, lista.get("count").asInt());
+        // HU-MOD01-007, «Campos económicos ocultos»: solo el jefe de sección ve el monto.
+        String ruta = "contratos/" + creado.get("id").asLong() + "/";
+        assertTrue(send("GET", ruta, null, "ingeniero", 200).get("monto_fijo").isNull());
+        lista.get("results").forEach(c -> assertTrue(c.get("monto_fijo").isNull()));
+        assertEquals("12000.00", send("GET", ruta, null, "jefe", 200).get("monto_fijo").asText());
         var precargado = send("GET", "contratos/" + contrato + "/", null, "jefe", 200);
         assertTrue(precargado.get("monto_fijo").isNull()); // el precargado no trae condiciones
         assertTrue(precargado.get("vigente").asBoolean());

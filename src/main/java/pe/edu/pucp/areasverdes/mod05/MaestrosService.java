@@ -89,16 +89,18 @@ public class MaestrosService {
                                 "vigente")),
                 params,
                 url,
-                this::contratoVisible);
+                fila -> contratoVisible(fila, user));
     }
 
     public Map<String, Object> contrato(Usuario user, long id) {
         user.exigir(false);
-        return contratoVisible(repo.one(CONTRATOS + " WHERE c.id=:id", Map.of("id", id)));
+        return contratoVisible(repo.one(CONTRATOS + " WHERE c.id=:id", Map.of("id", id)), user);
     }
 
-    Map<String, Object> contratoVisible(Map<String, Object> fila) {
-        if (fila.get("monto_fijo") instanceof BigDecimal monto)
+    /** RNF-008 y HU-MOD01-007: el monto solo lo ve el jefe de sección; al resto le llega nulo. */
+    Map<String, Object> contratoVisible(Map<String, Object> fila, Usuario user) {
+        if (!user.roles().contains(Usuario.JEFE)) fila.put("monto_fijo", null);
+        else if (fila.get("monto_fijo") instanceof BigDecimal monto)
             fila.put("monto_fijo", monto.setScale(2).toPlainString());
         LocalDate hoy = LocalDate.now(clock);
         fila.put(
@@ -234,7 +236,8 @@ public class MaestrosService {
                         VALUES (:id,:area,:monto,:frecuencia,:condiciones,:fecha,:usuario)
                         """,
                         detalle);
-        var creado = contratoVisible(repo.one(CONTRATOS + " WHERE c.id=:id", Map.of("id", id)));
+        var creado =
+                contratoVisible(repo.one(CONTRATOS + " WHERE c.id=:id", Map.of("id", id)), user);
         repo.audit("Contrato", id, "Alta", user, Map.of(), creado, "");
         return creado;
     }
