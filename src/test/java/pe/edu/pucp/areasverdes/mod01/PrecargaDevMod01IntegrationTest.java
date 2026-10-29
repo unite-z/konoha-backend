@@ -28,7 +28,8 @@ class PrecargaDevMod01IntegrationTest extends ApiCore {
                         + " campo'), (:id, 'Jefe de sección')",
                 Map.of("id", id));
 
-        // Copia esta cuenta y cualquier otra de MOD-05 que falte (otras pruebas también crean cuentas).
+        // Copia esta cuenta y cualquier otra de MOD-05 que falte (otras pruebas también crean
+        // cuentas).
         assertTrue(PrecargaDevMod01.copiarCuentasMod05(jdbc) >= 1);
         assertEquals(0, PrecargaDevMod01.copiarCuentasMod05(jdbc), "Es idempotente");
         assertEquals(
