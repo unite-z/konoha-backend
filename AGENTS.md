@@ -16,6 +16,7 @@ Este fichero es la guía para personas y agentes. Estándares comunes y ADR: en 
 |---|---|
 | `src/main/java/pe/edu/pucp/areasverdes/mod05/` | MOD-05 «Atenciones tercerizadas»: `/api/tercerizados/`, HTTP Basic, JDBC y Flyway |
 | `src/main/java/pe/edu/pucp/areasverdes/mod06/` | MOD-06 «Reportes, indicadores e IA»: `/api/v1/`, datos `mock` o `db`, Gemini |
+| `src/main/java/pe/edu/pucp/areasverdes/mod06/gestion/` | Reportes de gestión del MOD-06 (RF-REP-001, 005 y 007): `/api/v1/reportes/...`, HTTP Basic, JDBC de solo lectura sobre `mod05_*` |
 | `src/main/java/pe/edu/pucp/areasverdes/comun/` | Lo compartido entre módulos (hoy, la seguridad de `/api/health`) |
 | `src/main/resources/db/migration/` | Migraciones Flyway |
 | `src/main/resources/prompts/` | Prompts de la IA |
@@ -93,7 +94,7 @@ Pendiente de decisión (no la cambies por tu cuenta): formato de errores Problem
 ## Seguridad abierta: no empeorar
 
 - MOD-05 usa HTTP Basic con usuarios propios, hasta que exista la autenticación de MOD-01.
-- MOD-06 no tiene autenticación (`/api/v1/**` abierto).
+- MOD-06 no tiene autenticación (`/api/v1/**` abierto), salvo los reportes de gestión (`/api/v1/reportes/panel/`, `/material-vegetal/` y `/mapa-atenciones/`), que usan HTTP Basic como MOD-03.
 - Archivos en el disco del contenedor, sin el guard de `S3_PREFIX`.
 - MOD-05 responde 403 cuando faltan credenciales (debería ser 401).
 - Swagger (`/api/docs`) es público en todos los entornos.

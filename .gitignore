@@ -5,3 +5,5 @@ target/
 
 # Notas y planes de trabajo locales (de personas y agentes): nunca se commitean
 .notas/
+
+.env
