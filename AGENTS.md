@@ -15,7 +15,7 @@ Este fichero es la guía para personas y agentes. Estándares comunes y ADR: en 
 
 | Ruta | Qué hay |
 |---|---|
-| `src/main/java/pe/edu/pucp/areasverdes/mod05/` | MOD-05 «Atenciones tercerizadas»: `/api/tercerizados/`, HTTP Basic, JDBC y Flyway |
+| `src/main/java/pe/edu/pucp/areasverdes/mod05/` | MOD-05 «Atenciones tercerizadas»: `/api/tercerizados/`, sesión de MOD-01 (y HTTP Basic para pruebas), JDBC y Flyway |
 | `src/main/java/pe/edu/pucp/areasverdes/mod01/` | MOD-01 «Core y seguridad»: `/api/v1/core/`, sesión con cookie, permisos (`Autorizacion`) y auditoría común (`RegistradorAuditoria`) |
 | `src/main/java/pe/edu/pucp/areasverdes/mod06/` | MOD-06 «Reportes, indicadores e IA»: `/api/v1/`, datos `mock` o `db`, Gemini |
 | `src/main/java/pe/edu/pucp/areasverdes/comun/` | Lo compartido entre módulos (hoy, la seguridad de `/api/health`) |
@@ -95,10 +95,9 @@ Pendiente de decisión (no la cambies por tu cuenta): formato de errores Problem
 
 ## Seguridad abierta: no empeorar
 
-- MOD-05 y MOD-03 usan HTTP Basic con `mod05_usuario`. La sesión de MOD-01 ya existe (`/api/v1/core/`); pasarlos a ella va con la consolidación de usuarios.
+- MOD-05 y MOD-03 aceptan la sesión de MOD-01 (`SesionCompartida`, AV-234) y siguen aceptando HTTP Basic contra `mod05_usuario` para las pruebas y el smoke test del despliegue. Una cuenta creada solo en MOD-01 entra, pero no puede escribir en MOD-05 hasta la consolidación de usuarios (sus tablas apuntan a `mod05_usuario`).
 - MOD-06 no tiene autenticación (`/api/v1/**` abierto).
 - Archivos en el disco del contenedor, sin el guard de `S3_PREFIX`.
-- MOD-05 responde 403 cuando faltan credenciales (debería ser 401).
 - Swagger (`/api/docs`) es público en todos los entornos.
 
 Ningún PR puede ampliar estas brechas (por ejemplo, abrir más rutas sin autenticación). Cerrarlas va en tickets propios.
