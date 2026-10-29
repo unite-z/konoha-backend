@@ -3,6 +3,7 @@
 #   1. nombres en kebab-case salvo las excepciones de docs/estandares/nombres.md;
 #   2. artefactos que no deben versionarse (builds, dependencias, .env, estado de Terraform, binarios grandes);
 #   3. marcas de "no fusionar" en las líneas añadidas.
+#   4. migraciones ya fusionadas que el PR modifica, renombra o borra.
 # Uso: comprobar-higiene.sh <sha-base>
 set -euo pipefail
 
@@ -80,6 +81,12 @@ if git diff -U0 "$base"...HEAD -- . ':(exclude)*.md' ':(exclude).github/scripts/
   echo "::error::Hay una marca $marca en las líneas añadidas. Quítala antes de fusionar."
   errores=1
 fi
+
+# Una migración fusionada no se edita: Flyway valida su checksum y la api no arrancaría en UAT ni en prod.
+while IFS= read -r ruta; do
+  [[ -z "$ruta" ]] && continue
+  falla "$ruta" "Migración ya fusionada en main: no se edita, renombra ni borra. Corrígela con una migración nueva (docs/estandares/base-datos.md)."
+done < <(git diff --name-only --diff-filter=MDR "$base"...HEAD -- src/main/resources/db/migration/)
 
 if (( errores == 0 )); then echo "Higiene correcta."; fi
 exit "$errores"

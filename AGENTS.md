@@ -52,7 +52,7 @@ Es lo mismo que exige `ci-ok`:
 
 ## Reglas no negociables
 
-- **Nunca se edita una migración ya fusionada.** Se corrige con una nueva. Toda migración tiene que ser compatible con la versión anterior de la api (expand/contract).
+- **Nunca se edita una migración ya fusionada.** Se corrige con una nueva (`higiene` lo rechaza en el PR). Toda migración tiene que ser compatible con la versión anterior de la api (expand/contract).
 - **Cada entidad tiene un módulo dueño** (usuarios y roles: MOD-01 con tablas `core_`; áreas verdes y ejemplares: MOD-02). Nunca crees una copia de una tabla ajena: referénciala. Ver `docs/estandares/base-datos.md`.
 - **SQL siempre parametrizado.** Ninguna entrada del usuario se concatena en una consulta.
 - **El backend decide los permisos.** Todo endpoint nuevo entra en la matriz de permisos por rol, o CI falla.
