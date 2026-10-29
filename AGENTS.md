@@ -24,7 +24,8 @@ Este fichero es la guía para personas y agentes. Estándares comunes y ADR: en 
 | `src/test/java/.../apoyo/` | Dobles de prueba y constructores de datos |
 | `mock-data/` | Datos simulados (JSON y PDF) para `DATA_SOURCE=mock` |
 | `Dockerfile` | Imagen `konoha-api`: build con Maven y JRE 21 sin root |
-| `.github/workflows/` | `ci.yml`, `deploy-uat.yml` y `limpiar-imagenes.yml` |
+| `.github/workflows/` | `ci.yml`, `deploy-uat.yml`, `limpiar-imagenes.yml` y `tamano-pr.yml` (aviso si el PR pasa de 400 líneas) |
+| `.github/copilot-instructions.md`, `.github/instructions/` | Normas que usa Copilot al revisar los PR |
 
 ## Comandos
 
