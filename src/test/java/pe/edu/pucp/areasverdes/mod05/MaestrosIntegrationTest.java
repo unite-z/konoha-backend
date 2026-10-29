@@ -280,7 +280,7 @@ class MaestrosIntegrationTest {
     void soloElJefeRegistraProveedores() throws Exception {
         for (String user : List.of("ingeniero", "practicante", "sinrol"))
             send("POST", "proveedores/", proveedorNuevo("20000000009"), user, 403);
-        send("POST", "proveedores/", proveedorNuevo("20000000009"), null, 403);
+        send("POST", "proveedores/", proveedorNuevo("20000000009"), null, 401);
         assertEquals(1, count("proveedor"));
     }
 
@@ -572,9 +572,9 @@ class MaestrosIntegrationTest {
                         "aplicaciones_adicionales",
                         1);
         send("POST", "atenciones-especiales/", body, "sinrol", 403);
-        send("POST", "atenciones-especiales/", body, null, 403);
+        send("POST", "atenciones-especiales/", body, null, 401);
         send("GET", "atenciones-especiales/", null, "sinrol", 403);
-        send("GET", "plagas/", null, null, 403);
+        send("GET", "plagas/", null, null, 401);
         assertEquals(0, count("atencion_especial"));
     }
 

@@ -20,7 +20,6 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfException;
 import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.csrf.CsrfToken;
@@ -70,8 +69,7 @@ public class SeguridadMod01 {
             AutenticacionService autenticacion,
             RegistroAccesos accesos)
             throws Exception {
-        var tokensCsrf = CookieCsrfTokenRepository.withHttpOnlyFalse();
-        tokensCsrf.setCookiePath("/");
+        var tokensCsrf = SesionCompartida.tokensCsrf();
         http.securityMatcher("/api/v1/core", "/api/v1/core/**")
                 .authorizeHttpRequests(
                         a ->
@@ -86,6 +84,8 @@ public class SeguridadMod01 {
                                 c.csrfTokenRepository(tokensCsrf)
                                         .csrfTokenRequestHandler(
                                                 new CsrfTokenRequestAttributeHandler())
+                                        .sessionAuthenticationStrategy(
+                                                SesionCompartida.SIN_REGENERAR_CSRF)
                                         .ignoringRequestMatchers(LOGIN))
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .requestCache(c -> c.disable())
