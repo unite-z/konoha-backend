@@ -2,6 +2,8 @@ name: ci
 
 on:
   pull_request:
+    # edited: corregir el título del PR vuelve a comprobarlo sin tener que hacer push.
+    types: [opened, synchronize, reopened, edited]
   workflow_dispatch:
 
 # Un push nuevo cancela la ejecución anterior del mismo PR: ahorra minutos.
