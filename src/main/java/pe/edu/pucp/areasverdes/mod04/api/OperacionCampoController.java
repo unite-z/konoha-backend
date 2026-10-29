@@ -126,4 +126,28 @@ public class OperacionCampoController {
             @PathVariable long id, @AuthenticationPrincipal Usuario user) {
         return service.cuadrilla(id, user);
     }
+
+    @PostMapping({"/encargos", "/encargos/"})
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "RF-PLA-005: registrar encargo semanal o quincenal")
+    public Map<String, Object> crearEncargo(
+            @Valid @RequestBody Entradas.Encargo body, @AuthenticationPrincipal Usuario user) {
+        return service.guardarEncargo(null, body, user);
+    }
+
+    @PutMapping({"/encargos/{id}", "/encargos/{id}/"})
+    @Operation(summary = "Actualizar planificación de encargo")
+    public Map<String, Object> actualizarEncargo(
+            @PathVariable long id,
+            @Valid @RequestBody Entradas.Encargo body,
+            @AuthenticationPrincipal Usuario user) {
+        return service.guardarEncargo(id, body, user);
+    }
+
+    @GetMapping({"/encargos/{id}", "/encargos/{id}/"})
+    @Operation(summary = "Consultar encargo")
+    public Map<String, Object> encargo(
+            @PathVariable long id, @AuthenticationPrincipal Usuario user) {
+        return service.encargo(id, user);
+    }
 }

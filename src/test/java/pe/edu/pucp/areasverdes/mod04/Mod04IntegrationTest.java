@@ -284,6 +284,21 @@ class Mod04IntegrationTest {
     }
 
     @Test
+    void periodosSemanalesYQuincenalesConLimitesIncluidos() throws Exception {
+        long id = cuadrilla(c1, o1);
+        postJson("/encargos/", encargo(id, "Semanal", 7), "jefe", 201);
+        postJson("/encargos", encargo(id, "Quincenal", 14), "jefe", 201);
+        postJson("/encargos", encargo(id, "Semanal", 8), "jefe", 400);
+        postJson("/encargos", encargo(id, "Quincenal", 15), "jefe", 400);
+        var bad = encargo(id, "Semanal", 7);
+        bad.put("plazo_previsto", HOY.plusDays(7));
+        postJson("/encargos", bad, "jefe", 400);
+        bad = encargo(id, "Semanal", 7);
+        bad.put("fecha_fin", HOY.minusDays(1));
+        postJson("/encargos", bad, "jefe", 400);
+    }
+
+    @Test
     void concurrenciaNoAsignaOperarioADosCuadrillas() throws Exception {
         var start = new CountDownLatch(1);
         try (var executor = Executors.newFixedThreadPool(2)) {

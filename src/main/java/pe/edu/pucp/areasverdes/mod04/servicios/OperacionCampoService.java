@@ -6,6 +6,7 @@ import static pe.edu.pucp.areasverdes.mod04.datos.Mod04Repository.values;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -225,6 +226,79 @@ public class OperacionCampoService {
 
     public Map<String, Object> cuadrilla(long id, Usuario user) {
         var result = repo.cuadrilla(id);
+        exigirCapataz(number(result, "capataz_id"), user, false);
+        return result;
+    }
+
+    @Transactional
+    public Map<String, Object> guardarEncargo(Long id, Entradas.Encargo body, Usuario user) {
+        exigirJefe(user);
+        long days = ChronoUnit.DAYS.between(body.fechaInicio(), body.fechaFin()) + 1;
+        int max = body.periodicidad().equals("Semanal") ? 7 : 14;
+        if (days < 1 || days > max)
+            throw ApiError.invalid(
+                    "El periodo debe tener entre 1 y " + max + " días, incluidos inicio y fin");
+        if (body.plazoPrevisto().isBefore(body.fechaInicio())
+                || body.plazoPrevisto().isAfter(body.fechaFin()))
+            throw ApiError.invalid("El plazo debe estar dentro del periodo de planificación");
+        if (body.fechaReunion().isAfter(body.fechaFin()))
+            throw ApiError.invalid("La reunión no puede ser posterior al periodo");
+        var squad = repo.get("cuadrilla", body.cuadrillaId(), true);
+        if (!Boolean.TRUE.equals(squad.get("activa")))
+            throw ApiError.conflict("La cuadrilla está inactiva");
+        personalValido(number(squad, "capataz_id"), CAPATAZ);
+        catalogos(body.tipoActividadId(), body.areaVerdeId());
+        Map<String, Object> before = Map.of();
+        if (id != null) {
+            before = repo.get("encargo", id, true);
+            if (!repo.rows("SELECT id FROM mod04_actividad WHERE encargo_id=:id", Map.of("id", id))
+                    .isEmpty())
+                throw ApiError.conflict(
+                        "El encargo ya tiene ejecución registrada y no puede redefinirse");
+        }
+        var data =
+                values(
+                        "cuadrilla_id",
+                        body.cuadrillaId(),
+                        "capataz_id",
+                        squad.get("capataz_id"),
+                        "tipo_actividad_id",
+                        body.tipoActividadId(),
+                        "area_verde_id",
+                        body.areaVerdeId(),
+                        "descripcion",
+                        body.descripcion().strip(),
+                        "periodicidad",
+                        body.periodicidad(),
+                        "fecha_reunion",
+                        body.fechaReunion(),
+                        "fecha_inicio",
+                        body.fechaInicio(),
+                        "fecha_fin",
+                        body.fechaFin(),
+                        "plazo_previsto",
+                        body.plazoPrevisto(),
+                        "fecha_modificacion",
+                        OffsetDateTime.now(clock),
+                        "usuario_modificacion_id",
+                        user.id());
+        if (id == null) {
+            data.put("usuario_creacion_id", user.id());
+            id = repo.insert("encargo", data);
+        } else repo.update("encargo", id, data);
+        var result = repo.encargo(id);
+        repo.audit(
+                "Encargo",
+                id,
+                before.isEmpty() ? "Crear" : "Actualizar",
+                user.id(),
+                before,
+                result);
+        return result;
+    }
+
+    public Map<String, Object> encargo(long id, Usuario user) {
+        var result = repo.encargo(id);
         exigirCapataz(number(result, "capataz_id"), user, false);
         return result;
     }
