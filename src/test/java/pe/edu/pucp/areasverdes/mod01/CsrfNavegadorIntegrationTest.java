@@ -20,6 +20,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import pe.edu.pucp.areasverdes.comun.BaseDePruebas;
 
 /**
  * La cookie {@code XSRF-TOKEN} tal como la usa el navegador, contra el servidor HTTP real: MockMvc
@@ -35,17 +36,7 @@ class CsrfNavegadorIntegrationTest {
 
     @DynamicPropertySource
     static void baseDePruebas(DynamicPropertyRegistry p) {
-        String url =
-                System.getenv()
-                        .getOrDefault(
-                                "MOD05_TEST_DB_URL",
-                                "jdbc:postgresql://127.0.0.1:55432/mod05_spring_test");
-        if (!url.endsWith("_test")) {
-            throw new IllegalStateException("Las pruebas requieren una base terminada en _test");
-        }
-        p.add("spring.datasource.url", () -> url);
-        p.add("spring.datasource.username", () -> System.getenv("MOD05_TEST_DB_USER"));
-        p.add("spring.datasource.password", () -> System.getenv("MOD05_TEST_DB_PASSWORD"));
+        BaseDePruebas.registrar(p);
         // http en las pruebas: sin Secure, como en local.
         p.add("core.seguridad.cookie-segura", () -> "false");
     }

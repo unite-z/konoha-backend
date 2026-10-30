@@ -14,15 +14,16 @@
 ## Base de datos de pruebas
 
 - Una base exclusiva cuyo nombre termina en `_test`: las suites vacían sus tablas.
-- Variables: `MOD05_TEST_DB_URL`, `MOD05_TEST_DB_USER` y `MOD05_TEST_DB_PASSWORD`. Pasan a `TEST_DB_*` cuando se unifique la configuración (deuda con ticket).
+- Variables: `TEST_DB_URL`, `TEST_DB_USER` y `TEST_DB_PASSWORD`. Los nombres anteriores, `MOD05_TEST_DB_*`, se siguen aceptando.
+- Todas las pruebas de integración obtienen la base de `comun/BaseDePruebas`: con `BaseDePruebas.registrar(p)` dentro de su `@DynamicPropertySource`, o con `BaseDePruebas.URL`, `USUARIO` y `CLAVE` si abren la conexión a mano. Ningún módulo define variables propias: el CI solo da base a estas y `comprobar-higiene.sh` rechaza una prueba que lea otras.
 - En local, con Docker:
 
   ```sh
   docker run -d --name konoha-test-db -p 55432:5432 \
     -e POSTGRES_USER=areas_verdes -e POSTGRES_PASSWORD=solo-pruebas \
     -e POSTGRES_DB=mod05_spring_test postgis/postgis:16-3.4
-  export MOD05_TEST_DB_URL=jdbc:postgresql://127.0.0.1:55432/mod05_spring_test
-  export MOD05_TEST_DB_USER=areas_verdes MOD05_TEST_DB_PASSWORD=solo-pruebas
+  export TEST_DB_URL=jdbc:postgresql://127.0.0.1:55432/mod05_spring_test
+  export TEST_DB_USER=areas_verdes TEST_DB_PASSWORD=solo-pruebas
   ./mvnw verify
   ```
 

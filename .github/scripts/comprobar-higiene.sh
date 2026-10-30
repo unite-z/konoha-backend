@@ -3,7 +3,8 @@
 #   1. nombres en kebab-case salvo las excepciones de docs/estandares/nombres.md;
 #   2. artefactos que no deben versionarse (builds, dependencias, .env, estado de Terraform, binarios grandes);
 #   3. marcas de "no fusionar" en las líneas añadidas.
-#   4. migraciones ya fusionadas que el PR modifica, renombra o borra.
+#   4. migraciones ya fusionadas que el PR modifica, renombra o borra;
+#   5. pruebas que leen las variables de la base de pruebas por su cuenta en vez de usar BaseDePruebas.
 # Uso: comprobar-higiene.sh <sha-base>
 set -euo pipefail
 
@@ -87,6 +88,13 @@ while IFS= read -r ruta; do
   [[ -z "$ruta" ]] && continue
   falla "$ruta" "Migración ya fusionada en main: no se edita, renombra ni borra. Corrígela con una migración nueva (docs/estandares/base-datos.md)."
 done < <(git diff --name-only --diff-filter=MDR "$base"...HEAD -- src/main/resources/db/migration/)
+
+# La base de pruebas solo se lee en BaseDePruebas: un módulo con variables propias se queda sin base en el CI (AV-242).
+if git diff -U0 "$base"...HEAD -- src/test/java ':(exclude)src/test/java/pe/edu/pucp/areasverdes/comun/BaseDePruebas.java' \
+  | grep -E '^\+' | grep -qE 'TEST_DB_[A-Z]+"'; then
+  echo "::error::Una prueba lee variables *TEST_DB_* por su cuenta. Usa BaseDePruebas.registrar(p) (docs/estandares/pruebas.md)."
+  errores=1
+fi
 
 if (( errores == 0 )); then echo "Higiene correcta."; fi
 exit "$errores"
