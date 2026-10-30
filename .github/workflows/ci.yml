@@ -2,8 +2,6 @@ name: ci
 
 on:
   pull_request:
-    # edited: corregir el título del PR vuelve a comprobarlo sin tener que hacer push.
-    types: [opened, synchronize, reopened, edited]
   workflow_dispatch:
 
 # Un push nuevo cancela la ejecución anterior del mismo PR: ahorra minutos.
@@ -77,10 +75,6 @@ jobs:
           --health-timeout 5s
           --health-retries 20
     env:
-      TEST_DB_URL: jdbc:postgresql://localhost:5432/mod05_spring_test
-      TEST_DB_USER: areas_verdes
-      TEST_DB_PASSWORD: solo-pruebas
-      # Nombres anteriores: los siguen leyendo las ramas abiertas antes de AV-242. Quitar cuando no quede ninguna.
       MOD05_TEST_DB_URL: jdbc:postgresql://localhost:5432/mod05_spring_test
       MOD05_TEST_DB_USER: areas_verdes
       MOD05_TEST_DB_PASSWORD: solo-pruebas

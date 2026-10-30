@@ -42,17 +42,6 @@ springdoc:
     path: /api/schema
   swagger-ui:
     path: /api/docs
-core:
-  seguridad:
-    # Supuestos ACC-S4 a ACC-S6 del equipo, pendientes de la contraparte (RNF-011).
-    intentos-maximos: ${CORE_INTENTOS_MAXIMOS:5}
-    minutos-bloqueo: ${CORE_MINUTOS_BLOQUEO:15}
-    minutos-inactividad: ${CORE_MINUTOS_INACTIVIDAD:30}
-    dias-sesion-persistente: ${CORE_DIAS_SESION_PERSISTENTE:30}
-    # CU-MOD01-007 dice 60 y HU-MOD01-008 dice 75: pendiente de decidir.
-    dias-sin-uso: ${CORE_DIAS_SIN_USO:60}
-    # false solo en local sin HTTPS.
-    cookie-segura: ${CORE_COOKIE_SEGURA:true}
 mod05:
   archivos: ${MOD05_ARCHIVOS_DIR:./private-media}
   max-archivo-bytes: ${MOD05_MAX_ARCHIVO_BYTES:20971520}

@@ -5,7 +5,6 @@
 Esquema **real** de PostgreSQL tal como queda tras las migraciones de Flyway. Se sacó de la base de UAT el 22-10-2026 (`V1__mod05.sql`).
 
 - 16 tablas, todas de MOD-05. MOD-06 todavía no tiene tablas propias: lee los datos de MOD-05 y de `mock-data/`.
-- Pendiente de dibujar: MOD-01 añade `core_rol`, `core_usuario`, `core_permiso`, `core_rol_permiso`, `core_sesion`, `core_registro_auditoria`, `core_registro_acceso`, `core_archivo` y `core_adjunto` (`V6` a `V10`, ver [mod01.md](../modulos/mod01.md)). `core_usuario` copia `mod05_usuario` con los mismos `id`, y las dos tablas de bitácora solo admiten inserciones.
 - `mod05_usuario`, `mod05_areaverde` y `mod05_ejemplar` son provisionales. Cuando MOD-01 y MOD-02 publiquen sus tablas `core_`, MOD-05 las referenciará y estas se retirarán con expand y contract (ver [base-datos.md](../estandares/base-datos.md), «Propiedad de las entidades»).
 - `mod05_historialestado` y `mod05_registroauditoria` solo admiten inserciones: un trigger rechaza `UPDATE` y `DELETE`.
 - No se dibujan `flyway_schema_history` ni `spatial_ref_sys` (PostGIS).
