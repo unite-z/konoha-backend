@@ -19,25 +19,7 @@ class SaludIntegrationTest {
 
     @DynamicPropertySource
     static void propiedades(DynamicPropertyRegistry p) {
-        String url =
-                System.getenv()
-                        .getOrDefault(
-                                "MOD05_TEST_DB_URL",
-                                "jdbc:postgresql://127.0.0.1:55432/mod05_spring_test");
-        if (!url.endsWith("_test")) {
-            throw new IllegalStateException(
-                    "Las pruebas requieren una base exclusiva terminada en _test");
-        }
-        p.add("spring.datasource.url", () -> url);
-        p.add(
-                "spring.datasource.username",
-                () ->
-                        System.getenv()
-                                .getOrDefault(
-                                        "MOD05_TEST_DB_USER", System.getProperty("user.name")));
-        p.add(
-                "spring.datasource.password",
-                () -> System.getenv().getOrDefault("MOD05_TEST_DB_PASSWORD", ""));
+        BaseDePruebas.registrar(p);
     }
 
     @Autowired MockMvc http;

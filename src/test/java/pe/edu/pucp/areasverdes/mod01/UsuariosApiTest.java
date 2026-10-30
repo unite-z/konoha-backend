@@ -154,7 +154,7 @@ class UsuariosApiTest extends ApiCore {
                 "UPDATE core_usuario SET ultimo_acceso = now() - interval '61 days' WHERE id = :id",
                 Map.of("id", ids.get("ingeniero")));
         jdbc.update(
-                "UPDATE core_usuario SET fecha_fin_vigencia = current_date + 5 WHERE id = :id",
+                "UPDATE core_usuario SET fecha_fin_vigencia = " + HOY_LIMA + " + 5 WHERE id = :id",
                 Map.of("id", ids.get("practicante")));
         jdbc.update(
                 "UPDATE core_usuario SET bloqueado_hasta = now() + interval '10 minutes'"
@@ -186,7 +186,7 @@ class UsuariosApiTest extends ApiCore {
     void lasCuentasVencidasSeDesactivanSolas() throws Exception {
         var sesionPracticante = sesion("practicante");
         jdbc.update(
-                "UPDATE core_usuario SET fecha_fin_vigencia = current_date - 1 WHERE id = :id",
+                "UPDATE core_usuario SET fecha_fin_vigencia = " + HOY_LIMA + " - 1 WHERE id = :id",
                 Map.of("id", ids.get("practicante")));
         assertEquals(1, servicio.desactivarVencidas());
         assertEquals(0, servicio.desactivarVencidas());

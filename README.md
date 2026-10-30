@@ -41,7 +41,7 @@ cp .env.example .env      # completar MOD05_DB_PASSWORD; GEMINI_API_KEY solo par
 ./mvnw verify
 ```
 
-Necesitan PostgreSQL con PostGIS en una base terminada en `_test` (`MOD05_TEST_DB_*` como variables de entorno). Cómo levantarla con Docker: [docs/estandares/pruebas.md](docs/estandares/pruebas.md).
+Necesitan PostgreSQL con PostGIS en una base terminada en `_test` (`TEST_DB_*` como variables de entorno). Cómo levantarla con Docker: [docs/estandares/pruebas.md](docs/estandares/pruebas.md).
 
 ## Documentación
 
