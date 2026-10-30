@@ -268,6 +268,22 @@ class Mod04IntegrationTest {
     }
 
     @Test
+    void periodosSemanalesYQuincenalesConLimitesIncluidos() throws Exception {
+        long id = cuadrilla(c1, o1);
+        postJson("/encargos/", encargo(id, "Semanal", 7), "jefe", 201);
+        postJson("/encargos", encargo(id, "Quincenal", 14), "jefe", 201);
+        postJson("/encargos", encargo(id, "Semanal", 8), "jefe", 400);
+        postJson("/encargos", encargo(id, "Quincenal", 15), "jefe", 400);
+        postJson("/encargos", encargo(id, "Quincenal", 20), "jefe", 400);
+        var bad = encargo(id, "Semanal", 7);
+        bad.put("plazo_previsto", HOY.plusDays(7));
+        postJson("/encargos", bad, "jefe", 400);
+        bad = encargo(id, "Semanal", 7);
+        bad.put("fecha_fin", HOY.minusDays(1));
+        postJson("/encargos", bad, "jefe", 400);
+    }
+
+    @Test
     void concurrenciaNoAsignaOperarioADosCuadrillas() throws Exception {
         var start = new CountDownLatch(1);
         try (var executor = Executors.newFixedThreadPool(2)) {
@@ -342,6 +358,29 @@ class Mod04IntegrationTest {
                 repo.jdbc()
                         .queryForObject(
                                 "SELECT count(*) FROM mod04_personal", Map.of(), Long.class));
+    }
+
+    @Test
+    void cadaCapatazSoloConsultaSusEncargosConPlazo() throws Exception {
+        long propia = cuadrilla(c1, o1), ajena = cuadrilla(c2, o2);
+        long idPropio =
+                postJson("/encargos", encargo(propia, "Semanal", 7), "jefe", 201)
+                        .path("id")
+                        .asLong();
+        long idAjeno =
+                postJson("/encargos", encargo(ajena, "Semanal", 7), "jefe", 201)
+                        .path("id")
+                        .asLong();
+        http.perform(get(BASE + "/encargos/").with(httpBasic("capataz1", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(1))
+                .andExpect(jsonPath("$.results[0].id").value(idPropio))
+                .andExpect(jsonPath("$.results[0].plazo_previsto").value(HOY.toString()));
+        http.perform(get(BASE + "/encargos/" + idAjeno).with(httpBasic("capataz1", PASSWORD)))
+                .andExpect(status().isForbidden());
+        postJson("/encargos", encargo(propia, "Semanal", 7), "capataz1", 403);
+        assertTrue(repo.encargo(idPropio).containsKey("estado"));
+        assertEquals(null, repo.encargo(idPropio).get("estado"));
     }
 
     String hashDemo() {

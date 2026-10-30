@@ -144,7 +144,7 @@ public class Mod04Repository {
     public Map<String, Object> encargo(long id) {
         return one(
                 """
-                SELECT e.*,c.nombre cuadrilla_nombre,p.nombres||' '||p.apellidos capataz_nombre,
+                SELECT e.*,NULL::text estado,c.nombre cuadrilla_nombre,p.nombres||' '||p.apellidos capataz_nombre,
                     t.nombre tipo_actividad_nombre,a.nombre area_verde_nombre
                 FROM mod04_encargo e JOIN mod04_cuadrilla c ON c.id=e.cuadrilla_id
                 JOIN mod04_personal p ON p.id=e.capataz_id JOIN mod04_tipo_actividad t ON t.id=e.tipo_actividad_id
