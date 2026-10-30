@@ -21,6 +21,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import pe.edu.pucp.areasverdes.comun.BaseDePruebas;
 
 /**
  * RF-SER-001, RF-SER-002 y RF-INV-011. Misma base *_test y mismos usuarios que
@@ -42,24 +43,7 @@ class MaestrosIntegrationTest {
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry p) {
-        String url =
-                System.getenv()
-                        .getOrDefault(
-                                "MOD05_TEST_DB_URL",
-                                "jdbc:postgresql://127.0.0.1:55432/mod05_spring_test");
-        if (!url.endsWith("_test"))
-            throw new IllegalStateException(
-                    "Las pruebas requieren una base exclusiva terminada en _test");
-        p.add("spring.datasource.url", () -> url);
-        p.add(
-                "spring.datasource.username",
-                () ->
-                        System.getenv()
-                                .getOrDefault(
-                                        "MOD05_TEST_DB_USER", System.getProperty("user.name")));
-        p.add(
-                "spring.datasource.password",
-                () -> System.getenv().getOrDefault("MOD05_TEST_DB_PASSWORD", ""));
+        BaseDePruebas.registrar(p);
         p.add("mod05.archivos", () -> FILES.toString());
         p.add("mod05.max-archivo-bytes", () -> 1024);
     }
@@ -280,7 +264,7 @@ class MaestrosIntegrationTest {
     void soloElJefeRegistraProveedores() throws Exception {
         for (String user : List.of("ingeniero", "practicante", "sinrol"))
             send("POST", "proveedores/", proveedorNuevo("20000000009"), user, 403);
-        send("POST", "proveedores/", proveedorNuevo("20000000009"), null, 403);
+        send("POST", "proveedores/", proveedorNuevo("20000000009"), null, 401);
         assertEquals(1, count("proveedor"));
     }
 
@@ -343,6 +327,11 @@ class MaestrosIntegrationTest {
         assertTrue(creado.get("vigente").asBoolean());
         var lista = send("GET", "contratos/", null, "practicante", 200);
         assertEquals(2, lista.get("count").asInt());
+        // HU-MOD01-007, «Campos económicos ocultos»: solo el jefe de sección ve el monto.
+        String ruta = "contratos/" + creado.get("id").asLong() + "/";
+        assertTrue(send("GET", ruta, null, "ingeniero", 200).get("monto_fijo").isNull());
+        lista.get("results").forEach(c -> assertTrue(c.get("monto_fijo").isNull()));
+        assertEquals("12000.00", send("GET", ruta, null, "jefe", 200).get("monto_fijo").asText());
         var precargado = send("GET", "contratos/" + contrato + "/", null, "jefe", 200);
         assertTrue(precargado.get("monto_fijo").isNull()); // el precargado no trae condiciones
         assertTrue(precargado.get("vigente").asBoolean());
@@ -567,9 +556,9 @@ class MaestrosIntegrationTest {
                         "aplicaciones_adicionales",
                         1);
         send("POST", "atenciones-especiales/", body, "sinrol", 403);
-        send("POST", "atenciones-especiales/", body, null, 403);
+        send("POST", "atenciones-especiales/", body, null, 401);
         send("GET", "atenciones-especiales/", null, "sinrol", 403);
-        send("GET", "plagas/", null, null, 403);
+        send("GET", "plagas/", null, null, 401);
         assertEquals(0, count("atencion_especial"));
     }
 
