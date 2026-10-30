@@ -95,7 +95,7 @@ class AuthApiTest extends ApiCore {
     @Test
     void unaCuentaVencidaNoEntraYSeLePideContactarAlJefe() throws Exception {
         jdbc.update(
-                "UPDATE core_usuario SET fecha_fin_vigencia = current_date - 1 WHERE id = :id",
+                "UPDATE core_usuario SET fecha_fin_vigencia = " + HOY_LIMA + " - 1 WHERE id = :id",
                 Map.of("id", ids.get("practicante")));
         http.perform(login("practicante" + DOMINIO, CLAVE))
                 .andExpect(status().isUnauthorized())

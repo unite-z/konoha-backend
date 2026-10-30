@@ -45,6 +45,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import pe.edu.pucp.areasverdes.comun.BaseDePruebas;
 import pe.edu.pucp.areasverdes.mod01.config.PrecargaDevMod01;
 import pe.edu.pucp.areasverdes.mod04.api.OperacionCampoController;
 import pe.edu.pucp.areasverdes.mod04.datos.Mod04Repository;
@@ -60,24 +61,7 @@ class Mod04IntegrationTest {
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry p) {
-        String url =
-                System.getenv()
-                        .getOrDefault(
-                                "MOD04_TEST_DB_URL",
-                                "jdbc:postgresql://127.0.0.1:55432/mod04_spring_test");
-        if (!url.endsWith("_test"))
-            throw new IllegalStateException(
-                    "Las pruebas requieren una base exclusiva terminada en _test");
-        p.add("spring.datasource.url", () -> url);
-        p.add(
-                "spring.datasource.username",
-                () ->
-                        System.getenv()
-                                .getOrDefault(
-                                        "MOD04_TEST_DB_USER", System.getProperty("user.name")));
-        p.add(
-                "spring.datasource.password",
-                () -> System.getenv().getOrDefault("MOD04_TEST_DB_PASSWORD", ""));
+        BaseDePruebas.registrar(p);
     }
 
     @TestConfiguration

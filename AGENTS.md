@@ -38,14 +38,14 @@ Este fichero es la guía para personas y agentes. Estándares comunes y ADR: en 
 ./mvnw test -Dtest=CumplimientoCorteServiceTest   # una clase
 ```
 
-Java 21 exactamente. Las pruebas de integración necesitan PostGIS y `MOD05_TEST_DB_*` (ver `docs/estandares/pruebas.md`).
+Java 21 exactamente. Las pruebas de integración necesitan PostGIS y `TEST_DB_*` (ver `docs/estandares/pruebas.md`).
 
 ## Gates: lo que tiene que pasar antes de pushear
 
 Es lo mismo que exige `ci-ok`:
 
 ```sh
-./mvnw verify                                     # con PostGIS levantado y MOD05_TEST_DB_* exportadas
+./mvnw verify                                     # con PostGIS levantado y TEST_DB_* exportadas
 ```
 
 - El hook `pre-push` ya ejecuta Spotless sobre lo cambiado y las pruebas rápidas. Actívalo con `git config core.hooksPath .githooks`.
