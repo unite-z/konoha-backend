@@ -1,4 +1,4 @@
-# Quién revisa qué. Cada ruta necesita al menos dos personas: nadie aprueba su propio PR.
+# A quién se pide revisión en cada ruta. La revisión es recomendable, no obligatoria.
 # La última regla que coincide es la que manda.
 # TODO: sustituir cada @TODO-... por usuarios de GitHub del equipo y descomentar.
 
