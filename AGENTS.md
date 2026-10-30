@@ -17,6 +17,7 @@ Este fichero es la guía para personas y agentes. Estándares comunes y ADR: en 
 |---|---|
 | `src/main/java/pe/edu/pucp/areasverdes/mod05/` | MOD-05 «Atenciones tercerizadas»: `/api/tercerizados/`, sesión de MOD-01 (y HTTP Basic para pruebas), JDBC y Flyway |
 | `src/main/java/pe/edu/pucp/areasverdes/mod01/` | MOD-01 «Core y seguridad»: `/api/v1/core/`, sesión con cookie, permisos (`Autorizacion`) y auditoría común (`RegistradorAuditoria`) |
+| `src/main/java/pe/edu/pucp/areasverdes/mod04/` | MOD-04 «Operación de campo»: cuadrillas, encargos y participantes en `/api/v1/operacion-campo/`; sesión común de MOD-01 y referencias a `core_usuario` |
 | `src/main/java/pe/edu/pucp/areasverdes/mod06/` | MOD-06 «Reportes, indicadores e IA»: `/api/v1/`, datos `mock` o `db`, Gemini |
 | `src/main/java/pe/edu/pucp/areasverdes/comun/` | Lo compartido entre módulos (hoy, la seguridad de `/api/health`) |
 | `src/main/resources/db/migration/` | Migraciones Flyway |
