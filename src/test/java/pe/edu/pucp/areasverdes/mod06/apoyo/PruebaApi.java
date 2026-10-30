@@ -37,11 +37,13 @@ public abstract class PruebaApi {
     /**
      * El contexto incluye el MOD-05, que necesita PostgreSQL. Se usa la misma base exclusiva {@code
      * *_test} que {@code Mod05IntegrationTest}, nunca la de desarrollo. El MOD-06 no lee ni escribe
-     * en ella.
+     * en ella. Pool de 2 conexiones para no agotar las de PostgreSQL en CI (ver {@code
+     * ApiGestion}).
      */
     @DynamicPropertySource
     static void baseDatosPrueba(DynamicPropertyRegistry p) {
         BaseDePruebas.registrar(p);
+        p.add("spring.datasource.hikari.maximum-pool-size", () -> 2);
     }
 
     @Autowired protected MockMvc http;

@@ -23,26 +23,32 @@ import pe.edu.pucp.areasverdes.mod06.comun.errores.TipoArchivoNoAdmitido;
 import pe.edu.pucp.areasverdes.mod06.comun.errores.TransicionNoPermitida;
 
 /**
- * Traducción de las excepciones del MOD-06 a respuestas HTTP ({@code api/manejador_excepciones.py}).
+ * Traducción de las excepciones del MOD-06 a respuestas HTTP ({@code
+ * api/manejador_excepciones.py}).
  *
  * <ul>
- *   <li>Excepciones de dominio: {@code {"codigo": "<NombreExcepcion>", "detalle": "<mensaje que dice qué hacer>"}}
- *   con el código HTTP de la tabla.</li>
- *   <li>Errores propios de DRF (validación, 403, 404, 405, 406, 415, lectura del cuerpo): formato por defecto de
- *   DRF ({@code {"campo": ["mensaje"]}} o {@code {"detail": "..."}}).</li>
- *   <li>Cualquier otro error: 500 con la página de error de Django.</li>
+ *   <li>Excepciones de dominio: {@code {"codigo": "<NombreExcepcion>", "detalle": "<mensaje que
+ *       dice qué hacer>"}} con el código HTTP de la tabla.
+ *   <li>Errores propios de DRF (validación, 403, 404, 405, 406, 415, lectura del cuerpo): formato
+ *       por defecto de DRF ({@code {"campo": ["mensaje"]}} o {@code {"detail": "..."}}).
+ *   <li>Cualquier otro error: 500 con la página de error de Django.
  * </ul>
  *
- * <p>Limitado al paquete {@code mod06} para no interferir con el MOD-05 en la fusión. Va primero porque el
- * manejador del MOD-05 es global y, si no, atendería también los errores del MOD-06.
+ * <p>Limitado al paquete {@code mod06} para no interferir con el MOD-05 en la fusión. Va primero
+ * porque el manejador del MOD-05 es global y, si no, atendería también los errores del MOD-06.
+ *
+ * <p>Limitado a {@code mod06.api}, donde están todos los controladores del MOD-06 con contrato DRF:
+ * {@code mod06.gestion} (RF-REP-001, RF-REP-005 y RF-REP-007) tiene su propio manejador, {@code
+ * ErrorGestion.Manejador}.
  */
 @Order(Ordered.HIGHEST_PRECEDENCE)
-@RestControllerAdvice(basePackages = "pe.edu.pucp.areasverdes.mod06")
+@RestControllerAdvice(basePackages = "pe.edu.pucp.areasverdes.mod06.api")
 public class ManejadorExcepciones {
 
     private static final Logger log = LoggerFactory.getLogger(ManejadorExcepciones.class);
 
-    static final Map<Class<? extends ErrorDominio>, Integer> ESTADO_HTTP_POR_EXCEPCION = new LinkedHashMap<>();
+    static final Map<Class<? extends ErrorDominio>, Integer> ESTADO_HTTP_POR_EXCEPCION =
+            new LinkedHashMap<>();
 
     static {
         ESTADO_HTTP_POR_EXCEPCION.put(ParametroInvalido.class, 400);
@@ -62,7 +68,8 @@ public class ManejadorExcepciones {
     @ExceptionHandler(ErrorDominio.class)
     ResponseEntity<byte[]> dominio(ErrorDominio exc, HttpServletRequest peticion) {
         int codigoHttp = 500;
-        for (Map.Entry<Class<? extends ErrorDominio>, Integer> e : ESTADO_HTTP_POR_EXCEPCION.entrySet()) {
+        for (Map.Entry<Class<? extends ErrorDominio>, Integer> e :
+                ESTADO_HTTP_POR_EXCEPCION.entrySet()) {
             if (e.getKey().isInstance(exc)) {
                 codigoHttp = e.getValue();
                 break;

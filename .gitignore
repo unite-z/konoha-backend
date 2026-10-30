@@ -6,16 +6,4 @@ target/
 # Notas y planes de trabajo locales (de personas y agentes): nunca se commitean
 .notas/
 
-# Entornos: nunca se commitean (solo .env.example)
 .env
-*.env
-.env.*
-!.env.example
-
-# Logs
-*.log
-
-# Sistema e IDE
-.DS_Store
-.idea/
-.vscode/
