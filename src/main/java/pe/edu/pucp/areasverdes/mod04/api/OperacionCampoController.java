@@ -7,7 +7,9 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,11 +17,13 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import pe.edu.pucp.areasverdes.mod04.servicios.ConsultasCampoService;
+import pe.edu.pucp.areasverdes.mod04.servicios.IdempotenciaCampo;
 import pe.edu.pucp.areasverdes.mod04.servicios.OperacionCampoService;
 import pe.edu.pucp.areasverdes.mod05.Usuario;
 
@@ -46,13 +50,16 @@ import pe.edu.pucp.areasverdes.mod05.Usuario;
 @SecurityRequirement(name = "basicAuth")
 public class OperacionCampoController {
     final OperacionCampoService service;
-
     final ConsultasCampoService consultas;
+    final IdempotenciaCampo idempotencia;
 
     public OperacionCampoController(
-            OperacionCampoService service, ConsultasCampoService consultas) {
+            OperacionCampoService service,
+            ConsultasCampoService consultas,
+            IdempotenciaCampo idempotencia) {
         this.service = service;
         this.consultas = consultas;
+        this.idempotencia = idempotencia;
     }
 
     @GetMapping({"/me", "/me/"})
@@ -149,5 +156,60 @@ public class OperacionCampoController {
     public Map<String, Object> encargo(
             @PathVariable long id, @AuthenticationPrincipal Usuario user) {
         return service.encargo(id, user);
+    }
+
+    @PostMapping({"/partes", "/partes/"})
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Soporte mínimo: abrir parte para registrar participantes")
+    public Map<String, Object> crearParte(
+            @Valid @RequestBody Entradas.Parte body,
+            @AuthenticationPrincipal Usuario user,
+            @RequestHeader(value = "Idempotency-Key", required = false) UUID clave) {
+        return idempotencia.ejecutar(
+                clave, user, "crear-parte", body, () -> service.crearParte(body, user));
+    }
+
+    @PostMapping({"/actividades", "/actividades/"})
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Soporte mínimo: crear actividad asociada a un parte")
+    public Map<String, Object> crearActividad(
+            @Valid @RequestBody Entradas.Actividad body,
+            @AuthenticationPrincipal Usuario user,
+            @RequestHeader(value = "Idempotency-Key", required = false) UUID clave) {
+        return idempotencia.ejecutar(
+                clave, user, "crear-actividad", body, () -> service.crearActividad(body, user));
+    }
+
+    @GetMapping({"/actividades/{id}/participantes", "/actividades/{id}/participantes/"})
+    @Operation(summary = "Consultar participantes de actividad")
+    public Map<String, Object> participantes(
+            @PathVariable long id, @AuthenticationPrincipal Usuario user) {
+        return service.participantes(id, user);
+    }
+
+    @GetMapping({"/actividades/{id}", "/actividades/{id}/"})
+    @Operation(summary = "Consultar actividad")
+    public Map<String, Object> actividad(
+            @PathVariable long id, @AuthenticationPrincipal Usuario user) {
+        return service.actividad(id, user);
+    }
+
+    @GetMapping({
+        "/actividades/{id}/operarios-disponibles",
+        "/actividades/{id}/operarios-disponibles/"
+    })
+    @Operation(summary = "Consultar operarios elegibles en la fecha de actividad")
+    public List<Map<String, Object>> disponibles(
+            @PathVariable long id, @AuthenticationPrincipal Usuario user) {
+        return service.operariosDisponibles(id, user);
+    }
+
+    @PutMapping({"/actividades/{id}/participantes", "/actividades/{id}/participantes/"})
+    @Operation(summary = "RF-ACT-003: reemplazar participantes; el servidor calcula la cantidad")
+    public Map<String, Object> guardarParticipantes(
+            @PathVariable long id,
+            @Valid @RequestBody Entradas.Participantes body,
+            @AuthenticationPrincipal Usuario user) {
+        return service.guardarParticipantes(id, body, user);
     }
 }

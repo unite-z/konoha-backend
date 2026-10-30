@@ -15,6 +15,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import pe.edu.pucp.areasverdes.AreasVerdesApplication;
 import pe.edu.pucp.areasverdes.mod04.api.Entradas;
 import pe.edu.pucp.areasverdes.mod04.datos.Mod04Repository;
 import pe.edu.pucp.areasverdes.mod05.ApiError;
@@ -24,9 +25,7 @@ import pe.edu.pucp.areasverdes.mod05.Usuario;
 @Transactional(readOnly = true)
 public class OperacionCampoService {
     public static final String CAPATAZ = "Capataz";
-
     final Mod04Repository repo;
-
     final Clock clock;
 
     public OperacionCampoService(Mod04Repository repo, Clock clock) {
@@ -301,5 +300,168 @@ public class OperacionCampoService {
         var result = repo.encargo(id);
         exigirCapataz(number(result, "capataz_id"), user, false);
         return result;
+    }
+
+    Map<String, Object> parteDeActividad(long id, Usuario user, boolean write) {
+        var activity = repo.get("actividad", id, write);
+        var part = repo.get("parte_diario", number(activity, "parte_id"), write);
+        exigirCapataz(number(part, "capataz_id"), user, write);
+        if (write && !part.get("estado").equals("Abierto"))
+            throw ApiError.conflict(
+                    "El parte está cerrado; no se pueden cambiar sus participantes");
+        return part;
+    }
+
+    public Map<String, Object> participantes(long id, Usuario user) {
+        parteDeActividad(id, user, false);
+        return repo.participantes(id);
+    }
+
+    public List<Map<String, Object>> operariosDisponibles(long id, Usuario user) {
+        var part = parteDeActividad(id, user, false);
+        return repo.rows(
+                """
+                SELECT p.id,p.nombres,p.apellidos,p.activo FROM mod04_personal p
+                WHERE p.activo AND p.tipo_personal='Operario' AND EXISTS (
+                    SELECT 1 FROM mod04_asignacion_cuadrilla a WHERE a.operario_id=p.id AND a.cuadrilla_id=:c
+                    AND a.fecha_inicio<=:fecha AND (a.fecha_fin IS NULL OR a.fecha_fin>:fecha)) ORDER BY p.id
+                """,
+                Map.of("c", part.get("cuadrilla_id"), "fecha", part.get("fecha")));
+    }
+
+    public Map<String, Object> actividad(long id, Usuario user) {
+        var part = parteDeActividad(id, user, false);
+        var result = repo.get("actividad", id, false);
+        result.put("cuadrilla_id", part.get("cuadrilla_id"));
+        result.put("capataz_id", part.get("capataz_id"));
+        result.put("fecha", part.get("fecha"));
+        result.put("estado", part.get("estado"));
+        result.put(
+                "cuadrilla_nombre",
+                repo.get("cuadrilla", number(part, "cuadrilla_id"), false).get("nombre"));
+        result.put(
+                "tipo_actividad_nombre",
+                repo.get("tipo_actividad", number(result, "tipo_actividad_id"), false)
+                        .get("nombre"));
+        result.put(
+                "area_verde_nombre",
+                repo.get("areaverde", number(result, "area_verde_id"), false).get("nombre"));
+        result.put("participantes", repo.participantes(id));
+        return result;
+    }
+
+    @Transactional
+    public Map<String, Object> guardarParticipantes(
+            long id, Entradas.Participantes body, Usuario user) {
+        sinDuplicados(body.operarios());
+        var part = parteDeActividad(id, user, true);
+        for (long person : new TreeSet<>(body.operarios())) {
+            personalValido(person, "Operario");
+            var assigned =
+                    repo.rows(
+                            """
+                            SELECT id FROM mod04_asignacion_cuadrilla WHERE cuadrilla_id=:c AND operario_id=:o
+                              AND fecha_inicio<=:fecha AND (fecha_fin IS NULL OR fecha_fin>:fecha)
+                            """,
+                            Map.of(
+                                    "c",
+                                    part.get("cuadrilla_id"),
+                                    "o",
+                                    person,
+                                    "fecha",
+                                    part.get("fecha")));
+            if (assigned.isEmpty())
+                throw ApiError.invalid(
+                        "El operario "
+                                + person
+                                + " no pertenecía a la cuadrilla en la fecha de la actividad");
+        }
+        var before = repo.participantes(id);
+        repo.jdbc()
+                .update(
+                        "DELETE FROM mod04_participacion_actividad WHERE actividad_id=:id",
+                        Map.of("id", id));
+        for (long person : body.operarios())
+            repo.jdbc()
+                    .update(
+                            "INSERT INTO mod04_participacion_actividad VALUES (:a,:o)",
+                            Map.of("a", id, "o", person));
+        var result = repo.participantes(id);
+        repo.audit("ParticipacionActividad", id, "Reemplazar", user.id(), before, result);
+        return result;
+    }
+
+    @Transactional
+    public Map<String, Object> crearParte(Entradas.Parte body, Usuario user) {
+        var squad = repo.get("cuadrilla", body.cuadrillaId(), true);
+        exigirCapataz(number(squad, "capataz_id"), user, true);
+        if (!Boolean.TRUE.equals(squad.get("activa")))
+            throw ApiError.conflict("La cuadrilla está inactiva");
+        if (body.fecha().isAfter(LocalDate.now(clock)))
+            throw ApiError.invalid("El parte no puede tener fecha futura");
+        long id =
+                repo.insert(
+                        "parte_diario",
+                        values(
+                                "cuadrilla_id",
+                                body.cuadrillaId(),
+                                "capataz_id",
+                                squad.get("capataz_id"),
+                                "fecha",
+                                body.fecha(),
+                                "usuario_creacion_id",
+                                user.id()));
+        var result = repo.get("parte_diario", id, false);
+        repo.audit("ParteDiario", id, "Crear", user.id(), Map.of(), result);
+        return result;
+    }
+
+    @Transactional
+    public Map<String, Object> crearActividad(Entradas.Actividad body, Usuario user) {
+        var part = repo.get("parte_diario", body.parteId(), true);
+        exigirCapataz(number(part, "capataz_id"), user, true);
+        if (!part.get("estado").equals("Abierto")) throw ApiError.conflict("El parte está cerrado");
+        if (!body.fechaHoraActividad()
+                .atZoneSameInstant(AreasVerdesApplication.LIMA)
+                .toLocalDate()
+                .equals(part.get("fecha")))
+            throw ApiError.invalid("La actividad debe corresponder a la fecha del parte en Lima");
+        if (body.fechaHoraActividad().toInstant().isAfter(clock.instant()))
+            throw ApiError.invalid("La actividad no puede estar en el futuro");
+        catalogos(body.tipoActividadId(), body.areaVerdeId());
+        if (body.encargoId() != null) {
+            var task = repo.get("encargo", body.encargoId(), true);
+            LocalDate day = (LocalDate) part.get("fecha");
+            if (number(task, "cuadrilla_id") != number(part, "cuadrilla_id")
+                    || number(task, "capataz_id") != number(part, "capataz_id")
+                    || number(task, "tipo_actividad_id") != body.tipoActividadId()
+                    || number(task, "area_verde_id") != body.areaVerdeId()
+                    || day.isBefore((LocalDate) task.get("fecha_inicio"))
+                    || day.isAfter((LocalDate) task.get("fecha_fin")))
+                throw ApiError.invalid(
+                        "El encargo no coincide con la cuadrilla, capataz, actividad, espacio o"
+                                + " periodo");
+        }
+        long id =
+                repo.insert(
+                        "actividad",
+                        values(
+                                "parte_id",
+                                body.parteId(),
+                                "tipo_actividad_id",
+                                body.tipoActividadId(),
+                                "area_verde_id",
+                                body.areaVerdeId(),
+                                "fecha_hora_actividad",
+                                body.fechaHoraActividad(),
+                                "encargo_id",
+                                body.encargoId(),
+                                "observaciones",
+                                body.observaciones(),
+                                "usuario_creacion_id",
+                                user.id()));
+        var result = repo.get("actividad", id, false);
+        repo.audit("Actividad", id, "Crear", user.id(), Map.of(), result);
+        return actividad(id, user);
     }
 }

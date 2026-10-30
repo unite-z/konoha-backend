@@ -43,6 +43,27 @@ cp .env.example .env      # completar MOD05_DB_PASSWORD; GEMINI_API_KEY solo par
 
 Necesitan PostgreSQL con PostGIS en una base terminada en `_test` (`TEST_DB_*` como variables de entorno). Cómo levantarla con Docker: [docs/estandares/pruebas.md](docs/estandares/pruebas.md).
 
+## MOD-04: operación de campo
+
+Integración de RF-T-005 (cuadrillas, capataces y operarios), RF-PLA-005 (encargos semanales/quincenales) y RF-ACT-003 (participantes). Sus rutas están bajo `/api/v1/operacion-campo/` y se documentan en Swagger. Utilizan la sesión común de MOD-01 con cookie y CSRF: 401 sin sesión, 403 sin permiso. HTTP Basic se conserva para las pruebas, igual que en MOD-03/MOD-05.
+
+| Operaciones | Jefe de sección | Ingeniero / practicante | Capataz |
+| --- | --- | --- | --- |
+| Consultar cuadrillas y encargos | Todas | Todas | Solo los suyos |
+| Registrar personal, gestionar cuadrillas y encargos | Sí | No | No |
+| Consultar actividades y participantes | Todas | Todas | Solo los suyos |
+| Abrir parte, registrar actividad y guardar participantes | Sí | No | Solo de su equipo, con parte abierto |
+
+La matriz ejecutable de permisos y la comprobación de cobertura de endpoints están en `Mod04IntegrationTest`. Los alias de ruta con y sin barra final comparten los mismos permisos.
+
+La migración nueva `V11__mod04_operacion_campo.sql` añade las tablas del módulo y amplía el catálogo provisional de roles con `Capataz` para la compatibilidad de pruebas HTTP Basic. Las migraciones V1–V10 se conservan. **Revisar la numeración antes de fusionar**, por si otro PR ocupa V11. Áreas verdes referencia `mod05_areaverde`, la tabla compartida provisional que ya existe; no crea otra copia. Las claves de usuario referencian `core_usuario`, dueño MOD-01: una cuenta creada solo en MOD-01 también puede registrar en campo. La auditoría usa el servicio público `RegistradorAuditoria` de MOD-01 y su tabla inmutable `core_registro_auditoria`.
+
+Para la demostración, usar el perfil `dev`, una contraseña propia en `MOD04_DEMO_PASSWORD` y `--mod04.seed=true`. Precarga en `core_usuario` las cuentas `mod04_jefe` y `mod04_capataz_2`, `_3`, `_4`; es idempotente y no sustituye datos existentes. El catálogo compartido de áreas debe estar disponible: en una base nueva de demostración se puede ejecutar además `--mod05.seed=true` con `MOD05_DEMO_PASSWORD` configurada.
+
+Los POST de partes y actividades aceptan `Idempotency-Key` (UUID). El servidor comprueba usuario, operación y contenido; un reenvío idéntico devuelve el mismo resultado y otro contenido con la misma clave devuelve 409. La vigencia es de 24 horas. El frontend conserva la clave de una actividad al reintentar sin cambiar sus datos. Los PUT reemplazan la composición o selección completa.
+
+Decisiones funcionales conservadas: semanal hasta 7 días y quincenal hasta 14, incluidos ambos extremos; confirmar la interpretación de quincenal con el equipo. Se valida la pertenencia histórica del operario en la fecha de la actividad. El cierre de partes completo y la cola sin conexión de HU-MOD04-012 quedan fuera de estos tres requisitos; la interfaz actual registra con conexión. MOD-06 conserva su fuente de datos existente.
+
 ## Documentación
 
 - [AGENTS.md](AGENTS.md): estado, mapa, gates y reglas, para personas y agentes.
@@ -50,7 +71,3 @@ Necesitan PostgreSQL con PostGIS en una base terminada en `_test` (`TEST_DB_*` c
 - [docs/estandares/](docs/estandares/): Java, API, base de datos, pruebas y almacenamiento.
 - [docs/base-datos/](docs/base-datos/README.md): modelo entidad-relación implementado (draw.io).
 - Estándares comunes y ADR: en `konoha-infra`.
-
-## MOD-04: operación de campo
-
-Entrega de cuadrillas, capataces y operarios y encargos semanales/quincenales, con sesión común de MOD-01. API `/api/v1/operacion-campo/`, permisos en servidor y auditoría común. La migración nueva V11 se revisa antes de publicar; V1–V10 no se alteran. Precarga de demostración solo en perfil dev con `--mod04.seed=true` y `MOD04_DEMO_PASSWORD`. Participantes llega en el PR siguiente. El registro requiere conexión; la cola sin conexión queda fuera de estos requisitos.
