@@ -40,6 +40,12 @@ abstract class ApiCore {
     static final String CLAVE = "clave-prueba-1";
     static final String DOMINIO = "@prueba.pucp.edu.pe";
 
+    /**
+     * «Hoy» en Lima, como lo calcula la aplicación. {@code current_date} es la fecha UTC de
+     * PostgreSQL y va un día por delante entre las 19:00 y las 24:00 de Lima (AV-241).
+     */
+    static final String HOY_LIMA = "(now() AT TIME ZONE 'America/Lima')::date";
+
     /** Los adjuntos de las pruebas van a una carpeta temporal, nunca a {@code private-media}. */
     static final Path ARCHIVOS;
 
