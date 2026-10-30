@@ -25,6 +25,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import pe.edu.pucp.areasverdes.comun.BaseDePruebas;
 import pe.edu.pucp.areasverdes.mod01.config.SeguridadMod01;
 
 /**
@@ -39,6 +40,12 @@ abstract class ApiCore {
     static final String CLAVE = "clave-prueba-1";
     static final String DOMINIO = "@prueba.pucp.edu.pe";
 
+    /**
+     * «Hoy» en Lima, como lo calcula la aplicación. {@code current_date} es la fecha UTC de
+     * PostgreSQL y va un día por delante entre las 19:00 y las 24:00 de Lima (AV-241).
+     */
+    static final String HOY_LIMA = "(now() AT TIME ZONE 'America/Lima')::date";
+
     /** Los adjuntos de las pruebas van a una carpeta temporal, nunca a {@code private-media}. */
     static final Path ARCHIVOS;
 
@@ -52,17 +59,7 @@ abstract class ApiCore {
 
     @DynamicPropertySource
     static void baseDePruebas(DynamicPropertyRegistry p) {
-        String url =
-                System.getenv()
-                        .getOrDefault(
-                                "MOD05_TEST_DB_URL",
-                                "jdbc:postgresql://127.0.0.1:55432/mod05_spring_test");
-        if (!url.endsWith("_test")) {
-            throw new IllegalStateException("Las pruebas requieren una base terminada en _test");
-        }
-        p.add("spring.datasource.url", () -> url);
-        p.add("spring.datasource.username", () -> System.getenv("MOD05_TEST_DB_USER"));
-        p.add("spring.datasource.password", () -> System.getenv("MOD05_TEST_DB_PASSWORD"));
+        BaseDePruebas.registrar(p);
         p.add("mod05.archivos", () -> ARCHIVOS.toString());
     }
 
