@@ -391,8 +391,7 @@ class Mod04IntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.count").value(1))
                 .andExpect(jsonPath("$.results[0].id").value(idPropio))
-                .andExpect(
-                        jsonPath("$.results[0].plazo_previsto").value(HOY.toString()));
+                .andExpect(jsonPath("$.results[0].plazo_previsto").value(HOY.toString()));
         http.perform(get(BASE + "/encargos/" + idAjeno).with(httpBasic("capataz1", PASSWORD)))
                 .andExpect(status().isForbidden());
         postJson("/encargos", encargo(propia, "Semanal", 7), "capataz1", 403);
