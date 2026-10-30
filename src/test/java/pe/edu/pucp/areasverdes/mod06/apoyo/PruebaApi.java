@@ -14,43 +14,41 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import pe.edu.pucp.areasverdes.comun.BaseDePruebas;
 import pe.edu.pucp.areasverdes.mod06.comun.JsonPy;
 import pe.edu.pucp.areasverdes.mod06.permisos.Permisos;
 
 /**
- * Base de las pruebas de API ({@code api_client} de {@code conftest.py}): Spring Boot con MockMvc y los dobles de
- * {@link DoblesPrueba}. Sin base de datos, sin red y sin Gemini.
+ * Base de las pruebas de API ({@code api_client} de {@code conftest.py}): Spring Boot con MockMvc y
+ * los dobles de {@link DoblesPrueba}. Sin base de datos, sin red y sin Gemini.
  */
 // RF-IA-001 lee el reporte de la misma FuenteDatos de prueba (FuenteDatosMemoria), no del MOD-05.
-@SpringBootTest(properties = {"mod06.data-source=mock", "mod06.gemini-api-key=", "mod06.gemini-model=",
-    "mod06.ia.fuente-reportes=mock"})
+@SpringBootTest(
+        properties = {
+            "mod06.data-source=mock",
+            "mod06.gemini-api-key=",
+            "mod06.gemini-model=",
+            "mod06.ia.fuente-reportes=mock"
+        })
 @AutoConfigureMockMvc
 @Import(DoblesPrueba.class)
 public abstract class PruebaApi {
 
     /**
-     * El contexto incluye el MOD-05, que necesita PostgreSQL. Se usa la misma base exclusiva {@code *_test} que
-     * {@code Mod05IntegrationTest}, nunca la de desarrollo. El MOD-06 no lee ni escribe en ella.
+     * El contexto incluye el MOD-05, que necesita PostgreSQL. Se usa la misma base exclusiva {@code
+     * *_test} que {@code Mod05IntegrationTest}, nunca la de desarrollo. El MOD-06 no lee ni escribe
+     * en ella.
      */
     @DynamicPropertySource
     static void baseDatosPrueba(DynamicPropertyRegistry p) {
-        String url = System.getenv().getOrDefault("MOD05_TEST_DB_URL", "jdbc:postgresql://127.0.0.1:55432/mod05_spring_test");
-        if (!url.endsWith("_test")) throw new IllegalStateException("Las pruebas requieren una base exclusiva terminada en _test");
-        p.add("spring.datasource.url", () -> url);
-        p.add("spring.datasource.username", () -> System.getenv().getOrDefault("MOD05_TEST_DB_USER", System.getProperty("user.name")));
-        p.add("spring.datasource.password", () -> System.getenv().getOrDefault("MOD05_TEST_DB_PASSWORD", ""));
+        BaseDePruebas.registrar(p);
     }
 
-    @Autowired
-    protected MockMvc http;
-    @Autowired
-    protected DoblesPrueba.SelectorPrueba selector;
-    @Autowired
-    protected DoblesPrueba.FabricaPrueba fabrica;
-    @Autowired
-    protected DoblesPrueba.UsuarioPrueba usuario;
-    @Autowired
-    protected DoblesPrueba.PermisosPrueba permisos;
+    @Autowired protected MockMvc http;
+    @Autowired protected DoblesPrueba.SelectorPrueba selector;
+    @Autowired protected DoblesPrueba.FabricaPrueba fabrica;
+    @Autowired protected DoblesPrueba.UsuarioPrueba usuario;
+    @Autowired protected DoblesPrueba.PermisosPrueba permisos;
 
     @BeforeEach
     void reiniciarDobles() {
@@ -84,8 +82,12 @@ public abstract class PruebaApi {
 
     /** {@code api_client.post(url, cuerpo, format="json")}. */
     protected MockHttpServletResponse postJson(String url, Object cuerpo) throws Exception {
-        return http.perform(post(url).contentType("application/json").content(JsonPy.dumpsRespuesta(Datos.normalizar(cuerpo))))
-            .andReturn().getResponse();
+        return http.perform(
+                        post(url)
+                                .contentType("application/json")
+                                .content(JsonPy.dumpsRespuesta(Datos.normalizar(cuerpo))))
+                .andReturn()
+                .getResponse();
     }
 
     protected static String texto(MockHttpServletResponse r) throws Exception {

@@ -150,9 +150,9 @@ Se ejecutan contra PostgreSQL real, nunca H2. Crear una base exclusiva terminada
 
 ```sh
 createdb -h localhost -U tu_usuario mod05_spring_test
-export MOD05_TEST_DB_URL=jdbc:postgresql://localhost:5432/mod05_spring_test
-export MOD05_TEST_DB_USER=tu_usuario
-export MOD05_TEST_DB_PASSWORD=tu_clave
+export TEST_DB_URL=jdbc:postgresql://localhost:5432/mod05_spring_test
+export TEST_DB_USER=tu_usuario
+export TEST_DB_PASSWORD=tu_clave
 ./mvnw test
 ```
 

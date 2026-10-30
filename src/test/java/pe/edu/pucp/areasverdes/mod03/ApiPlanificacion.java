@@ -10,6 +10,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import pe.edu.pucp.areasverdes.comun.BaseDePruebas;
 
 /**
  * Base de las pruebas de API de MOD-03: base PostGIS real terminada en {@code _test} y usuarios
@@ -23,17 +24,7 @@ abstract class ApiPlanificacion {
 
     @DynamicPropertySource
     static void baseDePruebas(DynamicPropertyRegistry p) {
-        String url =
-                System.getenv()
-                        .getOrDefault(
-                                "MOD05_TEST_DB_URL",
-                                "jdbc:postgresql://127.0.0.1:55432/mod05_spring_test");
-        if (!url.endsWith("_test")) {
-            throw new IllegalStateException("Las pruebas requieren una base terminada en _test");
-        }
-        p.add("spring.datasource.url", () -> url);
-        p.add("spring.datasource.username", () -> System.getenv("MOD05_TEST_DB_USER"));
-        p.add("spring.datasource.password", () -> System.getenv("MOD05_TEST_DB_PASSWORD"));
+        BaseDePruebas.registrar(p);
     }
 
     @Autowired MockMvc http;
