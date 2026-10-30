@@ -13,6 +13,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import pe.edu.pucp.areasverdes.comun.BaseDePruebas;
 import pe.edu.pucp.areasverdes.mod05.Usuario;
 
 /**
@@ -26,19 +27,15 @@ abstract class ApiGestion {
 
     static final String CLAVE = "prueba-integration-local";
 
+    /**
+     * Base común de pruebas. El pool se limita a 2 conexiones: Spring guarda vivo cada contexto de
+     * prueba y, con el tamaño por defecto (10), la suma de contextos agota las conexiones de
+     * PostgreSQL en CI ("too many clients already").
+     */
     @DynamicPropertySource
     static void baseDePruebas(DynamicPropertyRegistry p) {
-        String url =
-                System.getenv()
-                        .getOrDefault(
-                                "MOD05_TEST_DB_URL",
-                                "jdbc:postgresql://127.0.0.1:55432/mod05_spring_test");
-        if (!url.endsWith("_test")) {
-            throw new IllegalStateException("Las pruebas requieren una base terminada en _test");
-        }
-        p.add("spring.datasource.url", () -> url);
-        p.add("spring.datasource.username", () -> System.getenv("MOD05_TEST_DB_USER"));
-        p.add("spring.datasource.password", () -> System.getenv("MOD05_TEST_DB_PASSWORD"));
+        BaseDePruebas.registrar(p);
+        p.add("spring.datasource.hikari.maximum-pool-size", () -> 2);
     }
 
     @Autowired MockMvc http;
