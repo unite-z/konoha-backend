@@ -8,22 +8,25 @@ Este fichero es la guía para personas y agentes. Estándares comunes y ADR: en 
 
 - Sprint 0 (en curso): repos, estándares, CI y despliegue preparados. Aún sin EC2: `deploy-uat.yml` se salta hasta que `DESPLIEGUE_ACTIVO=true`.
 - MOD-05 y MOD-06: borrador importado y funcionando en local. MOD-06 lee datos `mock`.
-- Pendiente de arranque: tablas de MOD-01 (`core_`) y MOD-02, PostGIS y almacenamiento en S3.
+- MOD-01: sesión, usuarios, roles, permisos, auditoría común, adjuntos y repositorio en `/api/v1/core/` (tablas `core_`). Ver `docs/modulos/mod01.md`.
+- Pendiente de arranque: tablas de MOD-02, PostGIS y almacenamiento en S3.
 
 ## Mapa
 
 | Ruta | Qué hay |
 |---|---|
-| `src/main/java/pe/edu/pucp/areasverdes/mod05/` | MOD-05 «Atenciones tercerizadas»: `/api/tercerizados/`, HTTP Basic, JDBC y Flyway |
+| `src/main/java/pe/edu/pucp/areasverdes/mod05/` | MOD-05 «Atenciones tercerizadas»: `/api/tercerizados/`, sesión de MOD-01 (y HTTP Basic para pruebas), JDBC y Flyway |
+| `src/main/java/pe/edu/pucp/areasverdes/mod01/` | MOD-01 «Core y seguridad»: `/api/v1/core/`, sesión con cookie, permisos (`Autorizacion`) y auditoría común (`RegistradorAuditoria`) |
+| `src/main/java/pe/edu/pucp/areasverdes/mod04/` | MOD-04 «Operación de campo»: cuadrillas, encargos y participantes en `/api/v1/operacion-campo/`; sesión común de MOD-01 y referencias a `core_usuario` |
 | `src/main/java/pe/edu/pucp/areasverdes/mod06/` | MOD-06 «Reportes, indicadores e IA»: `/api/v1/`, datos `mock` o `db`, Gemini |
-| `src/main/java/pe/edu/pucp/areasverdes/mod06/gestion/` | Reportes de gestión del MOD-06 (RF-REP-001, 005 y 007): `/api/v1/reportes/...`, HTTP Basic, JDBC de solo lectura sobre `mod05_*` |
 | `src/main/java/pe/edu/pucp/areasverdes/comun/` | Lo compartido entre módulos (hoy, la seguridad de `/api/health`) |
 | `src/main/resources/db/migration/` | Migraciones Flyway |
 | `src/main/resources/prompts/` | Prompts de la IA |
 | `src/test/java/.../apoyo/` | Dobles de prueba y constructores de datos |
 | `mock-data/` | Datos simulados (JSON y PDF) para `DATA_SOURCE=mock` |
 | `Dockerfile` | Imagen `konoha-api`: build con Maven y JRE 21 sin root |
-| `.github/workflows/` | `ci.yml`, `deploy-uat.yml` y `limpiar-imagenes.yml` |
+| `.github/workflows/` | `ci.yml`, `deploy-uat.yml`, `limpiar-imagenes.yml` y `tamano-pr.yml` (aviso si el PR pasa de 400 líneas) |
+| `.github/copilot-instructions.md`, `.github/instructions/` | Normas que usa Copilot al revisar los PR |
 
 ## Comandos
 
@@ -35,14 +38,14 @@ Este fichero es la guía para personas y agentes. Estándares comunes y ADR: en 
 ./mvnw test -Dtest=CumplimientoCorteServiceTest   # una clase
 ```
 
-Java 21 exactamente. Las pruebas de integración necesitan PostGIS y `MOD05_TEST_DB_*` (ver `docs/estandares/pruebas.md`).
+Java 21 exactamente. Las pruebas de integración necesitan PostGIS y `TEST_DB_*` (ver `docs/estandares/pruebas.md`).
 
 ## Gates: lo que tiene que pasar antes de pushear
 
 Es lo mismo que exige `ci-ok`:
 
 ```sh
-./mvnw verify                                     # con PostGIS levantado y MOD05_TEST_DB_* exportadas
+./mvnw verify                                     # con PostGIS levantado y TEST_DB_* exportadas
 ```
 
 - El hook `pre-push` ya ejecuta Spotless sobre lo cambiado y las pruebas rápidas. Actívalo con `git config core.hooksPath .githooks`.
@@ -50,7 +53,7 @@ Es lo mismo que exige `ci-ok`:
 
 ## Reglas no negociables
 
-- **Nunca se edita una migración ya fusionada.** Se corrige con una nueva. Toda migración tiene que ser compatible con la versión anterior de la api (expand/contract).
+- **Nunca se edita una migración ya fusionada.** Se corrige con una nueva (`higiene` lo rechaza en el PR). Toda migración tiene que ser compatible con la versión anterior de la api (expand/contract).
 - **Cada entidad tiene un módulo dueño** (usuarios y roles: MOD-01 con tablas `core_`; áreas verdes y ejemplares: MOD-02). Nunca crees una copia de una tabla ajena: referénciala. Ver `docs/estandares/base-datos.md`.
 - **SQL siempre parametrizado.** Ninguna entrada del usuario se concatena en una consulta.
 - **El backend decide los permisos.** Todo endpoint nuevo entra en la matriz de permisos por rol, o CI falla.
@@ -93,10 +96,9 @@ Pendiente de decisión (no la cambies por tu cuenta): formato de errores Problem
 
 ## Seguridad abierta: no empeorar
 
-- MOD-05 usa HTTP Basic con usuarios propios, hasta que exista la autenticación de MOD-01.
-- MOD-06 no tiene autenticación (`/api/v1/**` abierto), salvo los reportes de gestión (`/api/v1/reportes/panel/`, `/material-vegetal/` y `/mapa-atenciones/`), que usan HTTP Basic como MOD-03.
+- MOD-05 y MOD-03 aceptan la sesión de MOD-01 (`SesionCompartida`, AV-234) y siguen aceptando HTTP Basic contra `mod05_usuario` para las pruebas y el smoke test del despliegue. Una cuenta creada solo en MOD-01 entra, pero no puede escribir en MOD-05 hasta la consolidación de usuarios (sus tablas apuntan a `mod05_usuario`).
+- MOD-06 no tiene autenticación (`/api/v1/**` abierto).
 - Archivos en el disco del contenedor, sin el guard de `S3_PREFIX`.
-- MOD-05 responde 403 cuando faltan credenciales (debería ser 401).
 - Swagger (`/api/docs`) es público en todos los entornos.
 
 Ningún PR puede ampliar estas brechas (por ejemplo, abrir más rutas sin autenticación). Cerrarlas va en tickets propios.
@@ -133,6 +135,7 @@ Los planes, notas y borradores de trabajo de personas y agentes van en `.notas/`
 | `SECURITY.md` | Cómo avisar de una vulnerabilidad |
 | `docs/arranque-local.md` | Instalación paso a paso en macOS y Windows |
 | `docs/estandares/*.md` | Java, API, base de datos, pruebas y almacenamiento |
+| `docs/modulos/mod01.md` | Contrato de MOD-01: sesión, endpoints y códigos de permiso para los demás módulos |
 | `docs/modulos/mod05.md` | Documentación funcional de MOD-05 |
 | `mock-data/README.md` | Formato de los datos simulados |
 
