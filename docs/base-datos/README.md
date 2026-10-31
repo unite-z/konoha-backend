@@ -39,10 +39,13 @@ Este diagrama es el modelo implementado, no el modelo de datos completo del sist
 
 ## Cómo se actualiza
 
-La fuente es `modelo-er.drawio`: ábrelo en draw.io (escritorio o app.diagrams.net). Si una migración cambia el esquema, actualiza su página en el mismo PR y vuelve a exportarla. Cada página se exporta por su número (1 MOD-01, 2 MOD-03, 3 MOD-04, 4 MOD-05):
+Si una migración cambia el esquema, regenera el diagrama en el mismo PR. `generar-modelo-er.py` crea una base temporal, le aplica las migraciones en orden, lee el esquema, la borra y escribe `modelo-er.drawio`. Si está el CLI de draw.io, exporta también los PNG. Necesita `psql` y el PostGIS de pruebas ([pruebas.md](../estandares/pruebas.md)):
 
 ```sh
-drawio -x -f png -s 1.5 -b 20 -p 2 -o docs/base-datos/modelo-er-mod03.png docs/base-datos/modelo-er.drawio
+PGHOST=127.0.0.1 PGPORT=55432 PGUSER=areas_verdes PGPASSWORD=solo-pruebas \
+  python3 docs/base-datos/generar-modelo-er.py
 ```
 
-Un módulo nuevo (MOD-02) va en una página nueva con su PNG, y se añade a la tabla de arriba.
+Una tabla nueva hay que colocarla en una columna de `PAGINAS` y darle color en `CATEGORIA`. Si falta alguna de las dos cosas, el script lo dice y no escribe nada. Un módulo nuevo (MOD-02) es una entrada nueva en `PAGINAS`, que genera su página y su PNG; añádelo también a la tabla de arriba.
+
+No edites el `.drawio` a mano: la siguiente ejecución del script borraría el cambio.
