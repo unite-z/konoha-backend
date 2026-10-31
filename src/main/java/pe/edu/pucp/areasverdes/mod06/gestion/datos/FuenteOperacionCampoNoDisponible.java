@@ -1,6 +1,8 @@
 package pe.edu.pucp.areasverdes.mod06.gestion.datos;
 
+import java.util.List;
 import org.springframework.stereotype.Component;
+import pe.edu.pucp.areasverdes.mod06.gestion.RangoFechas;
 
 /**
  * {@link FuenteOperacionCampo} mientras las tablas de MOD-04 no estén en {@code main}: sin datos y
@@ -21,5 +23,15 @@ public class FuenteOperacionCampoNoDisponible implements FuenteOperacionCampo {
     @Override
     public Disponibilidad disponibilidad() {
         return Disponibilidad.noDisponible(MOTIVO);
+    }
+
+    @Override
+    public List<ActividadCampo> actividades(RangoFechas periodo, Long areaVerdeId) {
+        return List.of();
+    }
+
+    @Override
+    public List<ParticipacionOperario> participaciones(RangoFechas periodo, Long areaVerdeId) {
+        return List.of();
     }
 }
