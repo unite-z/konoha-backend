@@ -112,6 +112,5 @@ La asignación por rol sigue la matriz de las Historias de Usuario (sección 2.1
 | Decidir entre 60 y 75 días sin uso (CU-007 frente a HU-008) | Nicolás y el equipo de documentación |
 | `ConsultaCampo` real (cuadrillas y encargos) al fusionar MOD-04 | Nelson |
 | Especies y sectores en el repositorio, y ejemplares en `mod02_ejemplar`, al fusionar MOD-02 | Joel |
-| Consolidar `mod05_usuario` en `core_usuario` y pasar MOD-03, 05 y 06 a la sesión de MOD-01 | MOD-01, con cada módulo |
+| Consolidar `mod05_usuario` en `core_usuario` (AV-287) y pasar MOD-03, 05 y 06 a la sesión de MOD-01 | MOD-01, con cada módulo |
 | Adjuntos en S3 con el guard de `S3_PREFIX` | Ticket de almacenamiento |
-| Actualizar `docs/base-datos/modelo-er.drawio` con las tablas `core_` | MOD-01 |
