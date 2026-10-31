@@ -19,8 +19,8 @@ import pe.edu.pucp.areasverdes.mod06.gestion.api.DocumentacionGestion;
 
 /**
  * OpenAPI de los reportes de gestión ({@code docs/estandares/api.md}, «OpenAPI»): rutas, seguridad
- * {@code basicAuth}, respuestas de error, etiquetas y parámetros en snake_case. Solo comprueba las
- * operaciones de este subpaquete.
+ * {@code sesionCore} (MOD-01), respuestas de error, etiquetas y parámetros en snake_case. Solo
+ * comprueba las operaciones de este subpaquete.
  */
 class OpenApiGestionApiTest extends ApiGestion {
 
@@ -60,11 +60,11 @@ class OpenApiGestionApiTest extends ApiGestion {
     void lasRutasEstanDocumentadasConSeguridadEtiquetaYErrores() {
         for (var e : OPERACIONES.entrySet()) {
             JsonNode op = operacion(e.getKey());
-            boolean basic = false;
+            boolean sesion = false;
             for (JsonNode requisito : op.path("security")) {
-                basic |= requisito.has("basicAuth");
+                sesion |= requisito.has("sesionCore");
             }
-            assertTrue(basic, "Sin basicAuth: " + e.getKey());
+            assertTrue(sesion, "Sin sesionCore: " + e.getKey());
             assertTrue(
                     op.path("tags").toString().contains(e.getValue()), "Etiqueta: " + e.getKey());
             for (String codigo : List.of("400", "401", "403")) {

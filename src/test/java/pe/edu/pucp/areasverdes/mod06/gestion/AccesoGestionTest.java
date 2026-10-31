@@ -4,38 +4,39 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
-import pe.edu.pucp.areasverdes.mod05.Usuario;
+import pe.edu.pucp.areasverdes.mod01.servicios.UsuarioSesion;
 
 class AccesoGestionTest {
 
-    static Usuario con(boolean activo, String... roles) {
-        return new Usuario(1, "u", "U", "", activo, List.of(roles));
+    static UsuarioSesion con(String rol, String... permisos) {
+        return new UsuarioSesion(1, "u", "U", rol, rol, Set.of(permisos), false, 1);
     }
 
     @Test
-    void losTresRolesPuedenConsultar() {
-        for (String rol : Usuario.ROLES) {
-            assertDoesNotThrow(() -> AccesoGestion.consultar(con(true, rol)));
-        }
+    void conElPermisoDeMod01PuedeConsultar() {
+        assertDoesNotThrow(
+                () -> AccesoGestion.consultar(con("ingeniero-campo", AccesoGestion.CONSULTAR)));
     }
 
     @Test
-    void sinRolNoPuedeConsultar() {
-        var e = assertThrows(ErrorGestion.class, () -> AccesoGestion.consultar(con(true)));
-        assertEquals(403, e.estado());
-        assertEquals("sin-permiso", e.codigo());
-    }
-
-    @Test
-    void inactivoNoPuedeConsultarAunqueSeaJefe() {
+    void sinElPermisoNoPuedeConsultarAunqueSeaJefe() {
         var e =
                 assertThrows(
                         ErrorGestion.class,
-                        () -> AccesoGestion.consultar(con(false, Usuario.JEFE)));
+                        () -> AccesoGestion.consultar(con(UsuarioSesion.JEFE, "OTRO.PERMISO")));
         assertEquals(403, e.estado());
         assertEquals("sin-permiso", e.codigo());
+    }
+
+    @Test
+    void elCapatazSinPermisoNoPuedeConsultar() {
+        var e =
+                assertThrows(
+                        ErrorGestion.class,
+                        () -> AccesoGestion.consultar(con(UsuarioSesion.CAPATAZ)));
+        assertEquals(403, e.estado());
     }
 
     @Test

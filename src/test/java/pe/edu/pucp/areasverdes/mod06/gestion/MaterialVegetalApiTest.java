@@ -3,7 +3,6 @@ package pe.edu.pucp.areasverdes.mod06.gestion;
 import static org.hamcrest.Matchers.hasKey;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -22,7 +21,7 @@ class MaterialVegetalApiTest extends ApiGestion {
     static final String RUTA = "/api/v1/reportes/material-vegetal/";
 
     ResultActions consultar(String usuario, String consulta) throws Exception {
-        return http.perform(get(RUTA + consulta).with(httpBasic(usuario, CLAVE)));
+        return http.perform(get(RUTA + consulta).cookie(sesion(usuario)));
     }
 
     @Test
@@ -50,9 +49,7 @@ class MaterialVegetalApiTest extends ApiGestion {
 
     @Test
     void sinBarraFinalTambienResponde() throws Exception {
-        http.perform(
-                        get("/api/v1/reportes/material-vegetal?mes=2026-10")
-                                .with(httpBasic("jefe", CLAVE)))
+        http.perform(get("/api/v1/reportes/material-vegetal?mes=2026-10").cookie(sesion("jefe")))
                 .andExpect(status().isOk());
     }
 
@@ -84,20 +81,20 @@ class MaterialVegetalApiTest extends ApiGestion {
     }
 
     @Test
-    void sinRolNoTienePermiso() throws Exception {
-        consultar("sinrol", "?mes=2026-10")
+    void elCapatazNoTienePermiso() throws Exception {
+        consultar("capataz", "?mes=2026-10")
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.codigo").value("sin-permiso"));
     }
 
     @Test
-    void sinCredencialesNoSeAutentica() throws Exception {
+    void sinSesionNoSeAutentica() throws Exception {
         http.perform(get(RUTA + "?mes=2026-10")).andExpect(status().isUnauthorized());
     }
 
     /**
-     * {@code mod05.Usuario.isEnabled()} devuelve {@code activo}: Spring Security rechaza la
-     * autenticación (401) antes de llegar a {@code AccesoGestion}.
+     * MOD-01 deja de aceptar la sesión de una cuenta desactivada: 401 antes de llegar a {@code
+     * AccesoGestion}.
      */
     @Test
     void unUsuarioInactivoNoSeAutentica() throws Exception {

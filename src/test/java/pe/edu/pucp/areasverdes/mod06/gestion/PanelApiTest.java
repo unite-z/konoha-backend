@@ -6,7 +6,6 @@ import static org.hamcrest.Matchers.hasKey;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -36,7 +35,7 @@ class PanelApiTest extends ApiGestion {
     }
 
     ResultActions como(String usuario, String ruta) throws Exception {
-        return http.perform(get(ruta).with(httpBasic(usuario, CLAVE)));
+        return http.perform(get(ruta).cookie(sesion(usuario)));
     }
 
     ResultActions panel(String filtros) throws Exception {
@@ -149,7 +148,7 @@ class PanelApiTest extends ApiGestion {
                                 .param("desde", "2026-10-01")
                                 .param("hasta", "2026-10-31")
                                 .param("estado", "Reporte adjunto")
-                                .with(httpBasic("jefe", CLAVE)))
+                                .cookie(sesion("jefe")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.indicadores[2].valor").value("3"));
     }
@@ -291,14 +290,14 @@ class PanelApiTest extends ApiGestion {
     }
 
     @Test
-    void sinRolNoTienePermiso() throws Exception {
-        como("sinrol", PANEL + "?" + PERIODO)
+    void elCapatazNoTienePermiso() throws Exception {
+        como("capataz", PANEL + "?" + PERIODO)
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.codigo").value("sin-permiso"));
     }
 
     @Test
-    void sinCredencialesNoSeAutentica() throws Exception {
+    void sinSesionNoSeAutentica() throws Exception {
         http.perform(get(PANEL + "?" + PERIODO)).andExpect(status().isUnauthorized());
     }
 

@@ -2,7 +2,6 @@ package pe.edu.pucp.areasverdes.mod06.gestion;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 import java.util.ArrayList;
@@ -26,26 +25,27 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
 
 /**
  * Matriz de permisos de los reportes de gestión del MOD-06 (HU v3, 2.1: «Panel de indicadores y
- * reportes»: consultan Jefe de sección, Ingeniero de campo y Practicante). Gate de {@code
+ * reportes»: consultan Jefe de sección, Ingeniero de campo y Practicante, que tienen el permiso de
+ * MOD-01 {@code REP.INDICADOR.CONSULTAR}; el Capataz no lo tiene). Gate de {@code
  * docs/estandares/pruebas.md}: un endpoint de {@code mod06.gestion} sin fila aquí rompe CI.
  *
  * <pre>
- * | Endpoint                                   | anónimo | jefe | ingeniero | practicante | sinrol | inactivo |
- * |--------------------------------------------|---------|------|-----------|-------------|--------|----------|
- * | GET /api/v1/reportes/panel/                |   401   | 200  |    200    |     200     |  403   |   401    |
- * | GET /api/v1/reportes/panel/{indicador}/    |   401   | 200  |    200    |     200     |  403   |   401    |
- * | GET /api/v1/reportes/material-vegetal/     |   401   | 200  |    200    |     200     |  403   |   401    |
- * | GET /api/v1/reportes/mapa-atenciones/      |   401   | 200  |    200    |     200     |  403   |   401    |
+ * | Endpoint                                   | anónimo | jefe | ingeniero | practicante | capataz | inactivo |
+ * |--------------------------------------------|---------|------|-----------|-------------|---------|----------|
+ * | GET /api/v1/reportes/panel/                |   401   | 200  |    200    |     200     |   403   |   401    |
+ * | GET /api/v1/reportes/panel/{indicador}/    |   401   | 200  |    200    |     200     |   403   |   401    |
+ * | GET /api/v1/reportes/material-vegetal/     |   401   | 200  |    200    |     200     |   403   |   401    |
+ * | GET /api/v1/reportes/mapa-atenciones/      |   401   | 200  |    200    |     200     |   403   |   401    |
  * </pre>
  *
- * <p>{@code inactivo} da 401: {@code mod05.Usuario.isEnabled()} devuelve {@code activo} y Spring
- * Security rechaza la autenticación antes de llegar a {@code AccesoGestion}.
+ * <p>Se entra con la cookie de sesión de MOD-01. {@code inactivo} da 401: MOD-01 deja de aceptar la
+ * sesión de una cuenta desactivada antes de llegar a {@code AccesoGestion}.
  */
 class MatrizPermisosGestionApiTest extends ApiGestion {
 
     static final String ANONIMO = "anónimo";
     static final List<String> USUARIOS =
-            List.of(ANONIMO, "jefe", "ingeniero", "practicante", "sinrol", "inactivo");
+            List.of(ANONIMO, "jefe", "ingeniero", "practicante", "capataz", "inactivo");
 
     /** Esperado por usuario, en el orden de {@link #USUARIOS}. */
     static final List<Integer> CONSULTA = List.of(401, 200, 200, 200, 403, 401);
@@ -94,7 +94,7 @@ class MatrizPermisosGestionApiTest extends ApiGestion {
             String endpoint, String ejemplo, String usuario, int esperado) throws Exception {
         MockHttpServletRequestBuilder peticion = get(ejemplo);
         if (!usuario.equals(ANONIMO)) {
-            peticion = peticion.with(httpBasic(usuario, CLAVE));
+            peticion = peticion.cookie(sesion(usuario));
         }
         int estado = http.perform(peticion).andReturn().getResponse().getStatus();
         assertEquals(esperado, estado, endpoint + " como " + usuario);

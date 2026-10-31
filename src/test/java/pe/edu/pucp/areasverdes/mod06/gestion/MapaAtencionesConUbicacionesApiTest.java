@@ -5,7 +5,6 @@ import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -107,7 +106,7 @@ class MapaAtencionesConUbicacionesApiTest extends ApiGestion {
     ResultActions mapa(String filtros) throws Exception {
         return http.perform(
                 get("/api/v1/reportes/mapa-atenciones/?desde=2026-10-01&hasta=2026-10-31" + filtros)
-                        .with(httpBasic("jefe", CLAVE)));
+                        .cookie(sesion("jefe")));
     }
 
     @Test

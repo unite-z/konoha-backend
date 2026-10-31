@@ -16,8 +16,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import pe.edu.pucp.areasverdes.mod01.servicios.UsuarioSesion;
 import pe.edu.pucp.areasverdes.mod05.Atencion;
-import pe.edu.pucp.areasverdes.mod05.Usuario;
 import pe.edu.pucp.areasverdes.mod06.gestion.AccesoGestion;
 import pe.edu.pucp.areasverdes.mod06.gestion.RangoFechas;
 import pe.edu.pucp.areasverdes.mod06.gestion.servicios.ConsultaPanel;
@@ -37,7 +37,7 @@ import pe.edu.pucp.areasverdes.mod06.gestion.servicios.PanelService;
 @RestController
 @RequestMapping("/api/v1/reportes")
 @Tag(name = DocumentacionGestion.TAG_REP_001)
-@SecurityRequirement(name = "basicAuth")
+@SecurityRequirement(name = "sesionCore")
 public class PanelController {
 
     private static final String DESCRIPCION_ESTADO = "Estado de la atención tercerizada";
@@ -63,7 +63,7 @@ public class PanelController {
     })
     @GetMapping({"/panel", "/panel/"})
     public PanelIndicadores panel(
-            @AuthenticationPrincipal Usuario usuario,
+            @AuthenticationPrincipal UsuarioSesion usuario,
             @Parameter(description = "Inicio del periodo (AAAA-MM-DD), incluido")
                     @RequestParam
                     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
@@ -123,7 +123,7 @@ public class PanelController {
     })
     @GetMapping({"/panel/{indicador}", "/panel/{indicador}/"})
     public DetalleIndicador detalle(
-            @AuthenticationPrincipal Usuario usuario,
+            @AuthenticationPrincipal UsuarioSesion usuario,
             @Parameter(
                             description = "Clave del indicador",
                             schema =

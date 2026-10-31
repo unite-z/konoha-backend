@@ -12,7 +12,7 @@ package pe.edu.pucp.areasverdes.mod06.gestion.api;
  *   <li>RF-REP-007 · HU-MOD06-003 · CU-MOD06-003
  * </ul>
  *
- * Todos son de solo lectura (GET) y exigen HTTP Basic ({@code SeguridadGestion}).
+ * Todos son de solo lectura (GET) y exigen la sesión de MOD-01 ({@code SeguridadGestion}).
  */
 public final class DocumentacionGestion {
 
@@ -26,9 +26,9 @@ public final class DocumentacionGestion {
             "Parámetros no válidos: {codigo: validacion | periodo-invalido, detalle, errores:"
                     + " {campo: [mensajes]}}.";
     public static final String R401 =
-            "Sin credenciales o credenciales inválidas: {codigo: no-autenticado, detalle}.";
+            "Sin sesión de MOD-01 o sesión no válida: {codigo: no-autenticado, detalle}.";
     public static final String R403 =
-            "Usuario sin rol de consulta: {codigo: sin-permiso, detalle}.";
+            "Usuario sin el permiso REP.INDICADOR.CONSULTAR: {codigo: sin-permiso, detalle}.";
     public static final String R404_PAGINA =
             "Página inexistente: {codigo: pagina-inexistente, detalle}.";
     public static final String R404_INDICADOR =

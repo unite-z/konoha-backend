@@ -1,7 +1,6 @@
 package pe.edu.pucp.areasverdes.mod06.gestion;
 
 import static org.hamcrest.Matchers.nullValue;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -38,9 +37,7 @@ class MaterialVegetalConDatosApiTest extends ApiGestion {
 
     @Test
     void elContratoJsonLlevaLasClavesEnSnakeCase() throws Exception {
-        http.perform(
-                        get("/api/v1/reportes/material-vegetal/?mes=2026-10")
-                                .with(httpBasic("jefe", CLAVE)))
+        http.perform(get("/api/v1/reportes/material-vegetal/?mes=2026-10").cookie(sesion("jefe")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.sin_datos").value(false))
                 .andExpect(jsonPath("$.mensaje_sin_datos").value(nullValue()))

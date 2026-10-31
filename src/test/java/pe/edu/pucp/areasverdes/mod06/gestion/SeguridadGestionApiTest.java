@@ -6,13 +6,16 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import pe.edu.pucp.areasverdes.mod01.config.SeguridadMod01;
 
 /**
- * Las rutas de los reportes de gestión exigen HTTP Basic ({@code SeguridadGestion}) y el resto del
- * MOD-06 y de MOD-03 sigue igual (AGENTS.md: «Seguridad abierta: no empeorar»).
+ * Las rutas de los reportes de gestión exigen la sesión de MOD-01 ({@code SeguridadGestion}): ni
+ * HTTP Basic ni una cookie inválida bastan. El resto del MOD-06 y de MOD-03 sigue igual (AGENTS.md:
+ * «Seguridad abierta: no empeorar»).
  */
 class SeguridadGestionApiTest extends ApiGestion {
 
@@ -26,11 +29,14 @@ class SeguridadGestionApiTest extends ApiGestion {
                 "/api/v1/reportes/mapa-atenciones",
                 "/api/v1/reportes/mapa-atenciones/"
             })
-    void lasRutasNuevasExigenCredenciales(String ruta) throws Exception {
+    void lasRutasNuevasExigenLaSesionDeMod01(String ruta) throws Exception {
         http.perform(get(ruta))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.codigo").value("no-autenticado"));
-        http.perform(get(ruta).with(httpBasic("jefe", "otra-clave")))
+        http.perform(get(ruta).cookie(new Cookie(SeguridadMod01.COOKIE_SESION, "no-existe")))
+                .andExpect(status().isUnauthorized());
+        // HTTP Basic ya no sirve, ni siquiera con un usuario de MOD-01 y su clave.
+        http.perform(get(ruta).with(httpBasic("jefe" + DOMINIO, CLAVE)))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -42,9 +48,8 @@ class SeguridadGestionApiTest extends ApiGestion {
                 "/api/v1/reportes/material-vegetal/no-existe/",
                 "/api/v1/reportes/mapa-atenciones/no-existe/"
             })
-    void conCredencialesPasaLaAutenticacion(String ruta) throws Exception {
-        http.perform(get(ruta).with(httpBasic("practicante", CLAVE)))
-                .andExpect(status().isNotFound());
+    void conLaSesionDeMod01PasaLaAutenticacion(String ruta) throws Exception {
+        http.perform(get(ruta).cookie(sesion("practicante"))).andExpect(status().isNotFound());
     }
 
     @Test

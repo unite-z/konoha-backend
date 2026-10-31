@@ -8,7 +8,6 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -51,7 +50,7 @@ class MapaAtencionesApiTest extends ApiGestion {
     }
 
     ResultActions como(String usuario, String consulta) throws Exception {
-        return http.perform(get(MAPA + consulta).with(httpBasic(usuario, CLAVE)));
+        return http.perform(get(MAPA + consulta).cookie(sesion(usuario)));
     }
 
     ResultActions mapa(String filtros) throws Exception {
@@ -129,7 +128,7 @@ class MapaAtencionesApiTest extends ApiGestion {
                                 .param("desde", "2026-10-01")
                                 .param("hasta", "2026-10-31")
                                 .param("estado", "Reporte adjunto")
-                                .with(httpBasic("jefe", CLAVE)))
+                                .cookie(sesion("jefe")))
                 .andExpect(status().isOk())
                 .andExpect(
                         jsonPath(
@@ -184,7 +183,7 @@ class MapaAtencionesApiTest extends ApiGestion {
                                 .param("desde", "2026-10-01")
                                 .param("hasta", "2026-10-31")
                                 .param("estado", "En ejecución")
-                                .with(httpBasic("jefe", CLAVE)))
+                                .cookie(sesion("jefe")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errores.estado", notNullValue()));
     }
@@ -240,14 +239,14 @@ class MapaAtencionesApiTest extends ApiGestion {
     }
 
     @Test
-    void sinRolNoTienePermiso() throws Exception {
-        como("sinrol", PERIODO)
+    void elCapatazNoTienePermiso() throws Exception {
+        como("capataz", PERIODO)
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.codigo").value("sin-permiso"));
     }
 
     @Test
-    void sinCredencialesNoSeAutentica() throws Exception {
+    void sinSesionNoSeAutentica() throws Exception {
         http.perform(get(MAPA + PERIODO)).andExpect(status().isUnauthorized());
     }
 
