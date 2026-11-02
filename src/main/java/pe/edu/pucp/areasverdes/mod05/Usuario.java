@@ -16,7 +16,7 @@ public record Usuario(
     public static final String JEFE = "Jefe de sección";
     public static final String CAPATAZ = "Capataz";
     public static final List<String> ROLES =
-            List.of(JEFE, "Ingeniero de campo", "Practicante autorizado", CAPATAZ);
+            List.of(JEFE, "Ingeniero de campo", "Practicante autorizado");
 
     public String rol() {
         return ROLES.stream().filter(roles::contains).findFirst().orElse(null);
