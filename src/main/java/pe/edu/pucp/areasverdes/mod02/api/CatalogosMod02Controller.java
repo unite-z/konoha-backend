@@ -1,0 +1,77 @@
+package pe.edu.pucp.areasverdes.mod02.api;
+
+import com.fasterxml.jackson.annotation.JsonAlias;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+import java.net.URI;
+import java.util.List;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import pe.edu.pucp.areasverdes.mod02.servicios.AccesoCoberturas;
+import pe.edu.pucp.areasverdes.mod02.servicios.CatalogosMod02Service;
+import pe.edu.pucp.areasverdes.mod05.Usuario;
+
+@RestController
+@RequestMapping("/api/v1/inventario")
+@Tag(name = "MOD-02 Inventario")
+@SecurityRequirement(name = "basicAuth")
+public class CatalogosMod02Controller {
+
+    private final CatalogosMod02Service catalogos;
+
+    public CatalogosMod02Controller(CatalogosMod02Service catalogos) {
+        this.catalogos = catalogos;
+    }
+
+    public record Sector(
+            long id,
+            String nombre,
+            boolean activo,
+            boolean atencionDemanda,
+            String superficieM2) {}
+
+    public record NuevoSector(
+            @NotBlank(message = "Indica el nombre") @Size(max = 120) String nombre,
+            @JsonAlias("atencion_a_demanda") Boolean atencionDemanda) {}
+
+    public record CambioSector(
+            Boolean activo, @JsonAlias("atencion_a_demanda") Boolean atencionDemanda) {}
+
+    @GetMapping("/sectores")
+    public List<Sector> sectores(
+            @AuthenticationPrincipal Usuario usuario,
+            @RequestParam(name = "incluir_inactivos", defaultValue = "false")
+                    boolean incluirInactivos) {
+        AccesoCoberturas.consultar(usuario);
+        return catalogos.sectores(incluirInactivos);
+    }
+
+    @PostMapping("/sectores")
+    public ResponseEntity<Sector> crearSector(
+            @AuthenticationPrincipal Usuario usuario, @Valid @RequestBody NuevoSector entrada) {
+        Sector creado = catalogos.crearSector(entrada, usuario);
+        return ResponseEntity.created(URI.create("/api/v1/inventario/sectores/" + creado.id()))
+                .body(creado);
+    }
+
+    @PatchMapping("/sectores/{id}")
+    public Sector cambiarSector(
+            @AuthenticationPrincipal Usuario usuario,
+            @PathVariable long id,
+            @RequestBody CambioSector cambio) {
+        return catalogos.cambiarSector(id, cambio, usuario);
+    }
+
+}

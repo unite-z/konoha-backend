@@ -9,6 +9,7 @@ import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import com.fasterxml.jackson.annotation.JsonAlias;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.util.List;
@@ -49,6 +50,8 @@ public class AreasController {
             String tipoCoberturaNombre,
             Long cuartelId,
             String cuartelNumero,
+            Long sectorId,
+            String sectorNombre,
             boolean activo) {}
 
     public record PaginaAreas(int count, Integer next, Integer previous, List<AreaVerde> results) {}
@@ -61,7 +64,8 @@ public class AreasController {
                     @DecimalMin(value = "0.01", message = "La superficie debe ser mayor que cero")
                     BigDecimal superficieM2,
             Long tipoCoberturaId,
-            Long cuartelId) {}
+            Long cuartelId,
+            Long sectorId) {}
 
     public record CambioAreaVerde(
             @Size(max = 150) String nombre,
@@ -73,16 +77,22 @@ public class AreasController {
             Long tipoCoberturaId,
             Long cuartelId) {}
 
+    public record CambioSectorArea(@JsonAlias("sector_id") Long sectorId) {}
+
+    public record AsignacionSector(
+            long id, long sectorId, String sectorNombre, String fechaInicio, String fechaFin) {}
+
     @Operation(summary = "Consulta áreas verdes por nombre")
     @ApiResponse(responseCode = "200", description = "Página del inventario")
     @GetMapping({"", "/"})
     public PaginaAreas listar(
             @AuthenticationPrincipal Usuario usuario,
             @RequestParam(required = false) String q,
+            @RequestParam(name = "sector_id", required = false) Long sectorId,
             @RequestParam(name = "cuartel_id", required = false) Long cuartelId,
             @RequestParam(defaultValue = "1") int page) {
         AccesoCoberturas.consultar(usuario);
-        return areas.listar(q, cuartelId, page);
+        return areas.listar(q, sectorId, cuartelId, page);
     }
 
     @Operation(summary = "Registra un área verde")
@@ -109,4 +119,21 @@ public class AreasController {
             @Valid @RequestBody CambioAreaVerde cambio) {
         return areas.modificar(id, cambio, usuario);
     }
+    @PatchMapping({"/{id}/sector", "/{id}/sector/"})
+    @Operation(summary = "Asigna o reasigna un área a un sector manteniendo su historial")
+    public AreaVerde asignarSector(
+            @AuthenticationPrincipal Usuario usuario,
+            @PathVariable long id,
+            @RequestBody CambioSectorArea cambio) {
+        return areas.asignarSector(id, cambio.sectorId(), usuario);
+    }
+
+    @GetMapping({"/{id}/historial-sector", "/{id}/historial-sector/"})
+    @Operation(summary = "Consulta las asignaciones históricas de sector de un área verde")
+    public List<AsignacionSector> historialSector(
+            @AuthenticationPrincipal Usuario usuario, @PathVariable long id) {
+        AccesoCoberturas.consultar(usuario);
+        return areas.historialSector(id);
+    }
+
 }
