@@ -1,7 +1,6 @@
 package pe.edu.pucp.areasverdes.mod02.api;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
-import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -36,11 +35,7 @@ public class CatalogosMod02Controller {
     }
 
     public record Sector(
-            long id,
-            String nombre,
-            boolean activo,
-            boolean atencionDemanda,
-            String superficieM2) {}
+            long id, String nombre, boolean activo, boolean atencionDemanda, String superficieM2) {}
 
     public record NuevoSector(
             @NotBlank(message = "Indica el nombre") @Size(max = 120) String nombre,
@@ -73,5 +68,4 @@ public class CatalogosMod02Controller {
             @RequestBody CambioSector cambio) {
         return catalogos.cambiarSector(id, cambio, usuario);
     }
-
 }

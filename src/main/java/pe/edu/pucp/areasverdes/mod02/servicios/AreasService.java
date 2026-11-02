@@ -22,13 +22,12 @@ public class AreasService {
     private static final String CONSULTA =
             "SELECT a.id, a.nombre, a.lugar, a.ubicacion, a.superficie_m2, a.tipo_cobertura_id,"
                 + " c.nombre tipo_cobertura_nombre, a.cuartel_id, q.numero cuartel_numero,"
-                + " h.sector_id, s.nombre sector_nombre, a.activo FROM mod02_area_verde a"
-                + " LEFT JOIN mod02_cobertura_vegetal c ON c.id = a.tipo_cobertura_id"
-                + " LEFT JOIN mod02_cuartel q ON q.id = a.cuartel_id LEFT JOIN"
-                + " mod02_historial_area_sector h ON h.area_verde_id = a.id AND h.fecha_fin IS NULL"
-                + " LEFT JOIN mod02_sector s ON s.id = h.sector_id"
-                + " WHERE (:incluir_inactivas OR a.activo) AND (:q = '' OR a.nombre ILIKE"
-                + " '%' || :q || '%') AND (CAST(:cuartel AS bigint) IS NULL OR a.cuartel_id ="
+                + " h.sector_id, s.nombre sector_nombre, a.activo FROM mod02_area_verde a LEFT JOIN"
+                + " mod02_cobertura_vegetal c ON c.id = a.tipo_cobertura_id LEFT JOIN mod02_cuartel"
+                + " q ON q.id = a.cuartel_id LEFT JOIN mod02_historial_area_sector h ON"
+                + " h.area_verde_id = a.id AND h.fecha_fin IS NULL LEFT JOIN mod02_sector s ON s.id"
+                + " = h.sector_id WHERE (:incluir_inactivas OR a.activo) AND (:q = '' OR a.nombre"
+                + " ILIKE '%' || :q || '%') AND (CAST(:cuartel AS bigint) IS NULL OR a.cuartel_id ="
                 + " :cuartel) AND (CAST(:sector AS bigint) IS NULL OR h.sector_id = :sector)";
 
     private final NamedParameterJdbcTemplate jdbc;

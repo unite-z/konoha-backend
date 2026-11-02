@@ -1,5 +1,6 @@
 package pe.edu.pucp.areasverdes.mod02.api;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -9,7 +10,6 @@ import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import com.fasterxml.jackson.annotation.JsonAlias;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.util.List;
@@ -119,6 +119,7 @@ public class AreasController {
             @Valid @RequestBody CambioAreaVerde cambio) {
         return areas.modificar(id, cambio, usuario);
     }
+
     @PatchMapping({"/{id}/sector", "/{id}/sector/"})
     @Operation(summary = "Asigna o reasigna un área a un sector manteniendo su historial")
     public AreaVerde asignarSector(
@@ -135,5 +136,4 @@ public class AreasController {
         AccesoCoberturas.consultar(usuario);
         return areas.historialSector(id);
     }
-
 }

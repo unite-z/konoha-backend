@@ -35,10 +35,10 @@ public class CatalogosMod02Service {
         return jdbc.query(
                 "SELECT s.id, s.nombre, s.activo, s.atencion_a_demanda,"
                     + " coalesce(sum(a.superficie_m2), 0)::text superficie_m2 FROM mod02_sector s"
-                    + " LEFT JOIN mod02_historial_area_sector ha ON ha.sector_id = s.id AND ha.fecha_fin"
-                    + " IS NULL LEFT JOIN mod02_area_verde a ON a.id = ha.area_verde_id AND"
-                    + " a.activo WHERE (:incluir OR s.activo) GROUP BY s.id ORDER BY"
-                    + " lower(s.nombre), s.id",
+                    + " LEFT JOIN mod02_historial_area_sector ha ON ha.sector_id = s.id AND"
+                    + " ha.fecha_fin IS NULL LEFT JOIN mod02_area_verde a ON a.id ="
+                    + " ha.area_verde_id AND a.activo WHERE (:incluir OR s.activo) GROUP BY s.id"
+                    + " ORDER BY lower(s.nombre), s.id",
                 Map.of("incluir", incluirInactivos),
                 SECTOR);
     }
