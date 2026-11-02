@@ -47,11 +47,17 @@ jobs:
     # Mientras no exista la EC2, el despliegue se salta y main no sale en rojo.
     if: vars.DESPLIEGUE_ACTIVO == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    # Hasta 13 minutos de espera si hay que abrir el Learner Lab (ADR 0006 de konoha-infra).
+    timeout-minutes: 28
     environment:
       name: uat
       url: ${{ vars.URL_UAT }}
     steps:
+      - name: asegurar lab
+        uses: unite-z/konoha-infra/.github/actions/asegurar-lab@main
+        with:
+          host: ${{ vars.SSH_HOST }}
+          token-lab: ${{ secrets.LAB_TOKEN }}
       - name: clave SSH
         env:
           SSH_KEY_DEPLOY: ${{ secrets.SSH_KEY_DEPLOY }}
@@ -65,7 +71,7 @@ jobs:
           HOST: ${{ vars.SSH_HOST }}
         run: |
           if ! ssh -o ConnectTimeout=15 "deploy@$HOST" true; then
-            echo "::error::La EC2 no responde por SSH. ¿Está arrancado el Learner Lab? Relanza este workflow cuando lo esté."
+            echo "::error::La EC2 responde, pero el SSH de deploy falla."
             exit 1
           fi
           ssh "deploy@$HOST" "/opt/konoha/infra/scripts/deploy.sh uat api $GITHUB_SHA"
