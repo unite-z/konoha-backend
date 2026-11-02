@@ -23,9 +23,9 @@ public class RepositorioService {
 
     /**
      * Fuente de un tipo. El SQL es fijo (no se arma con entradas del usuario); {@code :q} filtra
-     * por nombre. Se prueba en orden y se usa la primera tabla que exista.
+     * por nombre. Se combinan todas las fuentes disponibles durante la transición entre módulos.
      */
-    record Fuente(String tabla, String modulo, String seleccion) {}
+    record Fuente(String tabla, String seleccion) {}
 
     static final Map<String, List<Fuente>> FUENTES =
             Map.of(
@@ -33,35 +33,34 @@ public class RepositorioService {
                     List.of(
                             new Fuente(
                                     "mod02_area_verde",
-                                    "MOD-02",
-                                    "SELECT id, nombre, lugar detalle FROM mod02_area_verde"
+                                    "SELECT id, nombre, lugar detalle, 'MOD-02' modulo"
+                                            + " FROM mod02_area_verde"
                                             + " WHERE activo"),
                             new Fuente(
                                     "mod05_areaverde",
-                                    "MOD-05",
-                                    "SELECT id, nombre, NULL detalle FROM mod05_areaverde"
+                                    "SELECT id, nombre, NULL detalle, 'MOD-05' modulo"
+                                            + " FROM mod05_areaverde"
                                             + " WHERE activo")),
                     "especie",
                     List.of(
                             new Fuente(
                                     "mod02_especie_vegetal",
-                                    "MOD-02",
                                     "SELECT id, coalesce(nombre_comun, nombre_cientifico) nombre,"
-                                        + " nombre_cientifico detalle FROM mod02_especie_vegetal"
-                                        + " WHERE activo")),
+                                            + " nombre_cientifico detalle, 'MOD-02' modulo"
+                                            + " FROM mod02_especie_vegetal"
+                                            + " WHERE activo")),
                     "sector",
                     List.of(
                             new Fuente(
                                     "mod02_sector",
-                                    "MOD-02",
-                                    "SELECT id, nombre, NULL detalle FROM mod02_sector WHERE"
-                                            + " activo")),
+                                    "SELECT id, nombre, NULL detalle, 'MOD-02' modulo"
+                                            + " FROM mod02_sector WHERE activo")),
                     "servicio",
                     List.of(
                             new Fuente(
                                     "mod05_tiposervicio",
-                                    "MOD-05",
-                                    "SELECT id, nombre, ejecutor detalle FROM mod05_tiposervicio"
+                                    "SELECT id, nombre, ejecutor detalle, 'MOD-05' modulo"
+                                            + " FROM mod05_tiposervicio"
                                             + " WHERE activo")));
 
     private final NamedParameterJdbcTemplate jdbc;
@@ -86,13 +85,15 @@ public class RepositorioService {
         if (pagina < 1) {
             throw ErrorCore.invalido("pagina-invalida", "La página empieza en 1");
         }
-        var fuente = fuentes.stream().filter(this::existe).findFirst();
-        if (fuente.isEmpty()) {
+        List<Fuente> disponibles = fuentes.stream().filter(this::existe).toList();
+        if (disponibles.isEmpty()) {
             return new Resultado(false, 0, List.of());
         }
+        String seleccion =
+                String.join(" UNION ALL ", disponibles.stream().map(Fuente::seleccion).toList());
         String consulta =
                 "SELECT * FROM ("
-                        + fuente.get().seleccion()
+                        + seleccion
                         + ") f WHERE (CAST(:q AS text) IS NULL OR f.nombre ILIKE :patron"
                         + " OR f.detalle ILIKE :patron)";
         var p = new HashMap<String, Object>();
@@ -113,7 +114,7 @@ public class RepositorioService {
                                         tipo,
                                         fila.getString("nombre"),
                                         fila.getString("detalle"),
-                                        fuente.get().modulo()));
+                                        fila.getString("modulo")));
         return new Resultado(true, total == null ? 0 : total, elementos);
     }
 
