@@ -8,10 +8,13 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import pe.edu.pucp.areasverdes.mod02.api.CatalogosMod02Controller.Asignacion;
 import pe.edu.pucp.areasverdes.mod02.api.CatalogosMod02Controller.CambioSector;
 import pe.edu.pucp.areasverdes.mod02.api.CatalogosMod02Controller.NuevoSector;
+import pe.edu.pucp.areasverdes.mod02.api.CatalogosMod02Controller.Persona;
 import pe.edu.pucp.areasverdes.mod02.api.CatalogosMod02Controller.Sector;
 import pe.edu.pucp.areasverdes.mod02.api.ErrorCoberturas;
+import pe.edu.pucp.areasverdes.mod02.datos.CatalogosMod02Repository;
 import pe.edu.pucp.areasverdes.mod05.Usuario;
 
 @Service
@@ -24,23 +27,33 @@ public class CatalogosMod02Service {
                             rs.getString("nombre"),
                             rs.getBoolean("activo"),
                             rs.getBoolean("atencion_a_demanda"),
+                            rs.getString("capataz_nombre"),
                             rs.getString("superficie_m2"));
     private final NamedParameterJdbcTemplate jdbc;
+    private final CatalogosMod02Repository repository;
 
-    public CatalogosMod02Service(NamedParameterJdbcTemplate jdbc) {
+    public CatalogosMod02Service(
+            NamedParameterJdbcTemplate jdbc, CatalogosMod02Repository repository) {
         this.jdbc = jdbc;
+        this.repository = repository;
     }
 
     public List<Sector> sectores(boolean incluirInactivos) {
         return jdbc.query(
-                "SELECT s.id, s.nombre, s.activo, s.atencion_a_demanda,"
+                "SELECT s.id, s.nombre, s.activo, s.atencion_a_demanda, u.nombre capataz_nombre,"
                     + " coalesce(sum(a.superficie_m2), 0)::text superficie_m2 FROM mod02_sector s"
-                    + " LEFT JOIN mod02_historial_area_sector ha ON ha.sector_id = s.id AND"
-                    + " ha.fecha_fin IS NULL LEFT JOIN mod02_area_verde a ON a.id ="
-                    + " ha.area_verde_id AND a.activo WHERE (:incluir OR s.activo) GROUP BY s.id"
-                    + " ORDER BY lower(s.nombre), s.id",
+                    + " LEFT JOIN mod02_historial_capataz_sector hc ON hc.sector_id = s.id AND"
+                    + " hc.fecha_fin IS NULL LEFT JOIN core_usuario u ON u.id = hc.capataz_id LEFT"
+                    + " JOIN mod02_historial_area_sector ha ON ha.sector_id = s.id AND ha.fecha_fin"
+                    + " IS NULL LEFT JOIN mod02_area_verde a ON a.id = ha.area_verde_id AND"
+                    + " a.activo WHERE (:incluir OR s.activo) GROUP BY s.id, u.nombre ORDER BY"
+                    + " lower(s.nombre), s.id",
                 Map.of("incluir", incluirInactivos),
                 SECTOR);
+    }
+
+    public List<Persona> capataces() {
+        return repository.capatacesActivos();
     }
 
     @Transactional
@@ -89,6 +102,32 @@ public class CatalogosMod02Service {
         if (actualizados == 0) throw noExiste("No existe ese sector");
         auditar("mod02_sector", id, "modificar", usuario.id());
         return sector(id);
+    }
+
+    @Transactional
+    public Sector asignarCapataz(long sectorId, Long capatazId, Usuario usuario) {
+        AccesoCoberturas.gestionar(usuario);
+        if (!repository.existeSector(sectorId)) throw noExiste("No existe ese sector");
+        if (capatazId != null && !repository.esCapatazActivo(capatazId)) {
+            throw noExiste("El usuario indicado no es un capataz activo");
+        }
+        jdbc.update(
+                "UPDATE mod02_historial_capataz_sector SET fecha_fin = greatest(now(),"
+                        + " fecha_inicio) WHERE sector_id = :sector AND fecha_fin IS NULL",
+                Map.of("sector", sectorId));
+        if (capatazId != null) {
+            jdbc.update(
+                    "INSERT INTO mod02_historial_capataz_sector (sector_id, capataz_id, usuario_id)"
+                            + " VALUES (:sector, :capataz, :usuario)",
+                    Map.of("sector", sectorId, "capataz", capatazId, "usuario", usuario.id()));
+        }
+        auditar("mod02_sector", sectorId, "asignar-capataz", usuario.id());
+        return sector(sectorId);
+    }
+
+    public List<Asignacion> historialCapataz(long sectorId) {
+        if (!repository.existeSector(sectorId)) throw noExiste("No existe ese sector");
+        return repository.historialCapataz(sectorId);
     }
 
     private Sector sector(long id) {
