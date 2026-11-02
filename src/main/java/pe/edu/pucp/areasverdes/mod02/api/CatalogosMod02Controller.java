@@ -40,6 +40,7 @@ public class CatalogosMod02Controller {
             String nombre,
             boolean activo,
             boolean atencionDemanda,
+            String capatazNombre,
             String superficieM2) {}
 
     public record NuevoSector(
@@ -49,6 +50,13 @@ public class CatalogosMod02Controller {
     public record CambioSector(
             Boolean activo, @JsonAlias("atencion_a_demanda") Boolean atencionDemanda) {}
 
+    public record CambioCapataz(@JsonAlias("capataz_id") Long capatazId) {}
+
+    public record Asignacion(
+            long id, long capatazId, String capatazNombre, String fechaInicio, String fechaFin) {}
+
+    public record Persona(long id, String nombre) {}
+
     @GetMapping("/sectores")
     public List<Sector> sectores(
             @AuthenticationPrincipal Usuario usuario,
@@ -56,6 +64,12 @@ public class CatalogosMod02Controller {
                     boolean incluirInactivos) {
         AccesoCoberturas.consultar(usuario);
         return catalogos.sectores(incluirInactivos);
+    }
+
+    @GetMapping("/capataces")
+    public List<Persona> capataces(@AuthenticationPrincipal Usuario usuario) {
+        AccesoCoberturas.consultar(usuario);
+        return catalogos.capataces();
     }
 
     @PostMapping("/sectores")
@@ -72,6 +86,21 @@ public class CatalogosMod02Controller {
             @PathVariable long id,
             @RequestBody CambioSector cambio) {
         return catalogos.cambiarSector(id, cambio, usuario);
+    }
+
+    @PatchMapping("/sectores/{id}/capataz")
+    public Sector asignarCapataz(
+            @AuthenticationPrincipal Usuario usuario,
+            @PathVariable long id,
+            @RequestBody CambioCapataz cambio) {
+        return catalogos.asignarCapataz(id, cambio.capatazId(), usuario);
+    }
+
+    @GetMapping("/sectores/{id}/historial-capataz")
+    public List<Asignacion> historialCapataz(
+            @AuthenticationPrincipal Usuario usuario, @PathVariable long id) {
+        AccesoCoberturas.consultar(usuario);
+        return catalogos.historialCapataz(id);
     }
 
 }

@@ -8,7 +8,9 @@ import org.springframework.security.core.userdetails.UserDetails;
 public record Usuario(long id, String usuario, String nombre, String passwordHash,
                       boolean activo, List<String> roles) implements UserDetails {
     public static final String JEFE = "Jefe de sección";
-    public static final List<String> ROLES = List.of(JEFE, "Ingeniero de campo", "Practicante autorizado");
+    public static final String CAPATAZ = "Capataz";
+    public static final List<String> ROLES =
+            List.of(JEFE, "Ingeniero de campo", "Practicante autorizado", CAPATAZ);
     public String rol() { return ROLES.stream().filter(roles::contains).findFirst().orElse(null); }
     public void exigir(boolean jefe) {
         if (!activo || rol() == null || (jefe && !roles.contains(JEFE)))
