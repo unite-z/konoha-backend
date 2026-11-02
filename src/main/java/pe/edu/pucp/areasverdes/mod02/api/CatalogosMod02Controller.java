@@ -56,6 +56,38 @@ public class CatalogosMod02Controller {
 
     public record Persona(long id, String nombre) {}
 
+    public record Elemento(long id, String nombre, boolean activo) {}
+
+    public record NuevoNombre(
+            @NotBlank(message = "Indica el nombre") @Size(max = 80) String nombre) {}
+
+    public record CambioElemento(String nombre, Boolean activo) {}
+
+    @GetMapping("/tipos-uso")
+    public List<Elemento> tiposUso(
+            @AuthenticationPrincipal Usuario usuario,
+            @RequestParam(name = "incluir_inactivas", defaultValue = "false")
+                    boolean incluirInactivos) {
+        AccesoCoberturas.consultar(usuario);
+        return catalogos.tiposUso(incluirInactivos);
+    }
+
+    @PostMapping("/tipos-uso")
+    public ResponseEntity<Elemento> crearTipoUso(
+            @AuthenticationPrincipal Usuario usuario, @Valid @RequestBody NuevoNombre entrada) {
+        Elemento creado = catalogos.crearTipoUso(entrada, usuario);
+        return ResponseEntity.created(URI.create("/api/v1/inventario/tipos-uso/" + creado.id()))
+                .body(creado);
+    }
+
+    @PatchMapping("/tipos-uso/{id}")
+    public Elemento cambiarTipoUso(
+            @AuthenticationPrincipal Usuario usuario,
+            @PathVariable long id,
+            @Valid @RequestBody CambioElemento cambio) {
+        return catalogos.cambiarTipoUso(id, cambio, usuario);
+    }
+
     @GetMapping("/sectores")
     public List<Sector> sectores(
             @AuthenticationPrincipal Usuario usuario,

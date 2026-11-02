@@ -9,7 +9,10 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import pe.edu.pucp.areasverdes.mod02.api.CatalogosMod02Controller.Asignacion;
+import pe.edu.pucp.areasverdes.mod02.api.CatalogosMod02Controller.CambioElemento;
 import pe.edu.pucp.areasverdes.mod02.api.CatalogosMod02Controller.CambioSector;
+import pe.edu.pucp.areasverdes.mod02.api.CatalogosMod02Controller.Elemento;
+import pe.edu.pucp.areasverdes.mod02.api.CatalogosMod02Controller.NuevoNombre;
 import pe.edu.pucp.areasverdes.mod02.api.CatalogosMod02Controller.NuevoSector;
 import pe.edu.pucp.areasverdes.mod02.api.CatalogosMod02Controller.Persona;
 import pe.edu.pucp.areasverdes.mod02.api.CatalogosMod02Controller.Sector;
@@ -19,6 +22,10 @@ import pe.edu.pucp.areasverdes.mod05.Usuario;
 
 @Service
 public class CatalogosMod02Service {
+
+    private static final RowMapper<Elemento> ELEMENTO =
+            (rs, row) ->
+                    new Elemento(rs.getLong("id"), rs.getString("nombre"), rs.getBoolean("activo"));
 
     private static final RowMapper<Sector> SECTOR =
             (rs, row) ->
@@ -54,6 +61,59 @@ public class CatalogosMod02Service {
 
     public List<Persona> capataces() {
         return repository.capatacesActivos();
+    }
+
+    public List<Elemento> tiposUso(boolean incluirInactivos) {
+        return jdbc.query(
+                "SELECT id, nombre, activo FROM mod02_tipo_uso WHERE (:incluir OR activo)"
+                        + " ORDER BY lower(nombre), id",
+                Map.of("incluir", incluirInactivos),
+                ELEMENTO);
+    }
+
+    @Transactional
+    public Elemento crearTipoUso(NuevoNombre entrada, Usuario usuario) {
+        AccesoCoberturas.gestionar(usuario);
+        try {
+            long id =
+                    jdbc.queryForObject(
+                            "INSERT INTO mod02_tipo_uso (nombre, usuario_creacion_id,"
+                                + " usuario_modificacion_id) VALUES (:nombre, :usuario, :usuario)"
+                                + " RETURNING id",
+                            Map.of("nombre", entrada.nombre().trim(), "usuario", usuario.id()),
+                            Long.class);
+            auditar("mod02_tipo_uso", id, "crear", usuario.id());
+            return tiposUso(true).stream().filter(t -> t.id() == id).findFirst().orElseThrow();
+        } catch (DuplicateKeyException e) {
+            throw new ErrorCoberturas(409, "tipo-uso-duplicado", "Ya existe ese tipo de uso");
+        }
+    }
+
+    @Transactional
+    public Elemento cambiarTipoUso(long id, CambioElemento cambio, Usuario usuario) {
+        AccesoCoberturas.gestionar(usuario);
+        if (cambio.nombre() == null && cambio.activo() == null) {
+            throw new ErrorCoberturas(400, "cambio-vacio", "Indica un nombre o un estado");
+        }
+        try {
+            int actualizados =
+                    jdbc.update(
+                            "UPDATE mod02_tipo_uso SET nombre = coalesce(:nombre, nombre), activo ="
+                                    + " coalesce(:activo, activo), fecha_modificacion = now(),"
+                                    + " usuario_modificacion_id = :usuario WHERE id = :id",
+                            new MapSqlParameterSource()
+                                    .addValue("id", id)
+                                    .addValue("usuario", usuario.id())
+                                    .addValue(
+                                            "nombre",
+                                            cambio.nombre() == null ? null : cambio.nombre().trim())
+                                    .addValue("activo", cambio.activo()));
+            if (actualizados == 0) throw noExiste("No existe ese tipo de uso");
+            auditar("mod02_tipo_uso", id, "modificar", usuario.id());
+            return tiposUso(true).stream().filter(t -> t.id() == id).findFirst().orElseThrow();
+        } catch (DuplicateKeyException e) {
+            throw new ErrorCoberturas(409, "tipo-uso-duplicado", "Ya existe ese tipo de uso");
+        }
     }
 
     @Transactional

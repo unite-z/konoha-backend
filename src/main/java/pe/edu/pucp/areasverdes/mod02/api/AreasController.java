@@ -48,6 +48,8 @@ public class AreasController {
             String superficieM2,
             Long tipoCoberturaId,
             String tipoCoberturaNombre,
+            Long tipoUsoId,
+            String tipoUsoNombre,
             Long cuartelId,
             String cuartelNumero,
             Long sectorId,
@@ -64,6 +66,7 @@ public class AreasController {
                     @DecimalMin(value = "0.01", message = "La superficie debe ser mayor que cero")
                     BigDecimal superficieM2,
             Long tipoCoberturaId,
+            Long tipoUsoId,
             Long cuartelId,
             Long sectorId) {}
 
@@ -75,6 +78,7 @@ public class AreasController {
                     BigDecimal superficieM2,
             Boolean activo,
             Long tipoCoberturaId,
+            Long tipoUsoId,
             Long cuartelId) {}
 
     public record CambioSectorArea(@JsonAlias("sector_id") Long sectorId) {}
@@ -88,11 +92,12 @@ public class AreasController {
     public PaginaAreas listar(
             @AuthenticationPrincipal Usuario usuario,
             @RequestParam(required = false) String q,
+            @RequestParam(name = "tipo_uso_id", required = false) Long tipoUsoId,
             @RequestParam(name = "sector_id", required = false) Long sectorId,
             @RequestParam(name = "cuartel_id", required = false) Long cuartelId,
             @RequestParam(defaultValue = "1") int page) {
         AccesoCoberturas.consultar(usuario);
-        return areas.listar(q, sectorId, cuartelId, page);
+        return areas.listar(q, tipoUsoId, sectorId, cuartelId, page);
     }
 
     @Operation(summary = "Registra un área verde")
