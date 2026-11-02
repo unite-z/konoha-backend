@@ -1,4 +1,4 @@
-package pe.edu.pucp.areasverdes.mod02;
+package pe.edu.pucp.areasverdes.mod02.servicios;
 
 import java.util.List;
 import java.util.Map;
@@ -7,9 +7,10 @@ import org.springframework.jdbc.core.DataClassRowMapper;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import pe.edu.pucp.areasverdes.mod02.CoberturasController.CambioCobertura;
-import pe.edu.pucp.areasverdes.mod02.CoberturasController.Cobertura;
-import pe.edu.pucp.areasverdes.mod02.CoberturasController.NuevaCobertura;
+import pe.edu.pucp.areasverdes.mod02.api.CoberturasController.CambioCobertura;
+import pe.edu.pucp.areasverdes.mod02.api.CoberturasController.Cobertura;
+import pe.edu.pucp.areasverdes.mod02.api.CoberturasController.NuevaCobertura;
+import pe.edu.pucp.areasverdes.mod02.api.ErrorCoberturas;
 import pe.edu.pucp.areasverdes.mod05.Usuario;
 
 @Service
@@ -106,10 +107,11 @@ public class CoberturasService {
 
     private void auditar(long id, String accion, String anteriores, long usuarioId) {
         jdbc.update(
-                "INSERT INTO mod05_registroauditoria (entidad, registro_id, accion, fecha_hora, "
-                        + "valores_anteriores, valores_nuevos, motivo, usuario_id) "
-                        + "SELECT 'mod02_cobertura_vegetal', c.id, :accion, now(), "
-                        + "CAST(:anteriores AS jsonb), to_jsonb(c), '', :usuario "
+                "INSERT INTO core_registro_auditoria (entidad, registro_id, accion, usuario_id, "
+                        + "fecha_hora, valores_anteriores, valores_nuevos, motivo) "
+                        + "SELECT 'mod02_cobertura_vegetal', c.id,"
+                        + " CASE WHEN :accion = 'crear' THEN 'Alta' ELSE 'Modificacion' END,"
+                        + " :usuario, now(), CAST(:anteriores AS jsonb), to_jsonb(c), '' "
                         + "FROM mod02_cobertura_vegetal c WHERE c.id = :id",
                 new org.springframework.jdbc.core.namedparam.MapSqlParameterSource()
                         .addValue("id", id)

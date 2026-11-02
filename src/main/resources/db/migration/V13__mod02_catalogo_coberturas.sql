@@ -4,9 +4,9 @@ CREATE TABLE mod02_cobertura_vegetal (
     nombre varchar(120) NOT NULL,
     activo boolean NOT NULL DEFAULT true,
     fecha_creacion timestamptz NOT NULL DEFAULT now(),
-    usuario_creacion_id bigint REFERENCES mod05_usuario(id),
+    usuario_creacion_id bigint REFERENCES core_usuario(id),
     fecha_modificacion timestamptz NOT NULL DEFAULT now(),
-    usuario_modificacion_id bigint REFERENCES mod05_usuario(id),
+    usuario_modificacion_id bigint REFERENCES core_usuario(id),
     CONSTRAINT mod02_cobertura_vegetal_nombre_no_vacio CHECK (length(trim(nombre)) > 0)
 );
 CREATE UNIQUE INDEX mod02_cobertura_vegetal_nombre_unico

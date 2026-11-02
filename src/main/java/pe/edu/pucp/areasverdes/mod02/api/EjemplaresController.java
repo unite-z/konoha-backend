@@ -1,4 +1,4 @@
-package pe.edu.pucp.areasverdes.mod02;
+package pe.edu.pucp.areasverdes.mod02.api;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -22,8 +22,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import pe.edu.pucp.areasverdes.mod02.EjemplaresService.Ejemplar;
-import pe.edu.pucp.areasverdes.mod02.EjemplaresService.Especie;
+import pe.edu.pucp.areasverdes.mod02.servicios.AccesoCoberturas;
+import pe.edu.pucp.areasverdes.mod02.servicios.EjemplaresService;
+import pe.edu.pucp.areasverdes.mod02.servicios.EjemplaresService.Ejemplar;
+import pe.edu.pucp.areasverdes.mod02.servicios.EjemplaresService.Especie;
 import pe.edu.pucp.areasverdes.mod05.Usuario;
 
 @RestController

@@ -8,9 +8,9 @@ CREATE TABLE mod02_area_verde (
     tipo_cobertura_id bigint REFERENCES mod02_cobertura_vegetal(id) ON DELETE RESTRICT,
     activo boolean NOT NULL DEFAULT true,
     fecha_creacion timestamptz NOT NULL DEFAULT now(),
-    usuario_creacion_id bigint NOT NULL REFERENCES mod05_usuario(id),
+    usuario_creacion_id bigint NOT NULL REFERENCES core_usuario(id),
     fecha_modificacion timestamptz NOT NULL DEFAULT now(),
-    usuario_modificacion_id bigint NOT NULL REFERENCES mod05_usuario(id),
+    usuario_modificacion_id bigint NOT NULL REFERENCES core_usuario(id),
     CONSTRAINT mod02_area_verde_superficie_positiva CHECK (superficie_m2 > 0)
 );
 

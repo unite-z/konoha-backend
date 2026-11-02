@@ -1,4 +1,4 @@
-package pe.edu.pucp.areasverdes.mod02;
+package pe.edu.pucp.areasverdes.mod02.servicios;
 
 import java.util.List;
 import java.util.Map;
@@ -7,10 +7,12 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import pe.edu.pucp.areasverdes.mod02.AreasController.AreaVerde;
-import pe.edu.pucp.areasverdes.mod02.AreasController.AsignacionSector;
-import pe.edu.pucp.areasverdes.mod02.AreasController.NuevaAreaVerde;
-import pe.edu.pucp.areasverdes.mod02.AreasController.PaginaAreas;
+import pe.edu.pucp.areasverdes.mod02.api.AreasController;
+import pe.edu.pucp.areasverdes.mod02.api.AreasController.AreaVerde;
+import pe.edu.pucp.areasverdes.mod02.api.AreasController.AsignacionSector;
+import pe.edu.pucp.areasverdes.mod02.api.AreasController.NuevaAreaVerde;
+import pe.edu.pucp.areasverdes.mod02.api.AreasController.PaginaAreas;
+import pe.edu.pucp.areasverdes.mod02.api.ErrorCoberturas;
 import pe.edu.pucp.areasverdes.mod05.Usuario;
 
 @Service
@@ -108,10 +110,10 @@ public class AreasService {
         }
         AreaVerde area = obtener(id);
         jdbc.update(
-                "INSERT INTO mod05_registroauditoria (entidad, registro_id, accion, fecha_hora,"
-                        + " valores_anteriores, valores_nuevos, motivo, usuario_id) SELECT"
-                        + " 'mod02_area_verde', a.id, 'crear', now(), '{}'::jsonb, to_jsonb(a), '',"
-                        + " :usuario FROM mod02_area_verde a WHERE a.id = :id",
+                "INSERT INTO core_registro_auditoria (entidad, registro_id, accion, usuario_id,"
+                        + " fecha_hora, valores_anteriores, valores_nuevos, motivo) SELECT"
+                        + " 'mod02_area_verde', a.id, 'Alta', :usuario, now(), '{}'::jsonb,"
+                        + " to_jsonb(a), '' FROM mod02_area_verde a WHERE a.id = :id",
                 Map.of("id", id, "usuario", usuario.id()));
         return area;
     }
@@ -278,10 +280,11 @@ public class AreasService {
 
     private void auditarArea(long id, String accion, String anteriores, long usuarioId) {
         jdbc.update(
-                "INSERT INTO mod05_registroauditoria (entidad, registro_id, accion, fecha_hora,"
-                        + " valores_anteriores, valores_nuevos, motivo, usuario_id) SELECT"
-                        + " 'mod02_area_verde', a.id, :accion, now(), CAST(:anteriores AS jsonb),"
-                        + " to_jsonb(a), '', :usuario FROM mod02_area_verde a WHERE a.id = :id",
+                "INSERT INTO core_registro_auditoria (entidad, registro_id, accion, usuario_id,"
+                        + " fecha_hora, valores_anteriores, valores_nuevos, motivo) SELECT"
+                        + " 'mod02_area_verde', a.id, 'Modificacion', :usuario, now(),"
+                        + " CAST(:anteriores AS jsonb), to_jsonb(a), ''"
+                        + " FROM mod02_area_verde a WHERE a.id = :id",
                 new MapSqlParameterSource()
                         .addValue("id", id)
                         .addValue("accion", accion)

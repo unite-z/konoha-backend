@@ -1,4 +1,4 @@
-package pe.edu.pucp.areasverdes.mod02;
+package pe.edu.pucp.areasverdes.mod02.servicios;
 
 import java.util.List;
 import java.util.Map;
@@ -8,10 +8,11 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import pe.edu.pucp.areasverdes.mod02.MapaAreasController.CambioPoligono;
-import pe.edu.pucp.areasverdes.mod02.MapaAreasController.CambioUsoFuente;
-import pe.edu.pucp.areasverdes.mod02.MapaAreasController.PoligonoAsignado;
-import pe.edu.pucp.areasverdes.mod02.MapaAreasController.UsoFuente;
+import pe.edu.pucp.areasverdes.mod02.api.ErrorCoberturas;
+import pe.edu.pucp.areasverdes.mod02.api.MapaAreasController.CambioPoligono;
+import pe.edu.pucp.areasverdes.mod02.api.MapaAreasController.CambioUsoFuente;
+import pe.edu.pucp.areasverdes.mod02.api.MapaAreasController.PoligonoAsignado;
+import pe.edu.pucp.areasverdes.mod02.api.MapaAreasController.UsoFuente;
 import pe.edu.pucp.areasverdes.mod05.Usuario;
 
 @Service

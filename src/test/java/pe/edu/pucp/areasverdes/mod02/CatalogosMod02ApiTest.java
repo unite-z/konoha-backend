@@ -25,6 +25,7 @@ import pe.edu.pucp.areasverdes.mod05.Usuario;
 class CatalogosMod02ApiTest {
 
     private static final String CLAVE = "prueba-catalogos-local";
+    private static final String ROL_CAPATAZ = "Capataz";
 
     @DynamicPropertySource
     static void baseDePruebas(DynamicPropertyRegistry propiedades) {
@@ -54,10 +55,11 @@ class CatalogosMod02ApiTest {
 
     @BeforeEach
     void prepararBase() {
-        jdbc.getJdbcTemplate().execute("TRUNCATE mod05_usuario RESTART IDENTITY CASCADE");
+        jdbc.getJdbcTemplate()
+                .execute("TRUNCATE core_usuario, mod05_usuario RESTART IDENTITY CASCADE");
         crearUsuario("jefe", Usuario.JEFE);
-        crearUsuario("capataz-a", Usuario.CAPATAZ);
-        crearUsuario("capataz-b", Usuario.CAPATAZ);
+        crearUsuario("capataz-a", ROL_CAPATAZ);
+        crearUsuario("capataz-b", ROL_CAPATAZ);
         long jefe = idUsuario("jefe");
         jdbc.update(
                 "INSERT INTO mod02_cobertura_vegetal (nombre, usuario_creacion_id,"
@@ -216,9 +218,7 @@ class CatalogosMod02ApiTest {
         long sectorId =
                 ((Number) com.jayway.jsonpath.JsonPath.read(sectorJson, "$.id")).longValue();
 
-        http.perform(
-                        get("/api/v1/inventario/sectores")
-                                .with(httpBasic("jefe", CLAVE)))
+        http.perform(get("/api/v1/inventario/sectores").with(httpBasic("jefe", CLAVE)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.id == " + sectorId + ")]").isNotEmpty());
     }
@@ -233,6 +233,28 @@ class CatalogosMod02ApiTest {
         jdbc.update(
                 "INSERT INTO mod05_usuario_rol (usuario_id, rol) VALUES (:id, :rol)",
                 Map.of("id", id, "rol", rol));
+        String codigoRol =
+                switch (rol) {
+                    case "Jefe de sección" -> "jefe-seccion";
+                    case "Ingeniero de campo" -> "ingeniero-campo";
+                    case "Practicante autorizado" -> "practicante";
+                    case ROL_CAPATAZ -> "capataz";
+                    default -> throw new IllegalArgumentException("Rol de prueba desconocido");
+                };
+        Long rolId =
+                jdbc.queryForObject(
+                        "SELECT id FROM core_rol WHERE codigo = :codigo",
+                        Map.of("codigo", codigoRol),
+                        Long.class);
+        jdbc.update(
+                "INSERT INTO core_usuario (id, nombre_usuario, nombre, credencial_hash,"
+                        + " rol_id, activo) VALUES (:id, :usuario, :nombre, :hash, :rol, true)",
+                Map.of(
+                        "id", id,
+                        "usuario", usuario,
+                        "nombre", usuario,
+                        "hash", claves.encode(CLAVE),
+                        "rol", rolId));
     }
 
     private long idUsuario(String usuario) {

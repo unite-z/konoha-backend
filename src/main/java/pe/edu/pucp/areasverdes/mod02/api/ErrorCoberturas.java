@@ -1,16 +1,16 @@
-package pe.edu.pucp.areasverdes.mod02;
+package pe.edu.pucp.areasverdes.mod02.api;
 
 import java.util.Map;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-class ErrorCoberturas extends RuntimeException {
+public class ErrorCoberturas extends RuntimeException {
 
     private final int estado;
     private final String codigo;
 
-    ErrorCoberturas(int estado, String codigo, String detalle) {
+    public ErrorCoberturas(int estado, String codigo, String detalle) {
         super(detalle);
         this.estado = estado;
         this.codigo = codigo;

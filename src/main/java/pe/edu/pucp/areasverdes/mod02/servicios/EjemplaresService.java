@@ -1,4 +1,4 @@
-package pe.edu.pucp.areasverdes.mod02;
+package pe.edu.pucp.areasverdes.mod02.servicios;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -8,6 +8,7 @@ import org.springframework.jdbc.core.DataClassRowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
+import pe.edu.pucp.areasverdes.mod02.api.ErrorCoberturas;
 import pe.edu.pucp.areasverdes.mod05.Usuario;
 
 @Service
@@ -15,14 +16,16 @@ public class EjemplaresService {
 
     private static final String CONSULTA =
             "SELECT e.id, e.codigo, e.referencia_catastro, e.codigo_catastro,"
-                + " e.codigo_placa_antigua, e.especie_id, s.nombre_comun especie_nombre_comun,"
-                + " s.nombre_cientifico especie_nombre_cientifico, s.forma_biologica"
-                + " especie_forma_biologica, e.tipo_vegetacion, e.ubicacion, e.latitud, e.longitud,"
-                + " e.cantidad, e.area_verde_id, (e.codigo_placa_antigua IS NOT NULL AND EXISTS"
-                + " (SELECT 1 FROM mod02_ejemplar otro WHERE otro.id <> e.id AND"
-                + " lower(otro.codigo_placa_antigua) = lower(e.codigo_placa_antigua)))"
-                + " advertencia_placa_repetida FROM mod02_ejemplar e LEFT JOIN"
-                + " mod02_especie_vegetal s ON s.id = e.especie_id";
+                    + " e.codigo_placa_antigua, e.especie_id, s.nombre_comun especie_nombre_comun,"
+                    + " s.nombre_cientifico especie_nombre_cientifico, s.forma_biologica"
+                    + " especie_forma_biologica, e.tipo_vegetacion, e.ubicacion,"
+                    + " ST_Y(e.ubicacion_geografica)::numeric(10, 7) latitud,"
+                    + " ST_X(e.ubicacion_geografica)::numeric(10, 7) longitud,"
+                    + " e.cantidad, e.area_verde_id, (e.codigo_placa_antigua IS NOT NULL AND EXISTS"
+                    + " (SELECT 1 FROM mod02_ejemplar otro WHERE otro.id <> e.id AND"
+                    + " lower(otro.codigo_placa_antigua) = lower(e.codigo_placa_antigua)))"
+                    + " advertencia_placa_repetida FROM mod02_ejemplar e LEFT JOIN"
+                    + " mod02_especie_vegetal s ON s.id = e.especie_id";
     private static final String ESPECIES =
             "SELECT id, nombre_comun, nombre_cientifico, forma_biologica, activo FROM"
                     + " mod02_especie_vegetal";
@@ -149,13 +152,15 @@ public class EjemplaresService {
 
     public Ejemplar crearEjemplar(NuevoEjemplar entrada, Usuario usuario) {
         AccesoCoberturas.registrar(usuario);
+        validarParCoordenadas(entrada.latitud(), entrada.longitud());
         validarEspecie(entrada.especieId());
         long id =
                 jdbc.queryForObject(
                         "INSERT INTO mod02_ejemplar (codigo_placa_antigua, especie_id,"
-                                + " tipo_vegetacion, ubicacion, latitud, longitud, cantidad)"
-                                + " VALUES (:placa, :especie, :vegetacion, :ubicacion, :latitud,"
-                                + " :longitud, :cantidad) RETURNING id",
+                            + " tipo_vegetacion, ubicacion, ubicacion_geografica, cantidad) VALUES"
+                            + " (:placa, :especie, :vegetacion, :ubicacion, CASE WHEN :latitud IS"
+                            + " NULL THEN NULL ELSE ST_SetSRID(ST_MakePoint(:longitud, :latitud),"
+                            + " 4326)::geometry(Point, 4326) END, :cantidad) RETURNING id",
                         parametros(entrada),
                         Long.class);
         return obtenerEjemplar(id);
@@ -173,14 +178,27 @@ public class EjemplaresService {
             throw new ErrorCoberturas(
                     400, "cambio-vacio", "Indica algún dato que quieras modificar");
         }
+        if ((cambio.latitud() != null || cambio.longitud() != null)
+                && cambio.latitud() != null
+                && cambio.longitud() != null) {
+            validarParCoordenadas(cambio.latitud(), cambio.longitud());
+        } else if ((cambio.latitud() != null || cambio.longitud() != null) && !tieneUbicacion(id)) {
+            throw new ErrorCoberturas(
+                    400,
+                    "coordenadas-incompletas",
+                    "Indica latitud y longitud para registrar la ubicación");
+        }
         validarEspecie(cambio.especieId());
         int filas =
                 jdbc.update(
                         "UPDATE mod02_ejemplar SET especie_id = coalesce(:especie, especie_id),"
                                 + " tipo_vegetacion = coalesce(:vegetacion, tipo_vegetacion),"
                                 + " ubicacion = coalesce(:ubicacion, ubicacion),"
-                                + " latitud = coalesce(:latitud, latitud),"
-                                + " longitud = coalesce(:longitud, longitud),"
+                                + " ubicacion_geografica = CASE WHEN :latitud IS NULL AND"
+                                + " :longitud IS NULL THEN ubicacion_geografica ELSE"
+                                + " ST_SetSRID(ST_MakePoint(coalesce(:longitud,"
+                                + " ST_X(ubicacion_geografica)), coalesce(:latitud,"
+                                + " ST_Y(ubicacion_geografica))), 4326)::geometry(Point, 4326) END,"
                                 + " cantidad = coalesce(:cantidad, cantidad),"
                                 + " codigo_placa_antigua = coalesce(:placa, codigo_placa_antigua)"
                                 + " WHERE id = :id",
@@ -218,6 +236,24 @@ public class EjemplaresService {
         if (!Boolean.TRUE.equals(activa)) {
             throw new ErrorCoberturas(
                     404, "especie-no-encontrada", "La especie no existe o está inactiva");
+        }
+    }
+
+    private boolean tieneUbicacion(long id) {
+        return Boolean.TRUE.equals(
+                jdbc.query(
+                        "SELECT ubicacion_geografica IS NOT NULL FROM mod02_ejemplar WHERE id ="
+                                + " :id",
+                        Map.of("id", id),
+                        rs -> rs.next() && rs.getBoolean(1)));
+    }
+
+    private static void validarParCoordenadas(BigDecimal latitud, BigDecimal longitud) {
+        if ((latitud == null) != (longitud == null)) {
+            throw new ErrorCoberturas(
+                    400,
+                    "coordenadas-incompletas",
+                    "Indica latitud y longitud juntas, o deja ambas vacías");
         }
     }
 

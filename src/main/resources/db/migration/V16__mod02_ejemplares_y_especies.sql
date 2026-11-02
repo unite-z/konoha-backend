@@ -30,11 +30,8 @@ ALTER TABLE mod02_ejemplar
     ADD COLUMN especie_id bigint REFERENCES mod02_especie_vegetal(id) ON DELETE RESTRICT,
     ADD COLUMN tipo_vegetacion varchar(80),
     ADD COLUMN ubicacion varchar(200),
-    ADD COLUMN latitud numeric(10, 7),
-    ADD COLUMN longitud numeric(10, 7),
+    ADD COLUMN ubicacion_geografica geometry(Point, 4326),
     ADD COLUMN cantidad integer NOT NULL DEFAULT 1,
-    ADD CONSTRAINT mod02_ejemplar_latitud_valida CHECK (latitud IS NULL OR latitud BETWEEN -90 AND 90),
-    ADD CONSTRAINT mod02_ejemplar_longitud_valida CHECK (longitud IS NULL OR longitud BETWEEN -180 AND 180),
     ADD CONSTRAINT mod02_ejemplar_cantidad_positiva CHECK (cantidad > 0);
 
 CREATE SEQUENCE mod02_ejemplar_codigo_seq;
@@ -53,8 +50,7 @@ CREATE UNIQUE INDEX mod02_ejemplar_codigo_catastro_unico
     ON mod02_ejemplar (codigo_catastro)
     WHERE codigo_catastro IS NOT NULL AND length(trim(codigo_catastro)) > 0;
 CREATE INDEX mod02_ejemplar_especie ON mod02_ejemplar (especie_id);
-CREATE INDEX mod02_ejemplar_coordenadas ON mod02_ejemplar (latitud, longitud)
-    WHERE latitud IS NOT NULL AND longitud IS NOT NULL;
+CREATE INDEX mod02_ejemplar_ubicacion_gist ON mod02_ejemplar USING GIST (ubicacion_geografica);
 
 -- MOD-05 conserva su contrato de consulta: id, código operativo y área asociada.
 CREATE VIEW mod05_ejemplar AS

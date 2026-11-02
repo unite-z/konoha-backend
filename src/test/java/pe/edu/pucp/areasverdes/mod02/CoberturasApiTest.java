@@ -55,11 +55,8 @@ class CoberturasApiTest {
 
     @BeforeEach
     void prepararBase() {
-        jdbc.getJdbcTemplate().execute("TRUNCATE mod05_usuario RESTART IDENTITY CASCADE");
-        jdbc.update(
-                "DELETE FROM mod05_registroauditoria WHERE entidad IN "
-                        + "('mod02_cobertura_vegetal', 'mod02_area_verde')",
-                Map.of());
+        jdbc.getJdbcTemplate()
+                .execute("TRUNCATE core_usuario, mod05_usuario RESTART IDENTITY CASCADE");
         crearUsuario("jefe", "Jefe de sección");
         crearUsuario("ingeniero", "Ingeniero de campo");
         crearUsuario("practicante", "Practicante autorizado");
@@ -139,7 +136,7 @@ class CoberturasApiTest {
 
         org.assertj.core.api.Assertions.assertThat(
                         jdbc.queryForObject(
-                                "SELECT count(*) FROM mod05_registroauditoria "
+                                "SELECT count(*) FROM core_registro_auditoria "
                                         + "WHERE entidad = 'mod02_cobertura_vegetal' "
                                         + "AND registro_id = :id",
                                 Map.of("id", coberturaId),
@@ -228,6 +225,27 @@ class CoberturasApiTest {
             jdbc.update(
                     "INSERT INTO mod05_usuario_rol (usuario_id, rol) VALUES (:id, :rol)",
                     Map.of("id", id, "rol", rol));
+            String codigoRol =
+                    switch (rol) {
+                        case "Jefe de sección" -> "jefe-seccion";
+                        case "Ingeniero de campo" -> "ingeniero-campo";
+                        case "Practicante autorizado" -> "practicante";
+                        default -> throw new IllegalArgumentException("Rol de prueba desconocido");
+                    };
+            Long rolId =
+                    jdbc.queryForObject(
+                            "SELECT id FROM core_rol WHERE codigo = :codigo",
+                            Map.of("codigo", codigoRol),
+                            Long.class);
+            jdbc.update(
+                    "INSERT INTO core_usuario (id, nombre_usuario, nombre, credencial_hash,"
+                            + " rol_id, activo) VALUES (:id, :usuario, :nombre, :hash, :rol, true)",
+                    Map.of(
+                            "id", id,
+                            "usuario", nombre,
+                            "nombre", nombre,
+                            "hash", claves.encode(CLAVE),
+                            "rol", rolId));
         }
     }
 }

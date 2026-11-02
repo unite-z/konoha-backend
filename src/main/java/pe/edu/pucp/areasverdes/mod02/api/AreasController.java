@@ -1,4 +1,4 @@
-package pe.edu.pucp.areasverdes.mod02;
+package pe.edu.pucp.areasverdes.mod02.api;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
 import io.swagger.v3.oas.annotations.Operation;
@@ -24,6 +24,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import pe.edu.pucp.areasverdes.mod02.servicios.AccesoCoberturas;
+import pe.edu.pucp.areasverdes.mod02.servicios.AreasService;
 import pe.edu.pucp.areasverdes.mod05.Usuario;
 
 @RestController
