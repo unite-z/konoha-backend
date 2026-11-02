@@ -21,14 +21,17 @@ public class AreasService {
     private static final int TAMANO_PAGINA = 25;
     private static final String CONSULTA =
             "SELECT a.id, a.nombre, a.lugar, a.ubicacion, a.superficie_m2, a.tipo_cobertura_id,"
-                + " c.nombre tipo_cobertura_nombre, a.cuartel_id, q.numero cuartel_numero,"
-                + " h.sector_id, s.nombre sector_nombre, a.activo FROM mod02_area_verde a LEFT JOIN"
-                + " mod02_cobertura_vegetal c ON c.id = a.tipo_cobertura_id LEFT JOIN mod02_cuartel"
-                + " q ON q.id = a.cuartel_id LEFT JOIN mod02_historial_area_sector h ON"
-                + " h.area_verde_id = a.id AND h.fecha_fin IS NULL LEFT JOIN mod02_sector s ON s.id"
-                + " = h.sector_id WHERE (:incluir_inactivas OR a.activo) AND (:q = '' OR a.nombre"
-                + " ILIKE '%' || :q || '%') AND (CAST(:cuartel AS bigint) IS NULL OR a.cuartel_id ="
-                + " :cuartel) AND (CAST(:sector AS bigint) IS NULL OR h.sector_id = :sector)";
+                + " c.nombre tipo_cobertura_nombre, a.tipo_uso_id, tu.nombre tipo_uso_nombre,"
+                + " a.cuartel_id, q.numero cuartel_numero, h.sector_id, s.nombre sector_nombre,"
+                + " a.activo FROM mod02_area_verde a LEFT JOIN mod02_cobertura_vegetal c ON c.id ="
+                + " a.tipo_cobertura_id LEFT JOIN mod02_tipo_uso tu ON tu.id = a.tipo_uso_id LEFT"
+                + " JOIN mod02_cuartel q ON q.id = a.cuartel_id LEFT JOIN"
+                + " mod02_historial_area_sector h ON h.area_verde_id = a.id AND h.fecha_fin IS NULL"
+                + " LEFT JOIN mod02_sector s ON s.id = h.sector_id WHERE (:incluir_inactivas OR"
+                + " a.activo) AND (:q = '' OR a.nombre ILIKE '%' || :q || '%') AND (CAST(:cuartel"
+                + " AS bigint) IS NULL OR a.cuartel_id = :cuartel) AND (CAST(:sector AS bigint) IS"
+                + " NULL OR h.sector_id = :sector) AND (CAST(:tipo_uso AS bigint) IS NULL OR"
+                + " a.tipo_uso_id = :tipo_uso)";
 
     private final NamedParameterJdbcTemplate jdbc;
 
@@ -36,7 +39,7 @@ public class AreasService {
         this.jdbc = jdbc;
     }
 
-    public PaginaAreas listar(String q, Long sector, Long cuartel, int pagina) {
+    public PaginaAreas listar(String q, Long tipoUso, Long sector, Long cuartel, int pagina) {
         if (pagina < 1) {
             throw new ErrorCoberturas(400, "pagina-invalida", "La página debe ser mayor que cero");
         }
@@ -44,13 +47,15 @@ public class AreasService {
         int count =
                 jdbc.queryForObject(
                         "SELECT count(*) FROM mod02_area_verde a LEFT JOIN"
-                                + " mod02_historial_area_sector h ON h.area_verde_id = a.id AND"
-                                + " h.fecha_fin IS NULL WHERE a.activo AND"
-                                + " (:q = '' OR a.nombre ILIKE '%' || :q || '%') AND"
-                                + " (CAST(:sector AS bigint) IS NULL OR h.sector_id = :sector) AND"
-                                + " (CAST(:cuartel AS bigint) IS NULL OR a.cuartel_id = :cuartel)",
+                            + " mod02_historial_area_sector h ON h.area_verde_id = a.id AND"
+                            + " h.fecha_fin IS NULL WHERE a.activo AND (:q = '' OR a.nombre ILIKE"
+                            + " '%' || :q || '%') AND (CAST(:tipo_uso AS bigint) IS NULL OR"
+                            + " a.tipo_uso_id = :tipo_uso) AND (CAST(:sector AS bigint) IS NULL OR"
+                            + " h.sector_id = :sector) AND (CAST(:cuartel AS bigint) IS NULL OR"
+                            + " a.cuartel_id = :cuartel)",
                         new MapSqlParameterSource()
                                 .addValue("q", consulta)
+                                .addValue("tipo_uso", tipoUso)
                                 .addValue("sector", sector)
                                 .addValue("cuartel", cuartel),
                         Integer.class);
@@ -60,6 +65,7 @@ public class AreasService {
                         new MapSqlParameterSource()
                                 .addValue("q", consulta)
                                 .addValue("incluir_inactivas", false)
+                                .addValue("tipo_uso", tipoUso)
                                 .addValue("sector", sector)
                                 .addValue("cuartel", cuartel)
                                 .addValue("limite", TAMANO_PAGINA)
@@ -74,6 +80,7 @@ public class AreasService {
     public AreaVerde crear(NuevaAreaVerde nueva, Usuario usuario) {
         AccesoCoberturas.registrar(usuario);
         validarCobertura(nueva.tipoCoberturaId());
+        validarTipoUso(nueva.tipoUsoId());
         validarReferencia("mod02_cuartel", nueva.cuartelId(), "estado", "cuartel", false);
         validarReferencia("mod02_sector", nueva.sectorId(), "activo", "sector", true);
         MapSqlParameterSource parametros =
@@ -83,15 +90,16 @@ public class AreasService {
                         .addValue("ubicacion", nueva.ubicacion().trim())
                         .addValue("superficie", nueva.superficieM2())
                         .addValue("cobertura", nueva.tipoCoberturaId())
+                        .addValue("tipoUso", nueva.tipoUsoId())
                         .addValue("cuartel", nueva.cuartelId())
                         .addValue("usuario", usuario.id());
         long id =
                 jdbc.queryForObject(
                         "INSERT INTO mod02_area_verde (nombre, lugar, ubicacion, superficie_m2,"
-                                + " tipo_cobertura_id, cuartel_id, usuario_creacion_id,"
-                                + " usuario_modificacion_id) VALUES (:nombre, :lugar, :ubicacion,"
-                                + " :superficie, :cobertura, :cuartel, :usuario, :usuario)"
-                                + " RETURNING id",
+                            + " tipo_cobertura_id, tipo_uso_id, cuartel_id, usuario_creacion_id,"
+                            + " usuario_modificacion_id) VALUES (:nombre, :lugar, :ubicacion,"
+                            + " :superficie, :cobertura, :tipoUso, :cuartel, :usuario, :usuario)"
+                            + " RETURNING id",
                         parametros,
                         Long.class);
         if (nueva.sectorId() != null) {
@@ -119,11 +127,13 @@ public class AreasService {
                 && cambio.superficieM2() == null
                 && cambio.activo() == null
                 && cambio.tipoCoberturaId() == null
+                && cambio.tipoUsoId() == null
                 && cambio.cuartelId() == null) {
             throw new ErrorCoberturas(
                     400, "cambio-vacio", "Indica algún dato que quieras modificar");
         }
         validarCobertura(cambio.tipoCoberturaId());
+        validarTipoUso(cambio.tipoUsoId());
         validarReferencia("mod02_cuartel", cambio.cuartelId(), "estado", "cuartel", false);
         String anteriores =
                 jdbc.query(
@@ -137,9 +147,10 @@ public class AreasService {
                 "UPDATE mod02_area_verde SET nombre = coalesce(:nombre, nombre), lugar ="
                     + " coalesce(:lugar, lugar), ubicacion = coalesce(:ubicacion, ubicacion),"
                     + " superficie_m2 = coalesce(:superficie, superficie_m2), tipo_cobertura_id ="
-                    + " coalesce(:cobertura, tipo_cobertura_id), cuartel_id = coalesce(:cuartel,"
-                    + " cuartel_id), activo = coalesce(:activo, activo), fecha_modificacion ="
-                    + " now(), usuario_modificacion_id = :usuario WHERE id = :id",
+                    + " coalesce(:cobertura, tipo_cobertura_id), tipo_uso_id = coalesce(:tipoUso,"
+                    + " tipo_uso_id), cuartel_id = coalesce(:cuartel, cuartel_id), activo ="
+                    + " coalesce(:activo, activo), fecha_modificacion = now(),"
+                    + " usuario_modificacion_id = :usuario WHERE id = :id",
                 new MapSqlParameterSource()
                         .addValue("id", id)
                         .addValue("usuario", usuario.id())
@@ -151,6 +162,7 @@ public class AreasService {
                         .addValue("superficie", cambio.superficieM2())
                         .addValue("activo", cambio.activo())
                         .addValue("cobertura", cambio.tipoCoberturaId())
+                        .addValue("tipoUso", cambio.tipoUsoId())
                         .addValue("cuartel", cambio.cuartelId()));
         if (Boolean.FALSE.equals(cambio.activo())) {
             jdbc.update(
@@ -222,6 +234,19 @@ public class AreasService {
         }
     }
 
+    private void validarTipoUso(Long tipoUsoId) {
+        if (tipoUsoId == null) return;
+        Boolean activo =
+                jdbc.query(
+                        "SELECT activo FROM mod02_tipo_uso WHERE id = :id",
+                        Map.of("id", tipoUsoId),
+                        rs -> rs.next() ? rs.getBoolean("activo") : null);
+        if (activo == null || !activo) {
+            throw new ErrorCoberturas(
+                    404, "tipo-uso-no-encontrado", "El tipo de uso no existe o está inactivo");
+        }
+    }
+
     private void validarReferencia(
             String tabla, Long id, String campoEstado, String etiqueta, boolean trueEsActivo) {
         if (id == null) return;
@@ -246,6 +271,7 @@ public class AreasService {
                         new MapSqlParameterSource()
                                 .addValue("q", "")
                                 .addValue("incluir_inactivas", true)
+                                .addValue("tipo_uso", null)
                                 .addValue("sector", null)
                                 .addValue("cuartel", null)
                                 .addValue("id", id),
