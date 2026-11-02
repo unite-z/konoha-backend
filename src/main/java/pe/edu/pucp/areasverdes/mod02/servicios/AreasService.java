@@ -1,0 +1,206 @@
+package pe.edu.pucp.areasverdes.mod02.servicios;
+
+import java.util.List;
+import java.util.Map;
+import org.springframework.jdbc.core.DataClassRowMapper;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import pe.edu.pucp.areasverdes.mod02.api.AreasController;
+import pe.edu.pucp.areasverdes.mod02.api.AreasController.AreaVerde;
+import pe.edu.pucp.areasverdes.mod02.api.AreasController.NuevaAreaVerde;
+import pe.edu.pucp.areasverdes.mod02.api.AreasController.PaginaAreas;
+import pe.edu.pucp.areasverdes.mod02.api.ErrorCoberturas;
+import pe.edu.pucp.areasverdes.mod05.Usuario;
+
+@Service
+public class AreasService {
+
+    private static final int TAMANO_PAGINA = 25;
+    private static final String CONSULTA =
+            "SELECT a.id, a.nombre, a.lugar, a.ubicacion, a.superficie_m2, a.tipo_cobertura_id,"
+                + " c.nombre tipo_cobertura_nombre, a.cuartel_id, q.numero cuartel_numero,"
+                + " a.activo FROM mod02_area_verde a LEFT JOIN mod02_cobertura_vegetal c ON"
+                + " c.id = a.tipo_cobertura_id LEFT JOIN mod02_cuartel q ON q.id = a.cuartel_id"
+                + " WHERE (:incluir_inactivas OR a.activo) AND (:q = '' OR a.nombre ILIKE"
+                + " '%' || :q || '%') AND (CAST(:cuartel AS bigint) IS NULL OR a.cuartel_id ="
+                + " :cuartel)";
+
+    private final NamedParameterJdbcTemplate jdbc;
+
+    public AreasService(NamedParameterJdbcTemplate jdbc) {
+        this.jdbc = jdbc;
+    }
+
+    public PaginaAreas listar(String q, Long cuartel, int pagina) {
+        if (pagina < 1) {
+            throw new ErrorCoberturas(400, "pagina-invalida", "La página debe ser mayor que cero");
+        }
+        String consulta = q == null || q.isBlank() ? "" : q.trim();
+        int count =
+                jdbc.queryForObject(
+                        "SELECT count(*) FROM mod02_area_verde a WHERE a.activo AND"
+                                + " (:q = '' OR a.nombre ILIKE '%' || :q || '%') AND"
+                                + " (CAST(:cuartel AS bigint) IS NULL OR a.cuartel_id = :cuartel)",
+                        new MapSqlParameterSource()
+                                .addValue("q", consulta)
+                                .addValue("cuartel", cuartel),
+                        Integer.class);
+        List<AreaVerde> resultados =
+                jdbc.query(
+                        CONSULTA + " ORDER BY lower(a.nombre), a.id LIMIT :limite OFFSET :offset",
+                        new MapSqlParameterSource()
+                                .addValue("q", consulta)
+                                .addValue("incluir_inactivas", false)
+                                .addValue("cuartel", cuartel)
+                                .addValue("limite", TAMANO_PAGINA)
+                                .addValue("offset", (pagina - 1) * TAMANO_PAGINA),
+                        new DataClassRowMapper<>(AreaVerde.class));
+        Integer anterior = pagina > 1 ? pagina - 1 : null;
+        Integer siguiente = pagina * TAMANO_PAGINA < count ? pagina + 1 : null;
+        return new PaginaAreas(count, siguiente, anterior, resultados);
+    }
+
+    @Transactional
+    public AreaVerde crear(NuevaAreaVerde nueva, Usuario usuario) {
+        AccesoCoberturas.registrar(usuario);
+        validarCobertura(nueva.tipoCoberturaId());
+        validarReferencia("mod02_cuartel", nueva.cuartelId(), "estado", "cuartel", false);
+        MapSqlParameterSource parametros =
+                new MapSqlParameterSource()
+                        .addValue("nombre", nueva.nombre().trim())
+                        .addValue("lugar", nueva.lugar().trim())
+                        .addValue("ubicacion", nueva.ubicacion().trim())
+                        .addValue("superficie", nueva.superficieM2())
+                        .addValue("cobertura", nueva.tipoCoberturaId())
+                        .addValue("cuartel", nueva.cuartelId())
+                        .addValue("usuario", usuario.id());
+        long id =
+                jdbc.queryForObject(
+                        "INSERT INTO mod02_area_verde (nombre, lugar, ubicacion, superficie_m2,"
+                            + " tipo_cobertura_id, cuartel_id, usuario_creacion_id,"
+                            + " usuario_modificacion_id) VALUES (:nombre, :lugar, :ubicacion,"
+                            + " :superficie, :cobertura, :cuartel, :usuario, :usuario)"
+                            + " RETURNING id",
+                        parametros,
+                        Long.class);
+        AreaVerde area = obtener(id);
+        jdbc.update(
+                "INSERT INTO core_registro_auditoria (entidad, registro_id, accion, usuario_id,"
+                        + " fecha_hora, valores_anteriores, valores_nuevos, motivo) SELECT"
+                        + " 'mod02_area_verde', a.id, 'Alta', :usuario, now(), '{}'::jsonb,"
+                        + " to_jsonb(a), '' FROM mod02_area_verde a WHERE a.id = :id",
+                Map.of("id", id, "usuario", usuario.id()));
+        return area;
+    }
+
+    @Transactional
+    public AreaVerde modificar(long id, AreasController.CambioAreaVerde cambio, Usuario usuario) {
+        AccesoCoberturas.registrar(usuario);
+        if (cambio.nombre() == null
+                && cambio.lugar() == null
+                && cambio.ubicacion() == null
+                && cambio.superficieM2() == null
+                && cambio.activo() == null
+                && cambio.tipoCoberturaId() == null
+                && cambio.cuartelId() == null) {
+            throw new ErrorCoberturas(
+                    400, "cambio-vacio", "Indica algún dato que quieras modificar");
+        }
+        validarCobertura(cambio.tipoCoberturaId());
+        validarReferencia("mod02_cuartel", cambio.cuartelId(), "estado", "cuartel", false);
+        String anteriores =
+                jdbc.query(
+                        "SELECT to_jsonb(a)::text FROM mod02_area_verde a WHERE id = :id FOR"
+                                + " UPDATE",
+                        Map.of("id", id),
+                        rs -> rs.next() ? rs.getString(1) : null);
+        if (anteriores == null)
+            throw new ErrorCoberturas(404, "area-no-encontrada", "No existe esa área verde");
+        jdbc.update(
+                "UPDATE mod02_area_verde SET nombre = coalesce(:nombre, nombre), lugar ="
+                    + " coalesce(:lugar, lugar), ubicacion = coalesce(:ubicacion, ubicacion),"
+                    + " superficie_m2 = coalesce(:superficie, superficie_m2), tipo_cobertura_id ="
+                    + " coalesce(:cobertura, tipo_cobertura_id), cuartel_id = coalesce(:cuartel,"
+                    + " cuartel_id), activo ="
+                    + " coalesce(:activo, activo), fecha_modificacion = now(),"
+                    + " usuario_modificacion_id = :usuario WHERE id = :id",
+                new MapSqlParameterSource()
+                        .addValue("id", id)
+                        .addValue("usuario", usuario.id())
+                        .addValue("nombre", cambio.nombre() == null ? null : cambio.nombre().trim())
+                        .addValue("lugar", cambio.lugar() == null ? null : cambio.lugar().trim())
+                        .addValue(
+                                "ubicacion",
+                                cambio.ubicacion() == null ? null : cambio.ubicacion().trim())
+                        .addValue("superficie", cambio.superficieM2())
+                        .addValue("activo", cambio.activo())
+                        .addValue("cobertura", cambio.tipoCoberturaId())
+                        .addValue("cuartel", cambio.cuartelId()));
+        auditarArea(id, "modificar", anteriores, usuario.id());
+        return obtener(id);
+    }
+
+    private void validarCobertura(Long coberturaId) {
+        if (coberturaId == null) return;
+        Boolean activa =
+                jdbc.query(
+                        "SELECT activo FROM mod02_cobertura_vegetal WHERE id = :id",
+                        Map.of("id", coberturaId),
+                        rs -> rs.next() ? rs.getBoolean("activo") : null);
+        if (activa == null || !activa) {
+            throw new ErrorCoberturas(
+                    404, "cobertura-no-encontrada", "La cobertura no existe o está inactiva");
+        }
+    }
+
+    private void validarReferencia(
+            String tabla, Long id, String campoEstado, String etiqueta, boolean trueEsActivo) {
+        if (id == null) return;
+        String valor =
+                jdbc.query(
+                        "SELECT " + campoEstado + "::text FROM " + tabla + " WHERE id = :id",
+                        Map.of("id", id),
+                        rs -> rs.next() ? rs.getString(1) : null);
+        boolean valida = trueEsActivo ? "true".equals(valor) : "vigente".equals(valor);
+        if (!valida) {
+            throw new ErrorCoberturas(
+                    404,
+                    "referencia-no-encontrada",
+                    "El " + etiqueta + " no existe o no está vigente");
+        }
+    }
+
+    private AreaVerde obtener(long id) {
+        return jdbc
+                .query(
+                        CONSULTA + " AND a.id = :id",
+                        new MapSqlParameterSource()
+                                .addValue("q", "")
+                                .addValue("incluir_inactivas", true)
+                                .addValue("cuartel", null)
+                                .addValue("id", id),
+                        new DataClassRowMapper<>(AreaVerde.class))
+                .stream()
+                .findFirst()
+                .orElseThrow(
+                        () ->
+                                new ErrorCoberturas(
+                                        404, "area-no-encontrada", "No existe esa área verde"));
+    }
+
+    private void auditarArea(long id, String accion, String anteriores, long usuarioId) {
+        jdbc.update(
+                "INSERT INTO core_registro_auditoria (entidad, registro_id, accion, usuario_id,"
+                        + " fecha_hora, valores_anteriores, valores_nuevos, motivo) SELECT"
+                        + " 'mod02_area_verde', a.id, 'Modificacion', :usuario, now(),"
+                        + " CAST(:anteriores AS jsonb), to_jsonb(a), ''"
+                        + " FROM mod02_area_verde a WHERE a.id = :id",
+                new MapSqlParameterSource()
+                        .addValue("id", id)
+                        .addValue("accion", accion)
+                        .addValue("anteriores", anteriores)
+                        .addValue("usuario", usuarioId));
+    }
+}
