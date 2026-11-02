@@ -125,7 +125,6 @@ class CoberturasApiTest {
                                 Map.of("id", coberturaId),
                                 Integer.class))
                 .isEqualTo(3);
-
     }
 
     @Test
