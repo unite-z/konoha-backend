@@ -23,7 +23,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import pe.edu.pucp.areasverdes.mod02.servicios.EjemplaresService;
-import pe.edu.pucp.areasverdes.mod02.servicios.EjemplaresService.CambioEjemplar;
 import pe.edu.pucp.areasverdes.mod02.servicios.EjemplaresService.Ejemplar;
 import pe.edu.pucp.areasverdes.mod02.servicios.EjemplaresService.NuevoEjemplar;
 import pe.edu.pucp.areasverdes.mod05.Usuario;
@@ -95,7 +94,7 @@ public class EjemplaresController {
             @Valid @RequestBody CambioEjemplar cambio) {
         return ejemplares.cambiar(
                 id,
-                new CambioEjemplar(
+                new EjemplaresService.CambioEjemplar(
                         cambio.codigoPlacaAntigua(),
                         cambio.especieId(),
                         cambio.tipoVegetacion(),
