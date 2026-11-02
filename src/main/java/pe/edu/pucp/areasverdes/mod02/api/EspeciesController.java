@@ -51,7 +51,8 @@ public class EspeciesController {
     public List<Especie> listar(
             @AuthenticationPrincipal Usuario usuario,
             @RequestParam(required = false) String q,
-            @RequestParam(defaultValue = "false") boolean incluirInactivas) {
+            @RequestParam(name = "incluir_inactivas", defaultValue = "false")
+                    boolean incluirInactivas) {
         AccesoCoberturas.consultar(usuario);
         return especies.listar(q, incluirInactivas);
     }
