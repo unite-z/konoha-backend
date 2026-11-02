@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import pe.edu.pucp.areasverdes.mod02.api.AreasController;
 import pe.edu.pucp.areasverdes.mod02.api.AreasController.AreaVerde;
+import pe.edu.pucp.areasverdes.mod02.api.AreasController.AsignacionSector;
 import pe.edu.pucp.areasverdes.mod02.api.AreasController.NuevaAreaVerde;
 import pe.edu.pucp.areasverdes.mod02.api.AreasController.PaginaAreas;
 import pe.edu.pucp.areasverdes.mod02.api.ErrorCoberturas;
@@ -20,12 +21,14 @@ public class AreasService {
     private static final int TAMANO_PAGINA = 25;
     private static final String CONSULTA =
             "SELECT a.id, a.nombre, a.lugar, a.ubicacion, a.superficie_m2, a.tipo_cobertura_id,"
-                    + " c.nombre tipo_cobertura_nombre, a.cuartel_id, q.numero cuartel_numero,"
-                    + " a.activo FROM mod02_area_verde a LEFT JOIN mod02_cobertura_vegetal c ON"
-                    + " c.id = a.tipo_cobertura_id LEFT JOIN mod02_cuartel q ON q.id = a.cuartel_id"
-                    + " WHERE (:incluir_inactivas OR a.activo) AND (:q = '' OR a.nombre ILIKE"
-                    + " '%' || :q || '%') AND (CAST(:cuartel AS bigint) IS NULL OR a.cuartel_id ="
-                    + " :cuartel)";
+                + " c.nombre tipo_cobertura_nombre, a.cuartel_id, q.numero cuartel_numero,"
+                + " h.sector_id, s.nombre sector_nombre, a.activo FROM mod02_area_verde a LEFT JOIN"
+                + " mod02_cobertura_vegetal c ON c.id = a.tipo_cobertura_id LEFT JOIN mod02_cuartel"
+                + " q ON q.id = a.cuartel_id LEFT JOIN mod02_historial_area_sector h ON"
+                + " h.area_verde_id = a.id AND h.fecha_fin IS NULL LEFT JOIN mod02_sector s ON s.id"
+                + " = h.sector_id WHERE (:incluir_inactivas OR a.activo) AND (:q = '' OR a.nombre"
+                + " ILIKE '%' || :q || '%') AND (CAST(:cuartel AS bigint) IS NULL OR a.cuartel_id ="
+                + " :cuartel) AND (CAST(:sector AS bigint) IS NULL OR h.sector_id = :sector)";
 
     private final NamedParameterJdbcTemplate jdbc;
 
@@ -33,18 +36,22 @@ public class AreasService {
         this.jdbc = jdbc;
     }
 
-    public PaginaAreas listar(String q, Long cuartel, int pagina) {
+    public PaginaAreas listar(String q, Long sector, Long cuartel, int pagina) {
         if (pagina < 1) {
             throw new ErrorCoberturas(400, "pagina-invalida", "La página debe ser mayor que cero");
         }
         String consulta = q == null || q.isBlank() ? "" : q.trim();
         int count =
                 jdbc.queryForObject(
-                        "SELECT count(*) FROM mod02_area_verde a WHERE a.activo AND"
+                        "SELECT count(*) FROM mod02_area_verde a LEFT JOIN"
+                                + " mod02_historial_area_sector h ON h.area_verde_id = a.id AND"
+                                + " h.fecha_fin IS NULL WHERE a.activo AND"
                                 + " (:q = '' OR a.nombre ILIKE '%' || :q || '%') AND"
+                                + " (CAST(:sector AS bigint) IS NULL OR h.sector_id = :sector) AND"
                                 + " (CAST(:cuartel AS bigint) IS NULL OR a.cuartel_id = :cuartel)",
                         new MapSqlParameterSource()
                                 .addValue("q", consulta)
+                                .addValue("sector", sector)
                                 .addValue("cuartel", cuartel),
                         Integer.class);
         List<AreaVerde> resultados =
@@ -53,6 +60,7 @@ public class AreasService {
                         new MapSqlParameterSource()
                                 .addValue("q", consulta)
                                 .addValue("incluir_inactivas", false)
+                                .addValue("sector", sector)
                                 .addValue("cuartel", cuartel)
                                 .addValue("limite", TAMANO_PAGINA)
                                 .addValue("offset", (pagina - 1) * TAMANO_PAGINA),
@@ -67,6 +75,7 @@ public class AreasService {
         AccesoCoberturas.registrar(usuario);
         validarCobertura(nueva.tipoCoberturaId());
         validarReferencia("mod02_cuartel", nueva.cuartelId(), "estado", "cuartel", false);
+        validarReferencia("mod02_sector", nueva.sectorId(), "activo", "sector", true);
         MapSqlParameterSource parametros =
                 new MapSqlParameterSource()
                         .addValue("nombre", nueva.nombre().trim())
@@ -85,6 +94,12 @@ public class AreasService {
                                 + " RETURNING id",
                         parametros,
                         Long.class);
+        if (nueva.sectorId() != null) {
+            jdbc.update(
+                    "INSERT INTO mod02_historial_area_sector (area_verde_id, sector_id, usuario_id)"
+                            + " VALUES (:area, :sector, :usuario)",
+                    Map.of("area", id, "sector", nueva.sectorId(), "usuario", usuario.id()));
+        }
         AreaVerde area = obtener(id);
         jdbc.update(
                 "INSERT INTO core_registro_auditoria (entidad, registro_id, accion, usuario_id,"
@@ -137,8 +152,61 @@ public class AreasService {
                         .addValue("activo", cambio.activo())
                         .addValue("cobertura", cambio.tipoCoberturaId())
                         .addValue("cuartel", cambio.cuartelId()));
+        if (Boolean.FALSE.equals(cambio.activo())) {
+            jdbc.update(
+                    "UPDATE mod02_historial_area_sector SET fecha_fin = greatest(now(),"
+                            + " fecha_inicio) WHERE area_verde_id = :id AND fecha_fin IS NULL",
+                    Map.of("id", id));
+        }
         auditarArea(id, "modificar", anteriores, usuario.id());
         return obtener(id);
+    }
+
+    @Transactional
+    public AreaVerde asignarSector(long areaId, Long sectorId, Usuario usuario) {
+        AccesoCoberturas.registrar(usuario);
+        String anteriores =
+                jdbc.query(
+                        "SELECT to_jsonb(a)::text FROM mod02_area_verde a WHERE id = :id AND activo"
+                                + " FOR UPDATE",
+                        Map.of("id", areaId),
+                        rs -> rs.next() ? rs.getString(1) : null);
+        if (anteriores == null) {
+            throw new ErrorCoberturas(
+                    404, "area-no-encontrada", "No existe un área verde activa con ese id");
+        }
+        validarReferencia("mod02_sector", sectorId, "activo", "sector", true);
+        jdbc.update(
+                "UPDATE mod02_historial_area_sector SET fecha_fin = greatest(now(), fecha_inicio) "
+                        + "WHERE area_verde_id = :area AND fecha_fin IS NULL",
+                Map.of("area", areaId));
+        if (sectorId != null) {
+            jdbc.update(
+                    "INSERT INTO mod02_historial_area_sector (area_verde_id, sector_id, usuario_id)"
+                            + " VALUES (:area, :sector, :usuario)",
+                    Map.of("area", areaId, "sector", sectorId, "usuario", usuario.id()));
+        }
+        auditarArea(areaId, "asignar-sector", anteriores, usuario.id());
+        return obtener(areaId);
+    }
+
+    public List<AsignacionSector> historialSector(long areaId) {
+        boolean existe =
+                Boolean.TRUE.equals(
+                        jdbc.query(
+                                "SELECT EXISTS (SELECT 1 FROM mod02_area_verde WHERE id = :id)",
+                                Map.of("id", areaId),
+                                rs -> rs.next() && rs.getBoolean(1)));
+        if (!existe) {
+            throw new ErrorCoberturas(404, "area-no-encontrada", "No existe esa área verde");
+        }
+        return jdbc.query(
+                "SELECT h.id, h.sector_id, s.nombre sector_nombre, h.fecha_inicio::text"
+                        + " fecha_inicio, h.fecha_fin::text fecha_fin FROM"
+                        + " mod02_historial_area_sector h JOIN mod02_sector s ON s.id = h.sector_id"
+                        + " WHERE h.area_verde_id = :id ORDER BY h.fecha_inicio DESC, h.id DESC",
+                Map.of("id", areaId),
+                new DataClassRowMapper<>(AsignacionSector.class));
     }
 
     private void validarCobertura(Long coberturaId) {
@@ -178,6 +246,7 @@ public class AreasService {
                         new MapSqlParameterSource()
                                 .addValue("q", "")
                                 .addValue("incluir_inactivas", true)
+                                .addValue("sector", null)
                                 .addValue("cuartel", null)
                                 .addValue("id", id),
                         new DataClassRowMapper<>(AreaVerde.class))
