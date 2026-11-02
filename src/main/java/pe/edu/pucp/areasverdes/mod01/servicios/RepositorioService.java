@@ -46,9 +46,9 @@ public class RepositorioService {
                             new Fuente(
                                     "mod02_especie_vegetal",
                                     "SELECT id, coalesce(nombre_comun, nombre_cientifico) nombre,"
-                                        + " nombre_cientifico detalle, 'MOD-02' modulo"
-                                        + " FROM mod02_especie_vegetal"
-                                        + " WHERE activo")),
+                                            + " nombre_cientifico detalle, 'MOD-02' modulo"
+                                            + " FROM mod02_especie_vegetal"
+                                            + " WHERE activo")),
                     "sector",
                     List.of(
                             new Fuente(

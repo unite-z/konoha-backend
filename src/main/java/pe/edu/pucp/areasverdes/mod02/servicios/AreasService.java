@@ -20,12 +20,12 @@ public class AreasService {
     private static final int TAMANO_PAGINA = 25;
     private static final String CONSULTA =
             "SELECT a.id, a.nombre, a.lugar, a.ubicacion, a.superficie_m2, a.tipo_cobertura_id,"
-                + " c.nombre tipo_cobertura_nombre, a.cuartel_id, q.numero cuartel_numero,"
-                + " a.activo FROM mod02_area_verde a LEFT JOIN mod02_cobertura_vegetal c ON"
-                + " c.id = a.tipo_cobertura_id LEFT JOIN mod02_cuartel q ON q.id = a.cuartel_id"
-                + " WHERE (:incluir_inactivas OR a.activo) AND (:q = '' OR a.nombre ILIKE"
-                + " '%' || :q || '%') AND (CAST(:cuartel AS bigint) IS NULL OR a.cuartel_id ="
-                + " :cuartel)";
+                    + " c.nombre tipo_cobertura_nombre, a.cuartel_id, q.numero cuartel_numero,"
+                    + " a.activo FROM mod02_area_verde a LEFT JOIN mod02_cobertura_vegetal c ON"
+                    + " c.id = a.tipo_cobertura_id LEFT JOIN mod02_cuartel q ON q.id = a.cuartel_id"
+                    + " WHERE (:incluir_inactivas OR a.activo) AND (:q = '' OR a.nombre ILIKE"
+                    + " '%' || :q || '%') AND (CAST(:cuartel AS bigint) IS NULL OR a.cuartel_id ="
+                    + " :cuartel)";
 
     private final NamedParameterJdbcTemplate jdbc;
 
@@ -79,10 +79,10 @@ public class AreasService {
         long id =
                 jdbc.queryForObject(
                         "INSERT INTO mod02_area_verde (nombre, lugar, ubicacion, superficie_m2,"
-                            + " tipo_cobertura_id, cuartel_id, usuario_creacion_id,"
-                            + " usuario_modificacion_id) VALUES (:nombre, :lugar, :ubicacion,"
-                            + " :superficie, :cobertura, :cuartel, :usuario, :usuario)"
-                            + " RETURNING id",
+                                + " tipo_cobertura_id, cuartel_id, usuario_creacion_id,"
+                                + " usuario_modificacion_id) VALUES (:nombre, :lugar, :ubicacion,"
+                                + " :superficie, :cobertura, :cuartel, :usuario, :usuario)"
+                                + " RETURNING id",
                         parametros,
                         Long.class);
         AreaVerde area = obtener(id);
@@ -123,9 +123,8 @@ public class AreasService {
                     + " coalesce(:lugar, lugar), ubicacion = coalesce(:ubicacion, ubicacion),"
                     + " superficie_m2 = coalesce(:superficie, superficie_m2), tipo_cobertura_id ="
                     + " coalesce(:cobertura, tipo_cobertura_id), cuartel_id = coalesce(:cuartel,"
-                    + " cuartel_id), activo ="
-                    + " coalesce(:activo, activo), fecha_modificacion = now(),"
-                    + " usuario_modificacion_id = :usuario WHERE id = :id",
+                    + " cuartel_id), activo = coalesce(:activo, activo), fecha_modificacion ="
+                    + " now(), usuario_modificacion_id = :usuario WHERE id = :id",
                 new MapSqlParameterSource()
                         .addValue("id", id)
                         .addValue("usuario", usuario.id())

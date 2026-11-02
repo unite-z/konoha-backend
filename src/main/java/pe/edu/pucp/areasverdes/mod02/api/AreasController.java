@@ -109,5 +109,4 @@ public class AreasController {
             @Valid @RequestBody CambioAreaVerde cambio) {
         return areas.modificar(id, cambio, usuario);
     }
-
 }
