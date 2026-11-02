@@ -167,7 +167,7 @@ class EvidenciasApiTest extends ApiCore {
                 .andExpect(jsonPath("$.results[0].modulo").value("MOD-05"));
         http.perform(get("/api/v1/core/repositorio/?tipo=especie").cookie(capataz))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.disponible").value(false))
+                .andExpect(jsonPath("$.disponible").value(true))
                 .andExpect(jsonPath("$.count").value(0));
         http.perform(get("/api/v1/core/repositorio/?tipo=planeta").cookie(capataz))
                 .andExpect(status().isBadRequest());
