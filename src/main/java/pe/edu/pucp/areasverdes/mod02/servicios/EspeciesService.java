@@ -9,11 +9,17 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import pe.edu.pucp.areasverdes.mod02.api.ErrorCoberturas;
-import pe.edu.pucp.areasverdes.mod02.api.EspeciesController.Especie;
 import pe.edu.pucp.areasverdes.mod05.Usuario;
 
 @Service
 public class EspeciesService {
+
+    public record Especie(
+            long id,
+            String nombreComun,
+            String nombreCientifico,
+            String formaBiologica,
+            boolean activo) {}
 
     private static final String CONSULTA =
             "SELECT id, nombre_comun, nombre_cientifico, forma_biologica, activo"
