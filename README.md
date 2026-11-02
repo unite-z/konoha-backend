@@ -64,6 +64,16 @@ Los POST de partes y actividades aceptan `Idempotency-Key` (UUID). El servidor c
 
 Decisiones funcionales conservadas: semanal hasta 7 días y quincenal hasta 14, incluidos ambos extremos; confirmar la interpretación de quincenal con el equipo. Se valida la pertenencia histórica del operario en la fecha de la actividad. El cierre de partes completo y la cola sin conexión de HU-MOD04-012 quedan fuera de estos tres requisitos; la interfaz actual registra con conexión. MOD-06 conserva su fuente de datos existente.
 
+## Catastro de ejemplares
+
+La migración `V10` crea el modelo de ejemplares y especies de MOD-02 y mantiene la vista `mod05_ejemplar` para las referencias de MOD-05. Tras arrancar el backend contra la base local para que Flyway aplique la migración, valida el Excel original:
+
+```sh
+python3 scripts/importar-catastro.py "/ruta/catastro campus.xlsx"
+```
+
+La validación no escribe en la base. Para importar, define `MOD05_DB_URL`, `MOD05_DB_USER` y `MOD05_DB_PASSWORD` y añade `--aplicar`. La importación usa `Referencia` como clave externa idempotente, conserva `Código` cuando está informado y deja la placa antigua vacía.
+
 ## Documentación
 
 - [AGENTS.md](AGENTS.md): estado, mapa, gates y reglas, para personas y agentes.
