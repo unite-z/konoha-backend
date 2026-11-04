@@ -39,16 +39,19 @@ public class IncidenciasController {
 
     private final Incidencias incidencias;
     private final ClasificacionIncidencias clasificacion;
+    private final CierreIncidencias cierre;
     private final ObjectMapper json;
     private final Validator validador;
 
     public IncidenciasController(
             Incidencias incidencias,
             ClasificacionIncidencias clasificacion,
+            CierreIncidencias cierre,
             ObjectMapper json,
             Validator validador) {
         this.incidencias = incidencias;
         this.clasificacion = clasificacion;
+        this.cierre = cierre;
         this.json = json;
         this.validador = validador;
     }
@@ -154,10 +157,31 @@ public class IncidenciasController {
         clasificacion.solicitarInspeccion(id, cuerpo, usuario);
     }
 
+    @Operation(summary = "Cierra una incidencia atendida con su evidencia (jefe)")
+    @PostMapping({"/{id:\\d+}/cerrar", "/{id:\\d+}/cerrar/"})
+    public Detalle cerrar(
+            UsuarioPlanificacion usuario,
+            @PathVariable long id,
+            @Valid @RequestBody(required = false) CierreIncidencias.Revision cuerpo) {
+        cierre.cerrar(id, cuerpo, usuario);
+        return incidencias.ficha(id);
+    }
+
+    @Operation(summary = "Devuelve una incidencia atendida a En atención con observaciones (jefe)")
+    @PostMapping({"/{id:\\d+}/devolver", "/{id:\\d+}/devolver/"})
+    public Detalle devolver(
+            UsuarioPlanificacion usuario,
+            @PathVariable long id,
+            @Valid @RequestBody(required = false) CierreIncidencias.Revision cuerpo) {
+        cierre.devolver(id, cuerpo, usuario);
+        return incidencias.ficha(id);
+    }
+
     @Operation(summary = "Bandeja de incidencias de la oficina (jefe)")
     @GetMapping({"", "/"})
-    public List<Resumen> bandeja(UsuarioPlanificacion usuario) {
-        return incidencias.bandeja(usuario);
+    public List<Resumen> bandeja(
+            UsuarioPlanificacion usuario, @RequestParam(required = false) String grupo) {
+        return incidencias.bandeja(grupo, usuario);
     }
 
     @Operation(summary = "Las incidencias que reportó el usuario")

@@ -318,4 +318,77 @@ class IncidenciasApiTest extends ApiPlanificacion {
         http.perform(get(RUTA + id + "/").with(httpBasic("jefe", CLAVE)))
                 .andExpect(jsonPath("$.estado").value("Registrada"));
     }
+
+    /** La deja Atendida (lo hará la derivación, AV-277 y AV-278) y, si se pide, con evidencia. */
+    void atendida(long id, boolean conEvidencia) throws Exception {
+        jdbc.getJdbcTemplate()
+                .update("UPDATE mod03_incidencia SET estado = 'Atendida' WHERE id = ?", id);
+        jdbc.getJdbcTemplate()
+                .update(
+                        "INSERT INTO mod03_historial_incidencia (incidencia_id, estado, usuario_id)"
+                                + " VALUES (?, 'Atendida', 2)",
+                        id);
+        if (conEvidencia) {
+            http.perform(
+                            multipart(RUTA + id + "/reportes/")
+                                    .file(
+                                            new MockMultipartFile(
+                                                    "foto", "rama.png", "image/png", PNG))
+                                    .with(httpBasic("ingeniero", CLAVE)))
+                    .andExpect(status().isNoContent());
+            jdbc.getJdbcTemplate()
+                    .update(
+                            "UPDATE core_adjunto SET descripcion = 'Rama retirada' WHERE entidad ="
+                                    + " 'incidencia' AND registro_id = ?",
+                            id);
+        }
+    }
+
+    @Test
+    void cerrarExigeEvidenciaYCalculaElTiempoDeCierre() throws Exception {
+        long id = registrada();
+        accion("jefe", id, "cerrar", "{}")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("transicion-invalida"));
+        atendida(id, false);
+        accion("jefe", id, "cerrar", "{}")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("sin-evidencia"));
+        jdbc.getJdbcTemplate()
+                .update(
+                        "DELETE FROM mod03_historial_incidencia WHERE incidencia_id = ? AND estado"
+                                + " = 'Atendida'",
+                        id);
+        atendida(id, true);
+        http.perform(get(RUTA + id + "/").with(httpBasic("jefe", CLAVE)))
+                .andExpect(jsonPath("$.atencion.atendida_por").value("ingeniero"))
+                .andExpect(jsonPath("$.atencion.evidencias.length()").value(1));
+        accion("jefe", id, "cerrar", "{\"observaciones\": \"Bien\"}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estado").value("Cerrada"))
+                .andExpect(jsonPath("$.cierre.minutos").value(0))
+                .andExpect(jsonPath("$.cierre.avisado_a").value("Ana"))
+                .andExpect(jsonPath("$.minutos_cierre").value(0));
+        http.perform(get(RUTA + "?grupo=cerradas").with(httpBasic("jefe", CLAVE)))
+                .andExpect(jsonPath("$.length()").value(1));
+        http.perform(get(RUTA + "?grupo=abiertas").with(httpBasic("jefe", CLAVE)))
+                .andExpect(jsonPath("$.length()").value(0));
+        http.perform(get(RUTA + "?grupo=otras").with(httpBasic("jefe", CLAVE)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void devolverPideObservacionesYLaDejaEnAtencion() throws Exception {
+        long id = registrada();
+        atendida(id, true);
+        accion("jefe", id, "devolver", "{}")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.codigo").value("observaciones-requeridas"));
+        accion("jefe", id, "devolver", "{\"observaciones\": \"Falta retirar la rama\"}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estado").value("EnAtencion"))
+                .andExpect(
+                        jsonPath("$.historial[0].texto")
+                                .value("En atención · jefe (devuelta: Falta retirar la rama)"));
+    }
 }
