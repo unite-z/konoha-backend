@@ -109,7 +109,8 @@ class MarcadoCorteApiTest extends ApiPlanificacion {
         http.perform(get(RUTA + "ruta-de-hoy/").with(httpBasic("ingeniero", CLAVE)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.ruta.programacion_id").value(ciclo))
-                .andExpect(jsonPath("$.ruta.codigo").value(startsWith("CC-")))
+                // El código guardado del ciclo (AV-364), el mismo que en Ciclos.
+                .andExpect(jsonPath("$.ruta.codigo").value("CC-%d-01".formatted(HOY.getYear())))
                 .andExpect(jsonPath("$.ruta.jardines.length()").value(2))
                 .andExpect(jsonPath("$.ruta.jardines[0].zona").value("Sociales"));
         http.perform(get(RUTA + "ruta-de-hoy/").with(httpBasic("practicante", CLAVE)))
