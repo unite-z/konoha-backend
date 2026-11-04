@@ -39,6 +39,7 @@ class Mod01PermisosApiTest extends ApiCore {
             String capataz) {}
 
     static final String U = "/api/v1/core/usuarios/999999";
+    static final String IMPORTACION = "/api/v1/core/importaciones/999999";
 
     // spotless:off
     static final List<Fila> MATRIZ =
@@ -179,6 +180,41 @@ class Mod01PermisosApiTest extends ApiCore {
                             "ok",
                             "ok",
                             "ok"),
+                    // El permiso depende del tipo de importación: sin cuerpo válido o con un id que
+                    // no
+                    // existe no se llega a comprobarlo. El 403 lo cubre ImportacionesApiTest.
+                    new Fila(
+                            "POST",
+                            "/importaciones",
+                            "/api/v1/core/importaciones/",
+                            "ok",
+                            "ok",
+                            "ok",
+                            "ok"),
+                    new Fila(
+                            "GET",
+                            "/importaciones/{id}",
+                            IMPORTACION + "/",
+                            "ok",
+                            "ok",
+                            "ok",
+                            "404"),
+                    new Fila(
+                            "GET",
+                            "/importaciones/{id}/filas",
+                            IMPORTACION + "/filas/",
+                            "ok",
+                            "ok",
+                            "ok",
+                            "404"),
+                    new Fila(
+                            "POST",
+                            "/importaciones/{id}/confirmar",
+                            IMPORTACION + "/confirmar/",
+                            "ok",
+                            "ok",
+                            "ok",
+                            "404"),
                     new Fila(
                             "GET",
                             "/repositorio",
