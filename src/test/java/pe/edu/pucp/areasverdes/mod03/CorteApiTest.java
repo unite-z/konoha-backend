@@ -114,6 +114,10 @@ class CorteApiTest extends ApiPlanificacion {
         programar("[\"Letras\"]", "2027-01-11", "2027-01-12")
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.codigo").value("zona-invalida"));
+        // AV-369: sin ninguna zona, un 400 claro en lugar de un error de SQL.
+        programar("[]", "2027-01-11", "2027-01-12")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.codigo").value("ruta-vacia"));
         programar("[\"Sociales\"]", "2027-01-11", "2027-01-15")
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.codigo").value("duracion-excedida"));
