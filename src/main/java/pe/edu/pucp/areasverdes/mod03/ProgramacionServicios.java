@@ -12,7 +12,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import pe.edu.pucp.areasverdes.mod03.Programador.Bloqueo;
 import pe.edu.pucp.areasverdes.mod03.RestriccionesController.Restriccion;
-import pe.edu.pucp.areasverdes.mod05.Usuario;
 
 /**
  * Alta de programaciones (HU-MOD03-004, RN-002 y RN-003). Ante una advertencia exige justificación,
@@ -39,7 +38,7 @@ public class ProgramacionServicios {
     }
 
     @Transactional
-    public long crear(NuevaProgramacion nueva, Usuario usuario) {
+    public long crear(NuevaProgramacion nueva, UsuarioPlanificacion usuario) {
         Acceso.gestionar(usuario);
         LocalDate inicio = nueva.fechaInicioPrevista();
         LocalDate fin = nueva.fechaFinPrevista();
@@ -119,7 +118,7 @@ public class ProgramacionServicios {
 
     /** Aplica la transición (inicio, fin o cancelación) si el estado actual lo permite. */
     @Transactional
-    public void cambiar(long id, String accion, LocalDate fecha, Usuario usuario) {
+    public void cambiar(long id, String accion, LocalDate fecha, UsuarioPlanificacion usuario) {
         Acceso.gestionar(usuario);
         Transicion t = TRANSICIONES.get(accion);
         String fechaReal = t.columna() == null ? "" : t.columna() + " = :fecha, ";

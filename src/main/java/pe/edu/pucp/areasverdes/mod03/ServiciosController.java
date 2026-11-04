@@ -14,7 +14,6 @@ import java.util.Optional;
 import java.util.Set;
 import org.springframework.jdbc.core.DataClassRowMapper;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -25,7 +24,6 @@ import pe.edu.pucp.areasverdes.mod03.ConfiguracionServicios.NuevaDuracion;
 import pe.edu.pucp.areasverdes.mod03.ConfiguracionServicios.NuevaFrecuencia;
 import pe.edu.pucp.areasverdes.mod03.Programador.Bloqueo;
 import pe.edu.pucp.areasverdes.mod03.RestriccionesController.Restriccion;
-import pe.edu.pucp.areasverdes.mod05.Usuario;
 
 @RestController
 @RequestMapping("/api/v1/planificacion")
@@ -51,7 +49,7 @@ public class ServiciosController {
 
     @Operation(summary = "Servicios periódicos con su frecuencia por estación y su duración máxima")
     @GetMapping({"/servicios", "/servicios/"})
-    public List<ServicioPeriodico> listar(@AuthenticationPrincipal Usuario usuario) {
+    public List<ServicioPeriodico> listar(UsuarioPlanificacion usuario) {
         Acceso.consultar(usuario);
         return servicios.periodicos();
     }
@@ -62,7 +60,7 @@ public class ServiciosController {
         "/servicios/{id}/frecuencias/{estacion}/"
     })
     public ServicioPeriodico configurarFrecuencia(
-            @AuthenticationPrincipal Usuario usuario,
+            UsuarioPlanificacion usuario,
             @PathVariable long id,
             @PathVariable String estacion,
             @Valid @RequestBody NuevaFrecuencia nueva) {
@@ -73,7 +71,7 @@ public class ServiciosController {
     @Operation(summary = "Configura la duración máxima de un servicio (jefe de sección)")
     @PutMapping({"/servicios/{id}/duracion", "/servicios/{id}/duracion/"})
     public ServicioPeriodico configurarDuracion(
-            @AuthenticationPrincipal Usuario usuario,
+            UsuarioPlanificacion usuario,
             @PathVariable long id,
             @Valid @RequestBody NuevaDuracion nueva) {
         configuracion.duracion(id, nueva, usuario);
@@ -96,7 +94,7 @@ public class ServiciosController {
 
     @Operation(summary = "Propone las fechas del siguiente ciclo y avisa de las restricciones")
     @GetMapping({"/servicios/{id}/propuesta", "/servicios/{id}/propuesta/"})
-    public Propuesta propuesta(@AuthenticationPrincipal Usuario usuario, @PathVariable long id) {
+    public Propuesta propuesta(UsuarioPlanificacion usuario, @PathVariable long id) {
         Acceso.consultar(usuario);
         LocalDate hoy = LocalDate.now(reloj);
         String estacion = Programador.estacion(hoy);

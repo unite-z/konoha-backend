@@ -10,7 +10,6 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import pe.edu.pucp.areasverdes.mod05.Usuario;
 
 /** Configuración de los servicios periódicos por el jefe de sección, con autor y auditoría. */
 @Service
@@ -73,7 +72,8 @@ public class ConfiguracionServicios {
     }
 
     @Transactional
-    public void frecuencia(long servicio, String estacion, NuevaFrecuencia nueva, Usuario usuario) {
+    public void frecuencia(
+            long servicio, String estacion, NuevaFrecuencia nueva, UsuarioPlanificacion usuario) {
         Acceso.gestionar(usuario);
         if (!ESTACIONES.contains(estacion)) {
             throw new ErrorPlanificacion(
@@ -109,7 +109,7 @@ public class ConfiguracionServicios {
     }
 
     @Transactional
-    public void duracion(long servicio, NuevaDuracion nueva, Usuario usuario) {
+    public void duracion(long servicio, NuevaDuracion nueva, UsuarioPlanificacion usuario) {
         Acceso.gestionar(usuario);
         exigirPeriodico(servicio);
         if (nueva.horaInicio() != null

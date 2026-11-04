@@ -11,11 +11,9 @@ import java.util.Map;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.DataClassRowMapper;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import pe.edu.pucp.areasverdes.mod05.Usuario;
 
 /**
  * Alertas al jefe de sección, calculadas al consultar (solo dentro de la aplicación, ADR 0003):
@@ -54,7 +52,7 @@ public class AlertasController {
 
     @Operation(summary = "Alertas de frecuencia a punto de vencer y de duración excedida")
     @GetMapping({"/alertas", "/alertas/"})
-    public List<Alerta> alertas(@AuthenticationPrincipal Usuario usuario) {
+    public List<Alerta> alertas(UsuarioPlanificacion usuario) {
         Acceso.consultar(usuario);
         LocalDate hoy = LocalDate.now(reloj);
         var datos = Map.of("hoy", hoy, "estacion", Programador.estacion(hoy), "umbral", umbralDias);

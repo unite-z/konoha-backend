@@ -13,7 +13,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.DataClassRowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -24,7 +23,6 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import pe.edu.pucp.areasverdes.mod03.ProgramacionServicios.Cambio;
 import pe.edu.pucp.areasverdes.mod03.ProgramacionServicios.NuevaProgramacion;
-import pe.edu.pucp.areasverdes.mod05.Usuario;
 
 /** Programaciones de servicios periódicos (HU-MOD03-004 y 005). */
 @RestController
@@ -69,7 +67,7 @@ public class ProgramacionController {
     @PostMapping({"/programaciones", "/programaciones/"})
     @ResponseStatus(HttpStatus.CREATED)
     public Programacion crear(
-            @AuthenticationPrincipal Usuario usuario, @Valid @RequestBody NuevaProgramacion nueva) {
+            UsuarioPlanificacion usuario, @Valid @RequestBody NuevaProgramacion nueva) {
         return jdbc.queryForObject(
                 CONSULTA.formatted("p.id = :id"),
                 Map.of("id", programacion.crear(nueva, usuario)),
@@ -79,7 +77,7 @@ public class ProgramacionController {
     @Operation(summary = "Calendario de actividades: programaciones del periodo, con filtros")
     @GetMapping({"/programaciones", "/programaciones/"})
     public List<Programacion> calendario(
-            @AuthenticationPrincipal Usuario usuario,
+            UsuarioPlanificacion usuario,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta,
             @RequestParam(name = "tipo_servicio_id", required = false) Long tipoServicioId,
@@ -116,7 +114,7 @@ public class ProgramacionController {
         "/programaciones/{id}/{accion:inicio|fin|cancelacion}/"
     })
     public Programacion cambiar(
-            @AuthenticationPrincipal Usuario usuario,
+            UsuarioPlanificacion usuario,
             @PathVariable long id,
             @PathVariable String accion,
             @RequestBody(required = false) Cambio cambio) {

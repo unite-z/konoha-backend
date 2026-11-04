@@ -20,7 +20,6 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import pe.edu.pucp.areasverdes.mod05.Usuario;
 
 /** Alta y baja de restricciones del calendario (HU-MOD03-003), sueltas o en serie semanal. */
 @Service
@@ -60,7 +59,7 @@ public class CalendarioRestricciones {
 
     /** Crea la restricción, o una por cada repetición con la misma serie, y devuelve sus ids. */
     @Transactional
-    public List<Long> crear(NuevaRestriccion nueva, Usuario usuario) {
+    public List<Long> crear(NuevaRestriccion nueva, UsuarioPlanificacion usuario) {
         Acceso.gestionar(usuario);
         if (nueva.fechaFin().isBefore(nueva.fechaInicio())
                 || (nueva.horaInicio() != null
@@ -109,7 +108,7 @@ public class CalendarioRestricciones {
 
     /** Da de baja la restricción o, con {@code serie}, todas las de su serie. Devuelve cuántas. */
     @Transactional
-    public int baja(long id, boolean serie, Usuario usuario) {
+    public int baja(long id, boolean serie, UsuarioPlanificacion usuario) {
         Acceso.gestionar(usuario);
         List<Long> ids =
                 jdbc.queryForList(
