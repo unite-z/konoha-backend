@@ -36,18 +36,21 @@ public class ServiciosController {
     private final HistorialServicio historial;
     private final NamedParameterJdbcTemplate jdbc;
     private final Clock reloj;
+    private final ValoresIniciales valoresIniciales;
 
     public ServiciosController(
             ServiciosRepository servicios,
             ConfiguracionServicios configuracion,
             HistorialServicio historial,
             NamedParameterJdbcTemplate jdbc,
-            Clock reloj) {
+            Clock reloj,
+            ValoresIniciales valoresIniciales) {
         this.servicios = servicios;
         this.configuracion = configuracion;
         this.historial = historial;
         this.jdbc = jdbc;
         this.reloj = reloj;
+        this.valoresIniciales = valoresIniciales;
     }
 
     @Operation(summary = "Servicios periódicos con su frecuencia por estación y su duración máxima")
@@ -55,6 +58,14 @@ public class ServiciosController {
     public List<ServicioPeriodico> listar(UsuarioPlanificacion usuario) {
         Acceso.consultar(usuario);
         return servicios.periodicos();
+    }
+
+    @Operation(summary = "Valores iniciales de la sección para configurar el servicio (AV-363)")
+    @GetMapping({"/servicios/{id}/valores-iniciales", "/servicios/{id}/valores-iniciales/"})
+    public ValoresIniciales.Valores valoresIniciales(
+            UsuarioPlanificacion usuario, @PathVariable long id) {
+        Acceso.consultar(usuario);
+        return valoresIniciales.de(id);
     }
 
     @Operation(summary = "Configura la frecuencia de un servicio en una estación (jefe de sección)")
