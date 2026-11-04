@@ -1,6 +1,5 @@
 package pe.edu.pucp.areasverdes.mod06.gestion;
 
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -14,8 +13,7 @@ import pe.edu.pucp.areasverdes.mod01.config.SeguridadMod01;
 
 /**
  * Las rutas de los reportes de gestión exigen la sesión de MOD-01 ({@code SeguridadGestion}): ni
- * HTTP Basic ni una cookie inválida bastan. El resto del MOD-06 y de MOD-03 sigue igual (AGENTS.md:
- * «Seguridad abierta: no empeorar»).
+ * HTTP Basic ni una cookie inválida bastan. MOD-03 sigue igual (AGENTS.md: «Seguridad abierta»).
  */
 class SeguridadGestionApiTest extends ApiGestion {
 
@@ -53,15 +51,14 @@ class SeguridadGestionApiTest extends ApiGestion {
     }
 
     @Test
-    void losReportesAntiguosSiguenAbiertos() throws Exception {
-        int estado =
-                http.perform(
-                                get(
-                                        "/api/v1/reportes/cumplimiento-corte/?desde=2026-01-01&hasta=2026-01-31"))
-                        .andReturn()
-                        .getResponse()
-                        .getStatus();
-        assertNotEquals(401, estado);
+    void losReportesAntiguosExigenSesion() throws Exception {
+        http.perform(get("/api/v1/reportes/cumplimiento-corte/?desde=2026-01-01&hasta=2026-01-31"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void laExtraccionIaExigeSesion() throws Exception {
+        http.perform(get("/api/v1/ia/extracciones/")).andExpect(status().isUnauthorized());
     }
 
     @Test

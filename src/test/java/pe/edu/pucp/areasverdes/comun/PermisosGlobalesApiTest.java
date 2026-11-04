@@ -29,9 +29,7 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
  * un 404 o un 400, significa que la petición pasó la seguridad. Solo no cuenta el 405: MOD-06
  * registra sus rutas para todos los métodos y responde así a los que no implementa.
  *
- * <p>Las excepciones están en dos listas con su motivo: {@link #PUBLICOS} (a propósito) y {@link
- * #BRECHAS_CONGELADAS} (deuda conocida de MOD-06). Una brecha que deja de estar abierta también
- * hace fallar la prueba, para que se quite de la lista al cerrarla (AV-327).
+ * <p>Las excepciones están en {@link #PUBLICOS}, cada una con su motivo.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -49,19 +47,6 @@ class PermisosGlobalesApiTest {
                     "GET /api/tercerizados/docs", "Swagger de MOD-05",
                     "GET /api/tercerizados/schema", "OpenAPI de MOD-05",
                     "GET /api/tercerizados/schema/", "OpenAPI de MOD-05");
-
-    /** Endpoints abiertos de MOD-06 que existen hoy. Se cierran en AV-327; no se añaden más. */
-    static final Set<String> BRECHAS_CONGELADAS =
-            Set.of(
-                    "GET /api/v1/ia/extracciones/",
-                    "POST /api/v1/ia/extracciones/",
-                    "GET /api/v1/ia/extracciones/metricas/",
-                    "GET /api/v1/ia/extracciones/{sugerenciaId:[0-9]+}/",
-                    "POST /api/v1/ia/extracciones/{sugerenciaId:[0-9]+}/rechazar/",
-                    "POST /api/v1/ia/extracciones/{sugerenciaId:[0-9]+}/validar/",
-                    "GET /api/v1/reportes/atenciones-espacio-sector/",
-                    "GET /api/v1/reportes/cumplimiento-corte/",
-                    "GET /api/v1/reportes/distribucion-personal/");
 
     /** Rutas comodín de MOD-06: solo responden 404 a lo que no existe. */
     static final Set<String> COMODINES = Set.of("/api/v1", "/api/v1/**");
@@ -102,18 +87,10 @@ class PermisosGlobalesApiTest {
 
         Map<String, Integer> sinJustificar = new TreeMap<>(abiertos);
         sinJustificar.keySet().removeAll(PUBLICOS.keySet());
-        sinJustificar.keySet().removeAll(BRECHAS_CONGELADAS);
         assertEquals(
                 Map.of(),
                 sinJustificar,
                 "Endpoints que responden sin credenciales («método ruta=estado»): protégelos");
-
-        Set<String> brechasCerradas = new TreeSet<>(BRECHAS_CONGELADAS);
-        brechasCerradas.removeAll(abiertos.keySet());
-        assertEquals(
-                Set.of(),
-                brechasCerradas,
-                "Estas brechas ya no están abiertas: quítalas de BRECHAS_CONGELADAS");
 
         Set<String> publicosInexistentes = new TreeSet<>(PUBLICOS.keySet());
         publicosInexistentes.removeAll(endpoints);
