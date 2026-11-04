@@ -60,6 +60,7 @@ Todos bajo `/api/v1/core/`, con y sin barra final. Errores en `{codigo, detalle}
 | `POST adjuntos/` | Según la entidad | Multipart `entidad`, `registro_id`, `descripcion` y `archivo`, con la cabecera `Idempotency-Key` (UUID). 201 si es nuevo, 200 si es un reintento, 409 `archivo-duplicado` o `entidad-no-disponible` |
 | `GET adjuntos/?entidad=&registro_id=` | Según la entidad | |
 | `GET adjuntos/{id}/contenido/` | Según la entidad | Descarga con `Content-Disposition: attachment` |
+| `GET exportaciones/{tipo}/` | Según la entidad | `.xlsx` de `actividades` (`CAM.PARTE.CONSULTAR`), `atenciones` (`SER.ATENCION.REGISTRAR`), `incidencias` (`PLA.INCIDENCIA.REGISTRAR`) o `ejemplares` (`INV.INVENTARIO.CONSULTAR`). Sin importes ni datos personales. 409 `entidad-no-disponible` si el módulo aún no tiene la tabla; 409 `volumen-excedido` por encima de 50 000 filas |
 | `GET repositorio/?tipo=&q=&page=` | Los cuatro roles | `tipo`: `jardin`, `especie`, `sector` o `servicio`. `disponible: false` si la tabla del dueño aún no existe |
 
 La matriz completa por rol está en `src/test/java/.../mod01/Mod01PermisosApiTest.java`. La prueba falla si un endpoint de MOD-01 no está en ella.
