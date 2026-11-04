@@ -161,6 +161,9 @@ public class ProgramacionServicios {
             long id, String accion, LocalDate fecha, String motivo, UsuarioPlanificacion usuario) {
         Acceso.gestionar(usuario);
         Transicion t = TRANSICIONES.get(accion);
+        if ("Completada".equals(t.hasta())) {
+            corte.exigirRutaCompleta(id);
+        }
         boolean cancela = "Cancelada".equals(t.hasta());
         if (cancela && (motivo == null || motivo.isBlank())) {
             throw new ErrorPlanificacion(

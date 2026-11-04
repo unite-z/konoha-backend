@@ -34,6 +34,7 @@ class MarcadoCorteApiTest extends ApiPlanificacion {
 
     long ciclo;
     long jardin;
+    long patio;
 
     @BeforeEach
     void escenario() throws Exception {
@@ -43,7 +44,7 @@ class MarcadoCorteApiTest extends ApiPlanificacion {
                         .getContentAsString(StandardCharsets.UTF_8));
         long sociales = sector("Sociales");
         jardin = area("Jardín de Sociales", sociales);
-        area("Patio de Sociales", sociales);
+        patio = area("Patio de Sociales", sociales);
         area("Jardín de Ciencias", sector("Ciencias"));
         sql.update(
                 "INSERT INTO mod02_historial_capataz_sector (sector_id, capataz_id, usuario_id)"
@@ -213,5 +214,41 @@ class MarcadoCorteApiTest extends ApiPlanificacion {
                 .andExpect(jsonPath("$.por_dia[0].cortados").value(1))
                 .andExpect(jsonPath("$.por_cortar.length()").value(1))
                 .andExpect(jsonPath("$.desactualizado").value(true));
+    }
+
+    ResultActions accion(String usuario, String ruta, String cuerpo) throws Exception {
+        return http.perform(
+                post(RUTA + ruta)
+                        .with(httpBasic(usuario, CLAVE))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(cuerpo));
+    }
+
+    @Test
+    void laLimpiezaPideLaRutaCompletaYElCierreTambien() throws Exception {
+        String limpiezas = "ciclos/" + ciclo + "/limpiezas/";
+        String hoy = "{\"fecha\": \"" + HOY + "\"}";
+        marcar("ingeniero", UUID.randomUUID(), HOY + "T09:00:00-05:00").andExpect(status().isOk());
+        accion("ingeniero", limpiezas, hoy)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("ruta-incompleta"))
+                .andExpect(jsonPath("$.detalle").value(containsString("Faltan 1 jardines")));
+        accion("jefe", "programaciones/" + ciclo + "/inicio/", hoy).andExpect(status().isOk());
+        accion("jefe", "programaciones/" + ciclo + "/fin/", hoy)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("ruta-incompleta"));
+        jardin = patio;
+        marcar("ingeniero", UUID.randomUUID(), HOY + "T11:00:00-05:00").andExpect(status().isOk());
+        accion("ingeniero", limpiezas, hoy)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.autor").value("ingeniero"));
+        http.perform(get(RUTA + "ciclos/" + ciclo + "/").with(httpBasic("jefe", CLAVE)))
+                .andExpect(jsonPath("$.limpiezas.length()").value(1))
+                .andExpect(jsonPath("$.dias_corte").value(1))
+                .andExpect(jsonPath("$.maximo_dias").value(4))
+                .andExpect(jsonPath("$.cumple").value(true));
+        accion("jefe", "programaciones/" + ciclo + "/fin/", hoy)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estado").value("Completada"));
     }
 }

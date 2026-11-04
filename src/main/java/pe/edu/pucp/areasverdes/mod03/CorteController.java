@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.time.LocalDate;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -98,6 +99,21 @@ public class CorteController {
     @GetMapping({"/ciclos/{id}/avance", "/ciclos/{id}/avance/"})
     public CorteCesped.Avance avance(UsuarioPlanificacion usuario, @PathVariable long id) {
         return corte.avance(id, usuario);
+    }
+
+    public record NuevaLimpieza(LocalDate fecha) {}
+
+    @Operation(
+            summary =
+                    "Registra una jornada de limpieza con la ruta completa (jefe, ingeniero o"
+                            + " practicante)")
+    @PostMapping({"/ciclos/{id}/limpiezas", "/ciclos/{id}/limpiezas/"})
+    @ResponseStatus(HttpStatus.CREATED)
+    public CorteCesped.Limpieza limpieza(
+            UsuarioPlanificacion usuario,
+            @PathVariable long id,
+            @RequestBody(required = false) NuevaLimpieza cuerpo) {
+        return corte.registrarLimpieza(id, cuerpo == null ? null : cuerpo.fecha(), usuario);
     }
 
     @Operation(summary = "Ciclo de corte con su ruta de jardines y sus marcas")
