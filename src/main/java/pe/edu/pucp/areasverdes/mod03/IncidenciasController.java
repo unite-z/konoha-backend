@@ -38,11 +38,17 @@ import pe.edu.pucp.areasverdes.mod03.Incidencias.Seguimiento;
 public class IncidenciasController {
 
     private final Incidencias incidencias;
+    private final ClasificacionIncidencias clasificacion;
     private final ObjectMapper json;
     private final Validator validador;
 
-    public IncidenciasController(Incidencias incidencias, ObjectMapper json, Validator validador) {
+    public IncidenciasController(
+            Incidencias incidencias,
+            ClasificacionIncidencias clasificacion,
+            ObjectMapper json,
+            Validator validador) {
         this.incidencias = incidencias;
+        this.clasificacion = clasificacion;
         this.json = json;
         this.validador = validador;
     }
@@ -110,6 +116,42 @@ public class IncidenciasController {
             @RequestParam(required = false) String descripcion,
             @RequestPart(name = "foto", required = false) MultipartFile foto) {
         incidencias.sumarReporte(id, descripcion, foto, usuario);
+    }
+
+    @Operation(summary = "Ingenieros y practicantes que pueden inspeccionar (jefe)")
+    @GetMapping({"/inspectores", "/inspectores/"})
+    public List<ClasificacionIncidencias.Inspector> inspectores(UsuarioPlanificacion usuario) {
+        return clasificacion.inspectores(usuario);
+    }
+
+    @Operation(summary = "Clasifica por severidad e impacto y elige la vía (jefe)")
+    @PostMapping({"/{id:\\d+}/clasificar", "/{id:\\d+}/clasificar/"})
+    public Detalle clasificar(
+            UsuarioPlanificacion usuario,
+            @PathVariable long id,
+            @Valid @RequestBody ClasificacionIncidencias.Clasificacion cuerpo) {
+        clasificacion.clasificar(id, cuerpo, usuario);
+        return incidencias.ficha(id);
+    }
+
+    @Operation(summary = "Descarta una incidencia con motivo (jefe)")
+    @PostMapping({"/{id:\\d+}/descartar", "/{id:\\d+}/descartar/"})
+    public Detalle descartar(
+            UsuarioPlanificacion usuario,
+            @PathVariable long id,
+            @Valid @RequestBody(required = false) ClasificacionIncidencias.Descarte cuerpo) {
+        clasificacion.descartar(id, cuerpo, usuario);
+        return incidencias.ficha(id);
+    }
+
+    @Operation(summary = "Pide una inspección en campo antes de clasificar (jefe)")
+    @PostMapping({"/{id:\\d+}/inspeccion", "/{id:\\d+}/inspeccion/"})
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void inspeccion(
+            UsuarioPlanificacion usuario,
+            @PathVariable long id,
+            @Valid @RequestBody ClasificacionIncidencias.SolicitudInspeccion cuerpo) {
+        clasificacion.solicitarInspeccion(id, cuerpo, usuario);
     }
 
     @Operation(summary = "Bandeja de incidencias de la oficina (jefe)")
