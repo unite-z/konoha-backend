@@ -61,12 +61,26 @@ public class Incidencias {
             String canal,
             OffsetDateTime fechaRegistro,
             OffsetDateTime fechaCierre,
-            String responsable) {}
+            String responsable,
+            Long minutosCierre) {}
 
     public record Ejemplar(String codigo, String especie, Double alturaM) {}
 
     /** Una transición: «Registrada · Ana Q.», de la más reciente a la más antigua. */
     public record Evento(String texto, OffsetDateTime fechaHora) {}
+
+    /** Foto de la evidencia (adjunto de MOD-01). */
+    public record FotoEvidencia(long id, String url) {}
+
+    /** Atendida: quién y cuándo, el encargo y la evidencia que dejó (AV-279). */
+    public record Atencion(
+            String atendidaPor,
+            OffsetDateTime atendidaEn,
+            String encargoCodigo,
+            List<FotoEvidencia> evidencias) {}
+
+    /** Cerrada: minutos del registro al cierre y a quién se avisó (AV-279). */
+    public record Cierre(long minutos, String avisadoA) {}
 
     /** La ficha: la fila de la bandeja con la ubicación, el ejemplar, la foto y el historial. */
     public record Detalle(
@@ -77,7 +91,27 @@ public class Incidencias {
             String reportadoPor,
             String impacto,
             String fotoUrl,
+            Atencion atencion,
+            Cierre cierre,
             List<Evento> historial) {}
+
+    /**
+     * Las fotos de los reportes; todo otro adjunto de la incidencia es evidencia de la atención.
+     */
+    static final List<String> FOTOS_DE_REPORTE =
+            List.of("Foto del reporte", "Foto de otro reporte");
+
+    /** Grupos de estado de la bandeja (AV-279). */
+    static final Map<String, List<String>> GRUPOS =
+            Map.of(
+                    "abiertas", List.of("Registrada", "Clasificada"),
+                    "en_proceso",
+                            List.of(
+                                    "DerivadaInterna",
+                                    "DerivadaTercerizada",
+                                    "EnAtencion",
+                                    "Atendida"),
+                    "cerradas", List.of("Cerrada", "Descartada"));
 
     public record Espacio(String nombre, List<String> ejemplares) {}
 
@@ -123,7 +157,9 @@ public class Incidencias {
             """
             SELECT i.id, i.codigo, t.nombre tipo, t.sencilla tipo_sencilla, a.nombre espacio,
                 i.severidad, i.via, i.estado, i.canal, i.fecha_registro, i.fecha_cierre,
-                NULL responsable
+                NULL responsable,
+                CAST(floor(extract(epoch FROM i.fecha_cierre - i.fecha_registro) / 60) AS bigint)
+                    minutos_cierre
             FROM mod03_incidencia i
             JOIN mod03_tipo_incidencia t ON t.id = i.tipo_incidencia_id
             JOIN mod02_area_verde a ON a.id = i.area_verde_id
@@ -331,11 +367,24 @@ public class Incidencias {
         }
     }
 
-    /** La bandeja de la oficina, de la más reciente a la más antigua. */
-    public List<Resumen> bandeja(UsuarioPlanificacion usuario) {
+    /**
+     * La bandeja de la oficina, de la más reciente a la más antigua. {@code grupo}: abiertas, en
+     * proceso o cerradas (AV-279); sin él, todas.
+     */
+    public List<Resumen> bandeja(String grupo, UsuarioPlanificacion usuario) {
         Acceso.gestionarIncidencias(usuario);
+        if (grupo != null && !GRUPOS.containsKey(grupo)) {
+            throw new ErrorPlanificacion(
+                    400, "grupo-invalido", "El grupo es abiertas, en_proceso o cerradas");
+        }
         return jdbc.query(
-                RESUMEN + " ORDER BY i.fecha_registro DESC, i.id DESC", Incidencias::resumen);
+                RESUMEN
+                        + " WHERE (CAST(:todas AS boolean) OR i.estado IN (:estados))"
+                        + " ORDER BY i.fecha_registro DESC, i.id DESC",
+                new MapSqlParameterSource()
+                        .addValue("todas", grupo == null)
+                        .addValue("estados", grupo == null ? List.of("") : GRUPOS.get(grupo)),
+                Incidencias::resumen);
     }
 
     /** Las que reportó el usuario (HU-024). */
@@ -387,6 +436,8 @@ public class Incidencias {
                                         rs.getString("reportado_por"),
                                         rs.getString("impacto"),
                                         fotoUrl(id),
+                                        atencion(id, rs.getString("estado")),
+                                        cierre(id, rs.getString("estado"), rs),
                                         historial(id)));
         if (fichas.isEmpty()) {
             throw new ErrorPlanificacion(
@@ -420,7 +471,10 @@ public class Incidencias {
                                             ? null
                                             : Duration.between(registro, cierre).toMinutes(),
                                     pasos(id),
-                                    null);
+                                    evidencias(id).stream()
+                                            .findFirst()
+                                            .map(e -> new Evidencia(e.url()))
+                                            .orElse(null));
                         });
         if (lista.isEmpty()) {
             throw new ErrorPlanificacion(
@@ -463,10 +517,59 @@ public class Incidencias {
         List<Long> fotos =
                 jdbc.queryForList(
                         "SELECT id FROM core_adjunto WHERE entidad = 'incidencia' AND registro_id ="
-                                + " :id ORDER BY id LIMIT 1",
-                        Map.of("id", id),
+                                + " :id AND descripcion IN (:reporte) ORDER BY id LIMIT 1",
+                        Map.of("id", id, "reporte", FOTOS_DE_REPORTE),
                         Long.class);
-        return fotos.isEmpty() ? null : "/api/v1/core/adjuntos/" + fotos.getFirst() + "/contenido/";
+        return fotos.isEmpty() ? null : url(fotos.getFirst());
+    }
+
+    private static String url(long adjunto) {
+        return "/api/v1/core/adjuntos/" + adjunto + "/contenido/";
+    }
+
+    /** La evidencia de la atención: los adjuntos que no son fotos de un reporte. */
+    List<FotoEvidencia> evidencias(long id) {
+        return jdbc.query(
+                """
+                SELECT id FROM core_adjunto WHERE entidad = 'incidencia' AND registro_id = :id
+                  AND (descripcion IS NULL OR descripcion NOT IN (:reporte))
+                ORDER BY id
+                """,
+                Map.of("id", id, "reporte", FOTOS_DE_REPORTE),
+                (rs, n) -> new FotoEvidencia(rs.getLong("id"), url(rs.getLong("id"))));
+    }
+
+    /** Quién la atendió y cuándo (la última transición a Atendida), si está Atendida o Cerrada. */
+    private Atencion atencion(long id, String estado) {
+        if (!Set.of("Atendida", "Cerrada").contains(estado)) {
+            return null;
+        }
+        return jdbc
+                .query(
+                        """
+                        SELECT coalesce(u.nombre, 'Sistema') autor, h.fecha_hora
+                        FROM mod03_historial_incidencia h LEFT JOIN core_usuario u ON u.id = h.usuario_id
+                        WHERE h.incidencia_id = :id AND h.estado = 'Atendida'
+                        ORDER BY h.fecha_hora DESC, h.id DESC LIMIT 1
+                        """,
+                        Map.of("id", id),
+                        (rs, n) ->
+                                new Atencion(
+                                        rs.getString("autor"),
+                                        instante(rs, "fecha_hora"),
+                                        null,
+                                        evidencias(id)))
+                .stream()
+                .findFirst()
+                .orElse(new Atencion(null, null, null, evidencias(id)));
+    }
+
+    private static Cierre cierre(long id, String estado, ResultSet rs) throws SQLException {
+        Long minutos = rs.getObject("minutos_cierre", Long.class);
+        if (!"Cerrada".equals(estado) || minutos == null) {
+            return null;
+        }
+        return new Cierre(minutos, rs.getString("reportado_por"));
     }
 
     /** El id de la fila activa con ese valor; 400 con el código dado si no la hay. */
@@ -507,7 +610,8 @@ public class Incidencias {
                 rs.getString("canal"),
                 instante(rs, "fecha_registro"),
                 instante(rs, "fecha_cierre"),
-                rs.getString("responsable"));
+                rs.getString("responsable"),
+                rs.getObject("minutos_cierre", Long.class));
     }
 
     static OffsetDateTime instante(ResultSet rs, String columna) throws SQLException {
