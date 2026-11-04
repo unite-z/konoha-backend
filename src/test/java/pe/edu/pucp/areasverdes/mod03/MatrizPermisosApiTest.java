@@ -36,6 +36,8 @@ class MatrizPermisosApiTest extends ApiPlanificacion {
                     "restricciones/?desde=2027-01-01&hasta=2027-01-31",
                     "programaciones/?desde=2027-01-01&hasta=2027-01-31",
                     "servicios/",
+                    "incidencias/catalogos-registro/",
+                    "incidencias/mias/",
                     "servicios/1/historial/",
                     "calendario-cuadrilla/?desde=2027-01-01&hasta=2027-01-31");
 
@@ -91,6 +93,7 @@ class MatrizPermisosApiTest extends ApiPlanificacion {
                 post(RUTA + "programaciones/1/cancelacion/")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"motivo\": \"Lluvia\"}"),
+                get(RUTA + "incidencias/"),
                 post(RUTA + "alertas/1/motivo/")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"motivo\": \"Lluvia\"}"));

@@ -6,7 +6,8 @@ package pe.edu.pucp.areasverdes.mod03;
  * <ul>
  *   <li>consultar: los cuatro roles, también el capataz (RF-PLA-007);
  *   <li>gestionar (configurar, restricciones, programar, interrupción y traslado): el jefe;
- *   <li>registrar la limpieza del ciclo de corte: jefe, ingeniero y practicante (RF-COR-006).
+ *   <li>registrar la limpieza del ciclo de corte: jefe, ingeniero y practicante (RF-COR-006);
+ *   <li>reportar incidencias: los cuatro roles; gestionarlas desde la oficina: el jefe.
  * </ul>
  */
 final class Acceso {
@@ -14,6 +15,8 @@ final class Acceso {
     static final String CONSULTAR = "PLA.PLANIFICACION.CONSULTAR";
     static final String GESTIONAR = "PLA.PLANIFICACION.GESTIONAR";
     static final String LIMPIEZA = "PLA.CORTE.LIMPIEZA";
+    static final String REGISTRAR_INCIDENCIA = "PLA.INCIDENCIA.REGISTRAR";
+    static final String CLASIFICAR_INCIDENCIA = "PLA.INCIDENCIA.CLASIFICAR";
 
     private Acceso() {}
 
@@ -28,6 +31,16 @@ final class Acceso {
     /** Lo aplica el registro de la limpieza del ciclo de corte (AV-262). */
     static void registrarLimpieza(UsuarioPlanificacion usuario) {
         exigir(usuario, LIMPIEZA);
+    }
+
+    /** Reportar y seguir las propias: los cuatro roles (HU-020, AV-274). */
+    static void registrarIncidencia(UsuarioPlanificacion usuario) {
+        exigir(usuario, REGISTRAR_INCIDENCIA);
+    }
+
+    /** La bandeja y la ficha de la oficina: el jefe, hasta los permisos propios de AV-281. */
+    static void gestionarIncidencias(UsuarioPlanificacion usuario) {
+        exigir(usuario, CLASIFICAR_INCIDENCIA);
     }
 
     private static void exigir(UsuarioPlanificacion usuario, String permiso) {

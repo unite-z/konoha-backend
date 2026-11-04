@@ -1,0 +1,196 @@
+package pe.edu.pucp.areasverdes.mod03;
+
+import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.matchesPattern;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.util.Base64;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.web.servlet.ResultActions;
+
+/** Registro, bandeja y seguimiento de incidencias (AV-274, RF-INC-001, HU-020 y CU-020). */
+class IncidenciasApiTest extends ApiPlanificacion {
+
+    static final String RUTA = "/api/v1/planificacion/incidencias/";
+
+    @Autowired ObjectMapper json;
+
+    /** Las fotos de prueba, fuera del repo. */
+    @DynamicPropertySource
+    static void archivos(DynamicPropertyRegistry p) throws IOException {
+        String carpeta = Files.createTempDirectory("incidencias-").toString();
+        p.add("mod05.archivos", () -> carpeta);
+    }
+
+    /** PNG de 1 × 1. */
+    static final byte[] PNG =
+            Base64.getDecoder()
+                    .decode(
+                            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
+
+    @BeforeEach
+    void espacio() {
+        var sql = jdbc.getJdbcTemplate();
+        long sector =
+                sql.queryForObject(
+                        "INSERT INTO mod02_sector (nombre, usuario_creacion_id,"
+                            + " usuario_modificacion_id) VALUES ('Sociales', 1, 1) RETURNING id",
+                        Long.class);
+        long area =
+                sql.queryForObject(
+                        "INSERT INTO mod02_area_verde (nombre, lugar, ubicacion, superficie_m2,"
+                                + " usuario_creacion_id, usuario_modificacion_id) VALUES ('Jardín"
+                                + " de la Biblioteca', 'Biblioteca', 'Campus', 120, 1, 1)"
+                                + " RETURNING id",
+                        Long.class);
+        sql.update(
+                "INSERT INTO mod02_historial_area_sector (area_verde_id, sector_id, usuario_id)"
+                        + " VALUES (?, ?, 1)",
+                area,
+                sector);
+        sql.update("INSERT INTO mod02_ejemplar (codigo) VALUES ('T-0412') ON CONFLICT DO NOTHING");
+    }
+
+    static String cuerpo(String canal, String reportante) {
+        return ("{\"canal\": \"%s\", \"tipo\": \"Rama caída\", \"reportado_por\": %s,"
+                        + " \"espacio\": \"Jardín de la Biblioteca\", \"ejemplar\": \"T-0412\","
+                        + " \"descripcion\": \"Rama grande sobre el paso\"}")
+                .formatted(canal, reportante);
+    }
+
+    ResultActions registrar(String usuario, String json) throws Exception {
+        return http.perform(
+                post(RUTA)
+                        .with(httpBasic(usuario, CLAVE))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json));
+    }
+
+    ResultActions registrarConFoto(String usuario, String json, UUID clave) throws Exception {
+        var peticion =
+                multipart(RUTA)
+                        .file(new MockMultipartFile("foto", "rama.png", "image/png", PNG))
+                        .param("datos", json)
+                        .with(httpBasic(usuario, CLAVE));
+        if (clave != null) {
+            peticion.header("Idempotency-Key", clave.toString());
+        }
+        return http.perform(peticion);
+    }
+
+    @Test
+    void laOficinaRegistraEnNombreDeUnaPersonaExterna() throws Exception {
+        registrar("jefe", cuerpo("Telefono", "{\"nombre\": \"Ana Quispe\", \"contacto\": \"999\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.codigo").value(matchesPattern("INC-\\d{4}-\\d{3}")))
+                .andExpect(jsonPath("$.estado").value("Registrada"))
+                .andExpect(jsonPath("$.canal").value("Telefono"))
+                .andExpect(jsonPath("$.tipo_sencilla").value(true))
+                .andExpect(jsonPath("$.espacio").value("Jardín de la Biblioteca"))
+                .andExpect(jsonPath("$.zona").value("Sociales"))
+                .andExpect(jsonPath("$.ejemplar.codigo").value("T-0412"))
+                .andExpect(jsonPath("$.reportado_por").value("Ana Quispe"))
+                .andExpect(jsonPath("$.foto_url").isEmpty())
+                .andExpect(jsonPath("$.historial[0].texto").value("Registrada · jefe"));
+    }
+
+    @Test
+    void desdeLaAppLaFotoEsObligatoria() throws Exception {
+        registrar("ingeniero", cuerpo("App", "{\"usuario_id\": 2}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.codigo").value("foto-obligatoria"));
+        registrarConFoto("ingeniero", cuerpo("App", "{\"usuario_id\": 2}"), null)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.reportado_por").value("ingeniero"))
+                .andExpect(
+                        jsonPath("$.foto_url")
+                                .value(matchesPattern("/api/v1/core/adjuntos/\\d+/contenido/")));
+    }
+
+    @Test
+    void validaTipoEspacioYReportante() throws Exception {
+        registrar("jefe", cuerpo("Telefono", "{\"nombre\": \" \"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.codigo").value("reportante-requerido"));
+        registrar("jefe", cuerpo("Fax", "{\"nombre\": \"Ana\"}"))
+                .andExpect(jsonPath("$.codigo").value("canal-invalido"));
+        registrar(
+                        "jefe",
+                        cuerpo("Telefono", "{\"nombre\": \"Ana\"}")
+                                .replace("Jardín de la Biblioteca", "Otro jardín"))
+                .andExpect(jsonPath("$.codigo").value("espacio-invalido"));
+        registrar("sinrol", cuerpo("Telefono", "{\"nombre\": \"Ana\"}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void elMismoEnvioDiferidoNoDuplica() throws Exception {
+        UUID clave = UUID.randomUUID();
+        String json = cuerpo("App", "{\"usuario_id\": 2}");
+        String primera =
+                registrarConFoto("ingeniero", json, clave)
+                        .andExpect(status().isCreated())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+        String segunda =
+                registrarConFoto("ingeniero", json, clave)
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+        assertEquals(primera, segunda);
+        assertEquals(
+                1,
+                jdbc.getJdbcTemplate()
+                        .queryForObject("SELECT count(*) FROM mod03_incidencia", Integer.class));
+    }
+
+    @Test
+    void bandejaDelJefeYSeguimientoDelReportante() throws Exception {
+        registrarConFoto("ingeniero", cuerpo("App", "{\"usuario_id\": 2}"), null);
+        registrar("jefe", cuerpo("Telefono", "{\"nombre\": \"Ana\"}"));
+        http.perform(get(RUTA).with(httpBasic("jefe", CLAVE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2));
+        http.perform(get(RUTA).with(httpBasic("ingeniero", CLAVE)))
+                .andExpect(status().isForbidden());
+        String mias =
+                http.perform(get(RUTA + "mias/").with(httpBasic("ingeniero", CLAVE)))
+                        .andExpect(jsonPath("$.length()").value(1))
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+        long id = json.readTree(mias).get(0).get("id").asLong();
+        http.perform(get(RUTA + "mias/" + id + "/").with(httpBasic("ingeniero", CLAVE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.pasos[0].estado").value("Registrada"))
+                .andExpect(jsonPath("$.minutos_cierre").isEmpty());
+        http.perform(get(RUTA + "mias/" + id + "/").with(httpBasic("practicante", CLAVE)))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void elCatalogoTraeTiposEspaciosYUsuarios() throws Exception {
+        http.perform(get(RUTA + "catalogos-registro/").with(httpBasic("practicante", CLAVE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tipos").value(hasItem("Rama caída")))
+                .andExpect(jsonPath("$.espacios[0].nombre").value("Jardín de la Biblioteca"))
+                .andExpect(jsonPath("$.usuarios").isArray());
+    }
+}
