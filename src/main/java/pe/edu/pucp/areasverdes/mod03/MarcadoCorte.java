@@ -82,8 +82,13 @@ public class MarcadoCorte {
             if (!jardines.isEmpty()) {
                 String servicio = (String) ciclo.get("servicio");
                 LocalDate inicio = ((java.sql.Date) ciclo.get("inicio")).toLocalDate();
+                // El código del ciclo (AV-364); los creados fuera de la api no lo tienen.
+                String codigo =
+                        ciclo.get("codigo") == null
+                                ? codigo(servicio, inicio)
+                                : (String) ciclo.get("codigo");
                 return new RespuestaRutaDeHoy(
-                        new RutaDeHoy(programacion, codigo(servicio, inicio), servicio, jardines));
+                        new RutaDeHoy(programacion, codigo, servicio, jardines));
             }
         }
         return new RespuestaRutaDeHoy(null);
@@ -292,7 +297,7 @@ public class MarcadoCorte {
     private List<Map<String, Object>> ciclosDeHoy() {
         return jdbc.queryForList(
                 """
-                SELECT p.id, t.nombre servicio, p.fecha_inicio_prevista inicio
+                SELECT p.id, p.codigo, t.nombre servicio, p.fecha_inicio_prevista inicio
                 FROM mod03_programacion_servicio p JOIN mod05_tiposervicio t ON t.id = p.tipo_servicio_id
                 WHERE p.estado IN ('Programada', 'EnCurso')
                   AND CAST(:hoy AS date) BETWEEN p.fecha_inicio_prevista AND p.fecha_fin_prevista
@@ -316,7 +321,10 @@ public class MarcadoCorte {
         }
     }
 
-    /** «CC-2026-11»: iniciales del servicio, año y mes del inicio (hasta el código de AV-364). */
+    /**
+     * Código de respaldo de un ciclo sin el de AV-364 (creado fuera de la api): iniciales del
+     * servicio, año y mes del inicio.
+     */
     static String codigo(String servicio, LocalDate inicio) {
         StringBuilder iniciales = new StringBuilder();
         for (String palabra : servicio.split("[\\s·.]+")) {
