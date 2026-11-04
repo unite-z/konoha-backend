@@ -10,6 +10,7 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -49,13 +50,16 @@ public class InterrupcionesCorte {
             String motivo,
             int minutosDescontados,
             boolean avisoProveedor,
-            boolean registradaComoRestriccion) {}
+            boolean registradaComoRestriccion,
+            Long avisoId) {}
 
     private final NamedParameterJdbcTemplate jdbc;
+    private final Avisos avisos;
     private final Clock reloj;
 
-    public InterrupcionesCorte(NamedParameterJdbcTemplate jdbc, Clock reloj) {
+    public InterrupcionesCorte(NamedParameterJdbcTemplate jdbc, Avisos avisos, Clock reloj) {
         this.jdbc = jdbc;
+        this.avisos = avisos;
         this.reloj = reloj;
     }
 
@@ -151,7 +155,56 @@ public class InterrupcionesCorte {
                                 .addValue("restriccion", registrada)
                                 .addValue("usuario", usuario.id()),
                         Long.class);
+        if (n.avisoProveedor()) {
+            avisar(programacion, id, n, hora);
+        }
         return de(programacion).stream().filter(i -> i.id() == id).findFirst().orElseThrow();
+    }
+
+    /**
+     * AV-264: avisa a quien ejecuta el corte, el proveedor o, con personal propio, el capataz de la
+     * cuadrilla, y deja el aviso en la interrupción.
+     */
+    private void avisar(
+            long programacion, long interrupcion, NuevaInterrupcion n, OffsetDateTime hora) {
+        Map<String, Object> ciclo =
+                jdbc.queryForMap(
+                        """
+                        SELECT p.proveedor_id, cp.usuario_id capataz
+                        FROM mod03_programacion_servicio p
+                        LEFT JOIN mod04_cuadrilla c ON c.id = p.cuadrilla_id
+                        LEFT JOIN mod04_personal cp ON cp.id = c.capataz_id
+                        WHERE p.id = :id
+                        """,
+                        Map.of("id", programacion));
+        String texto =
+                "Corte detenido en %s a las %s y trasladado a %s: %s"
+                        .formatted(
+                                n.zonaAfectada(),
+                                DateTimeFormatter.ofPattern("HH:mm").format(hora),
+                                n.zonaAlternativa(),
+                                n.motivo().trim());
+        Long aviso = null;
+        if (ciclo.get("proveedor_id") != null) {
+            aviso =
+                    avisos.aProveedor(
+                            ((Number) ciclo.get("proveedor_id")).longValue(),
+                            texto,
+                            "interrupcion",
+                            interrupcion);
+        } else if (ciclo.get("capataz") != null) {
+            aviso =
+                    avisos.aUsuario(
+                            ((Number) ciclo.get("capataz")).longValue(),
+                            texto,
+                            "interrupcion",
+                            interrupcion);
+        }
+        if (aviso != null) {
+            jdbc.update(
+                    "UPDATE mod03_interrupcion_corte SET aviso_id = :aviso WHERE id = :id",
+                    Map.of("aviso", aviso, "id", interrupcion));
+        }
     }
 
     /** Las interrupciones del ciclo, de la más antigua a la más reciente. */
@@ -172,7 +225,8 @@ public class InterrupcionesCorte {
                                 rs.getString("motivo"),
                                 rs.getInt("minutos_descontados"),
                                 rs.getBoolean("aviso_proveedor"),
-                                rs.getBoolean("registrada_como_restriccion")));
+                                rs.getBoolean("registrada_como_restriccion"),
+                                rs.getObject("aviso_id", Long.class)));
     }
 
     /** Días descontados del ciclo: los minutos de las interrupciones en medias jornadas de 8 h. */
