@@ -92,8 +92,28 @@ public class ExportacionesService {
                             "mod03_incidencia",
                             "PLA.INCIDENCIA.REGISTRAR",
                             "Incidencias",
-                            List.of(new Columna("id", "Id")),
-                            "SELECT id FROM mod03_incidencia ORDER BY id DESC"),
+                            List.of(
+                                    new Columna("codigo", "Código"),
+                                    new Columna("tipo", "Tipo"),
+                                    new Columna("espacio", "Espacio"),
+                                    new Columna("estado", "Estado"),
+                                    new Columna("severidad", "Severidad"),
+                                    new Columna("canal", "Canal"),
+                                    new Columna("registro", "Registro"),
+                                    new Columna("cierre", "Cierre")),
+                            // Sin el reportante ni su contacto: son datos personales (RNF-008).
+                            """
+                            SELECT i.codigo, t.nombre tipo, a.nombre espacio, i.estado, i.severidad,
+                                i.canal,
+                                to_char(i.fecha_registro AT TIME ZONE 'America/Lima',
+                                    'YYYY-MM-DD HH24:MI') registro,
+                                to_char(i.fecha_cierre AT TIME ZONE 'America/Lima',
+                                    'YYYY-MM-DD HH24:MI') cierre
+                            FROM mod03_incidencia i
+                            JOIN mod03_tipo_incidencia t ON t.id = i.tipo_incidencia_id
+                            JOIN mod02_area_verde a ON a.id = i.area_verde_id
+                            ORDER BY i.fecha_registro DESC, i.id DESC
+                            """),
                     "ejemplares",
                     new Listado(
                             "mod02_ejemplar",

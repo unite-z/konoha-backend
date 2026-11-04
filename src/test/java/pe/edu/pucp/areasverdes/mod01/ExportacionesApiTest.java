@@ -81,7 +81,7 @@ class ExportacionesApiTest extends ApiCore {
 
     @Test
     void lasColumnasNoIncluyenImportesNiDatosPersonales() throws Exception {
-        for (String tipo : List.of("actividades", "atenciones", "ejemplares")) {
+        for (String tipo : List.of("actividades", "atenciones", "ejemplares", "incidencias")) {
             Row cabecera = filas(exportar(tipo, "jefe").getContentAsByteArray()).get(0);
             for (int c = 0; c < cabecera.getCellCount(); c++) {
                 String texto = cabecera.getCellText(c).toLowerCase();
@@ -91,10 +91,9 @@ class ExportacionesApiTest extends ApiCore {
     }
 
     @Test
-    void siElModuloNoEstaDisponibleRespondeConflictoSinInventarDatos() throws Exception {
-        http.perform(get("/api/v1/core/exportaciones/incidencias/").cookie(sesion("jefe")))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.codigo").value("entidad-no-disponible"));
+    void lasIncidenciasSeExportanConLasDeMod03() throws Exception {
+        assertEquals(200, exportar("incidencias", "jefe").getStatus());
+        assertEquals(200, exportar("incidencias", "capataz").getStatus());
     }
 
     @Test

@@ -1,0 +1,441 @@
+package pe.edu.pucp.areasverdes.mod03;
+
+import static pe.edu.pucp.areasverdes.AreasVerdesApplication.LIMA;
+
+import com.fasterxml.jackson.annotation.JsonUnwrapped;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.time.Duration;
+import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+import pe.edu.pucp.areasverdes.mod01.servicios.AdjuntosService;
+import pe.edu.pucp.areasverdes.mod01.servicios.UsuarioSesion;
+
+/**
+ * Incidencias de MOD-03 (AV-274, RF-INC-001, HU-020 y CU-020): registro desde la app o desde la
+ * oficina en nombre de otra persona, la bandeja, la ficha y las propias del reportante. La foto va
+ * a los adjuntos de MOD-01 (entidad {@code incidencia}).
+ */
+@Service
+public class Incidencias {
+
+    static final Set<String> CANALES =
+            Set.of("App", "Web", "Telefono", "WhatsApp", "Correo", "Presencial");
+
+    /** Quién la reporta: un usuario del sistema o una persona externa con nombre y contacto. */
+    public record Reportante(
+            Long usuarioId,
+            @Size(max = 120, message = "Máximo 120 caracteres") String nombre,
+            @Size(max = 120, message = "Máximo 120 caracteres") String contacto) {}
+
+    public record NuevaIncidencia(
+            @NotBlank(message = "Indica el canal") String canal,
+            @NotBlank(message = "Indica el tipo") String tipo,
+            @NotNull(message = "Indica quién la reporta") @Valid Reportante reportadoPor,
+            @NotBlank(message = "Indica el espacio") String espacio,
+            String ejemplar,
+            @Size(max = 300, message = "Máximo 300 caracteres") String descripcion) {}
+
+    /** Fila de la bandeja y de «Mis incidencias». {@code responsable}: capataz o proveedor. */
+    public record Resumen(
+            long id,
+            String codigo,
+            String tipo,
+            boolean tipoSencilla,
+            String espacio,
+            String severidad,
+            String via,
+            String estado,
+            String canal,
+            OffsetDateTime fechaRegistro,
+            OffsetDateTime fechaCierre,
+            String responsable) {}
+
+    public record Ejemplar(String codigo, String especie, Double alturaM) {}
+
+    /** Una transición: «Registrada · Ana Q.», de la más reciente a la más antigua. */
+    public record Evento(String texto, OffsetDateTime fechaHora) {}
+
+    /** La ficha: la fila de la bandeja con la ubicación, el ejemplar, la foto y el historial. */
+    public record Detalle(
+            @JsonUnwrapped Resumen resumen,
+            String zona,
+            String descripcion,
+            Ejemplar ejemplar,
+            String reportadoPor,
+            String impacto,
+            String fotoUrl,
+            List<Evento> historial) {}
+
+    public record Espacio(String nombre, List<String> ejemplares) {}
+
+    public record UsuarioCatalogo(long id, String nombre) {}
+
+    /** Lo que necesita el formulario de registro (AV-285 y AV-282). */
+    public record Catalogos(
+            List<String> tipos,
+            List<Espacio> espacios,
+            List<UsuarioCatalogo> usuarios,
+            String espacioSugerido) {}
+
+    public record Paso(String estado, OffsetDateTime fechaHora) {}
+
+    public record Evidencia(String url) {}
+
+    /** El seguimiento de una propia (Figma 391-8560). */
+    public record Seguimiento(
+            long id,
+            String codigo,
+            String tipo,
+            String estado,
+            Long minutosCierre,
+            List<Paso> pasos,
+            Evidencia evidencia) {}
+
+    static final Map<String, String> TEXTO_ESTADO =
+            Map.of(
+                    "Registrada", "Registrada",
+                    "Clasificada", "Clasificada",
+                    "DerivadaInterna", "Derivada · interna",
+                    "DerivadaTercerizada", "Derivada · tercerizada",
+                    "EnAtencion", "En atención",
+                    "Atendida", "Atendida",
+                    "Cerrada", "Cerrada",
+                    "Descartada", "Descartada");
+
+    static final String RESUMEN =
+            """
+            SELECT i.id, i.codigo, t.nombre tipo, t.sencilla tipo_sencilla, a.nombre espacio,
+                i.severidad, i.via, i.estado, i.canal, i.fecha_registro, i.fecha_cierre,
+                NULL responsable
+            FROM mod03_incidencia i
+            JOIN mod03_tipo_incidencia t ON t.id = i.tipo_incidencia_id
+            JOIN mod02_area_verde a ON a.id = i.area_verde_id
+            """;
+
+    private final NamedParameterJdbcTemplate jdbc;
+    private final AdjuntosService adjuntos;
+
+    public Incidencias(NamedParameterJdbcTemplate jdbc, AdjuntosService adjuntos) {
+        this.jdbc = jdbc;
+        this.adjuntos = adjuntos;
+    }
+
+    public Catalogos catalogos(UsuarioPlanificacion usuario) {
+        Acceso.registrarIncidencia(usuario);
+        List<String> tipos =
+                jdbc.queryForList(
+                        "SELECT nombre FROM mod03_tipo_incidencia WHERE activo ORDER BY id",
+                        Map.of(),
+                        String.class);
+        // Los ejemplares de MOD-02 aún apuntan al área de MOD-05: se cruzan por el nombre del área.
+        List<Espacio> espacios =
+                jdbc.query(
+                        """
+                        SELECT a.nombre, coalesce(array_agg(e.codigo ORDER BY e.codigo)
+                            FILTER (WHERE e.codigo IS NOT NULL), '{}') ejemplares
+                        FROM mod02_area_verde a
+                        LEFT JOIN mod05_areaverde v ON v.nombre = a.nombre
+                        LEFT JOIN mod02_ejemplar e ON e.area_verde_id = v.id
+                        WHERE a.activo GROUP BY a.id, a.nombre ORDER BY a.nombre
+                        """,
+                        (rs, n) ->
+                                new Espacio(
+                                        rs.getString("nombre"),
+                                        List.of((String[]) rs.getArray("ejemplares").getArray())));
+        List<UsuarioCatalogo> usuarios =
+                jdbc.query(
+                        "SELECT id, nombre FROM core_usuario WHERE activo ORDER BY nombre",
+                        (rs, n) -> new UsuarioCatalogo(rs.getLong("id"), rs.getString("nombre")));
+        return new Catalogos(tipos, espacios, usuarios, null);
+    }
+
+    /**
+     * Registra la incidencia (Registrada) y devuelve su id. Con la misma {@code clave} de un envío
+     * anterior (cola sin conexión) devuelve aquella sin crear otra. Desde la app la foto es
+     * obligatoria (CU-020); desde la oficina, opcional.
+     */
+    @Transactional
+    public long registrar(
+            NuevaIncidencia nueva, MultipartFile foto, UUID clave, UsuarioPlanificacion usuario) {
+        Acceso.registrarIncidencia(usuario);
+        if (clave != null) {
+            List<Long> previa =
+                    jdbc.queryForList(
+                            "SELECT id FROM mod03_incidencia WHERE clave_idempotencia = :c",
+                            Map.of("c", clave),
+                            Long.class);
+            if (!previa.isEmpty()) {
+                return previa.getFirst();
+            }
+        }
+        if (!CANALES.contains(nueva.canal())) {
+            throw new ErrorPlanificacion(400, "canal-invalido", "Ese canal no existe");
+        }
+        long tipo = idDe("mod03_tipo_incidencia", "nombre", nueva.tipo(), "tipo-invalido");
+        long area = idDe("mod02_area_verde", "nombre", nueva.espacio(), "espacio-invalido");
+        Long ejemplar =
+                nueva.ejemplar() == null || nueva.ejemplar().isBlank()
+                        ? null
+                        : idDe("mod02_ejemplar", "codigo", nueva.ejemplar(), "ejemplar-invalido");
+        Reportante r = nueva.reportadoPor();
+        if (r.usuarioId() != null) {
+            if (jdbc.queryForObject(
+                            "SELECT count(*) FROM core_usuario WHERE id = :id AND activo",
+                            Map.of("id", r.usuarioId()),
+                            Integer.class)
+                    == 0) {
+                throw new ErrorPlanificacion(
+                        400, "reportante-invalido", "No existe ese usuario del sistema");
+            }
+        } else if (r.nombre() == null || r.nombre().isBlank()) {
+            throw new ErrorPlanificacion(
+                    400, "reportante-requerido", "Escribe el nombre de quien la reporta");
+        }
+        if ("App".equals(nueva.canal()) && (foto == null || foto.isEmpty())) {
+            throw new ErrorPlanificacion(400, "foto-obligatoria", "Añade una foto");
+        }
+        var datos =
+                new MapSqlParameterSource()
+                        .addValue("tipo", tipo)
+                        .addValue("area", area)
+                        .addValue("ejemplar", ejemplar)
+                        .addValue(
+                                "descripcion",
+                                nueva.descripcion() == null ? "" : nueva.descripcion().trim())
+                        .addValue("canal", nueva.canal())
+                        .addValue("reportante", r.usuarioId())
+                        .addValue("nombre", r.usuarioId() == null ? r.nombre().trim() : null)
+                        .addValue(
+                                "contacto",
+                                r.usuarioId() == null && r.contacto() != null
+                                        ? r.contacto().trim()
+                                        : null)
+                        .addValue("usuario", usuario.id())
+                        .addValue("clave", clave);
+        long id =
+                jdbc.queryForObject(
+                        """
+                        INSERT INTO mod03_incidencia (codigo, tipo_incidencia_id, area_verde_id,
+                            ejemplar_id, descripcion, canal, reportante_usuario_id, reportante_nombre,
+                            reportante_contacto, registrada_por_id, clave_idempotencia)
+                        VALUES ('INC-' || to_char(now() AT TIME ZONE 'America/Lima', 'YYYY') || '-'
+                                || lpad(nextval('mod03_incidencia_numero_seq')::text, 3, '0'),
+                            :tipo, :area, :ejemplar, :descripcion, :canal, :reportante, :nombre,
+                            :contacto, :usuario, :clave)
+                        RETURNING id
+                        """,
+                        datos,
+                        Long.class);
+        jdbc.update(
+                "INSERT INTO mod03_historial_incidencia (incidencia_id, estado, usuario_id) VALUES"
+                        + " (:id, 'Registrada', :usuario)",
+                Map.of("id", id, "usuario", usuario.id()));
+        if (foto != null && !foto.isEmpty()) {
+            adjuntos.subir(
+                    "incidencia",
+                    id,
+                    clave != null ? clave : UUID.randomUUID(),
+                    "Foto del reporte",
+                    foto,
+                    comoSesion(usuario));
+        }
+        return id;
+    }
+
+    /** La bandeja de la oficina, de la más reciente a la más antigua. */
+    public List<Resumen> bandeja(UsuarioPlanificacion usuario) {
+        Acceso.gestionarIncidencias(usuario);
+        return jdbc.query(
+                RESUMEN + " ORDER BY i.fecha_registro DESC, i.id DESC", Incidencias::resumen);
+    }
+
+    /** Las que reportó el usuario (HU-024). */
+    public List<Resumen> mias(UsuarioPlanificacion usuario) {
+        Acceso.registrarIncidencia(usuario);
+        return jdbc.query(
+                RESUMEN
+                        + " WHERE i.reportante_usuario_id = :usuario"
+                        + " ORDER BY i.fecha_registro DESC, i.id DESC",
+                Map.of("usuario", usuario.id()),
+                Incidencias::resumen);
+    }
+
+    public Detalle detalle(long id, UsuarioPlanificacion usuario) {
+        Acceso.gestionarIncidencias(usuario);
+        return ficha(id);
+    }
+
+    /** La ficha recién registrada, para quien la registró (aunque no gestione la bandeja). */
+    Detalle ficha(long id) {
+        List<Detalle> fichas =
+                jdbc.query(
+                        """
+                        SELECT r.*, s.nombre zona, i.descripcion, e.codigo ejemplar_codigo,
+                            coalesce(ev.nombre_comun, ev.nombre_cientifico) especie,
+                            coalesce(u.nombre, i.reportante_nombre) reportado_por, i.impacto
+                        FROM (%s WHERE i.id = :id) r
+                        JOIN mod03_incidencia i ON i.id = r.id
+                        LEFT JOIN mod02_historial_area_sector h ON h.area_verde_id = i.area_verde_id
+                            AND h.fecha_fin IS NULL
+                        LEFT JOIN mod02_sector s ON s.id = h.sector_id
+                        LEFT JOIN mod02_ejemplar e ON e.id = i.ejemplar_id
+                        LEFT JOIN mod02_especie_vegetal ev ON ev.id = e.especie_id
+                        LEFT JOIN core_usuario u ON u.id = i.reportante_usuario_id
+                        """
+                                .formatted(RESUMEN),
+                        Map.of("id", id),
+                        (rs, n) ->
+                                new Detalle(
+                                        resumen(rs, n),
+                                        rs.getString("zona"),
+                                        rs.getString("descripcion"),
+                                        rs.getString("ejemplar_codigo") == null
+                                                ? null
+                                                : new Ejemplar(
+                                                        rs.getString("ejemplar_codigo"),
+                                                        rs.getString("especie"),
+                                                        null),
+                                        rs.getString("reportado_por"),
+                                        rs.getString("impacto"),
+                                        fotoUrl(id),
+                                        historial(id)));
+        if (fichas.isEmpty()) {
+            throw new ErrorPlanificacion(
+                    404, "incidencia-no-encontrada", "No existe esa incidencia");
+        }
+        return fichas.getFirst();
+    }
+
+    /** El seguimiento de una que reportó el usuario; 404 si no es suya. */
+    public Seguimiento seguimiento(long id, UsuarioPlanificacion usuario) {
+        Acceso.registrarIncidencia(usuario);
+        List<Seguimiento> lista =
+                jdbc.query(
+                        """
+                        SELECT i.id, i.codigo, t.nombre tipo, i.estado, i.fecha_registro,
+                            i.fecha_cierre
+                        FROM mod03_incidencia i
+                        JOIN mod03_tipo_incidencia t ON t.id = i.tipo_incidencia_id
+                        WHERE i.id = :id AND i.reportante_usuario_id = :usuario
+                        """,
+                        Map.of("id", id, "usuario", usuario.id()),
+                        (rs, n) -> {
+                            OffsetDateTime registro = instante(rs, "fecha_registro");
+                            OffsetDateTime cierre = instante(rs, "fecha_cierre");
+                            return new Seguimiento(
+                                    rs.getLong("id"),
+                                    rs.getString("codigo"),
+                                    rs.getString("tipo"),
+                                    rs.getString("estado"),
+                                    cierre == null
+                                            ? null
+                                            : Duration.between(registro, cierre).toMinutes(),
+                                    pasos(id),
+                                    null);
+                        });
+        if (lista.isEmpty()) {
+            throw new ErrorPlanificacion(
+                    404, "incidencia-no-encontrada", "No existe esa incidencia");
+        }
+        return lista.getFirst();
+    }
+
+    private List<Evento> historial(long id) {
+        return jdbc.query(
+                """
+                SELECT h.estado, h.fecha_hora, coalesce(u.nombre, 'Sistema') autor, h.detalle
+                FROM mod03_historial_incidencia h LEFT JOIN core_usuario u ON u.id = h.usuario_id
+                WHERE h.incidencia_id = :id ORDER BY h.fecha_hora DESC, h.id DESC
+                """,
+                Map.of("id", id),
+                (rs, n) ->
+                        new Evento(
+                                TEXTO_ESTADO.getOrDefault(
+                                                rs.getString("estado"), rs.getString("estado"))
+                                        + " · "
+                                        + rs.getString("autor")
+                                        + (rs.getString("detalle") == null
+                                                ? ""
+                                                : " (" + rs.getString("detalle") + ")"),
+                                instante(rs, "fecha_hora")));
+    }
+
+    private List<Paso> pasos(long id) {
+        return jdbc.query(
+                """
+                SELECT estado, fecha_hora FROM mod03_historial_incidencia
+                WHERE incidencia_id = :id ORDER BY fecha_hora DESC, id DESC
+                """,
+                Map.of("id", id),
+                (rs, n) -> new Paso(rs.getString("estado"), instante(rs, "fecha_hora")));
+    }
+
+    private String fotoUrl(long id) {
+        List<Long> fotos =
+                jdbc.queryForList(
+                        "SELECT id FROM core_adjunto WHERE entidad = 'incidencia' AND registro_id ="
+                                + " :id ORDER BY id LIMIT 1",
+                        Map.of("id", id),
+                        Long.class);
+        return fotos.isEmpty() ? null : "/api/v1/core/adjuntos/" + fotos.getFirst() + "/contenido/";
+    }
+
+    /** El id de la fila activa con ese valor; 400 con el código dado si no la hay. */
+    private long idDe(String tabla, String columna, String valor, String codigo) {
+        String activo = "mod02_ejemplar".equals(tabla) ? "" : " AND activo";
+        List<Long> ids =
+                jdbc.queryForList(
+                        "SELECT id FROM "
+                                + tabla
+                                + " WHERE "
+                                + columna
+                                + " = :v"
+                                + activo
+                                + " ORDER BY id LIMIT 1",
+                        Map.of("v", valor.trim()),
+                        Long.class);
+        if (ids.isEmpty()) {
+            throw new ErrorPlanificacion(400, codigo, "No existe «" + valor.trim() + "»");
+        }
+        return ids.getFirst();
+    }
+
+    /** Los adjuntos de MOD-01 piden el usuario de la sesión: el mismo id y sus permisos. */
+    private static UsuarioSesion comoSesion(UsuarioPlanificacion u) {
+        return new UsuarioSesion(u.id(), "", u.nombre(), "", "", u.permisos(), false, 0L);
+    }
+
+    static Resumen resumen(ResultSet rs, int n) throws SQLException {
+        return new Resumen(
+                rs.getLong("id"),
+                rs.getString("codigo"),
+                rs.getString("tipo"),
+                rs.getBoolean("tipo_sencilla"),
+                rs.getString("espacio"),
+                rs.getString("severidad"),
+                rs.getString("via"),
+                rs.getString("estado"),
+                rs.getString("canal"),
+                instante(rs, "fecha_registro"),
+                instante(rs, "fecha_cierre"),
+                rs.getString("responsable"));
+    }
+
+    static OffsetDateTime instante(ResultSet rs, String columna) throws SQLException {
+        OffsetDateTime valor = rs.getObject(columna, OffsetDateTime.class);
+        return valor == null ? null : valor.atZoneSameInstant(LIMA).toOffsetDateTime();
+    }
+}

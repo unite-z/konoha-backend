@@ -95,7 +95,8 @@ class EvidenciasApiTest extends ApiCore {
     }
 
     @Test
-    void elCapatazNoAdjuntaAlInventarioYUnaEntidadSinModuloNoAdmiteAdjuntos() throws Exception {
+    void elCapatazNoAdjuntaAlInventarioYUnaIncidenciaQueNoExisteNoAdmiteAdjuntos()
+            throws Exception {
         adjuntar(sesion("capataz"), ejemplar, UUID.randomUUID(), PNG)
                 .andExpect(status().isForbidden());
         http.perform(
@@ -106,8 +107,7 @@ class EvidenciasApiTest extends ApiCore {
                                 .header("Idempotency-Key", UUID.randomUUID().toString())
                                 .cookie(sesion("jefe"))
                                 .with(csrf()))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.codigo").value("entidad-no-disponible"));
+                .andExpect(status().isNotFound());
     }
 
     @Test
