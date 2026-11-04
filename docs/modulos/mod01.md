@@ -66,6 +66,16 @@ Todos bajo `/api/v1/core/`, con y sin barra final. Errores en `{codigo, detalle}
 | `POST importaciones/{id}/confirmar/` | Según el tipo | Vuelve a clasificar y aplica las altas y actualizaciones en una transacción. `Revisar` y `Error` no se incorporan. 409 `importacion-ya-confirmada` |
 | `GET repositorio/?tipo=&q=&page=` | Los cuatro roles | `tipo`: `jardin`, `especie`, `sector` o `servicio`. `disponible: false` si la tabla del dueño aún no existe |
 
+Columnas de cada tipo de importación (sin distinguir mayúsculas; con `*`, obligatorias):
+
+| Tipo | Permiso | Clave | Columnas |
+|---|---|---|---|
+| `catastro` | `INV.INVENTARIO.REGISTRAR` | Código de catastro | Código de catastro\*, Especie\*, Referencia de catastro, Tipo de vegetación, Área verde, Ubicación, Cantidad |
+| `inventario` | `INV.INVENTARIO.REGISTRAR` | Nombre y lugar | Nombre\*, Lugar\*, Ubicación\*, Superficie (m²)\*, Cobertura, Tipo de uso |
+| `partes` | `CAM.PARTE.VERIFICAR` | Cuadrilla, fecha, hora, tipo y área | Cuadrilla\*, Fecha\*, Hora\*, Tipo de actividad\*, Área verde\*, Observaciones |
+
+La importación nunca crea catálogos: una especie, cobertura, cuadrilla o área que no exista es un error de esa fila. Los partes no incluyen participantes, que son datos personales y se registran en MOD-04.
+
 La matriz completa por rol está en `src/test/java/.../mod01/Mod01PermisosApiTest.java`. La prueba falla si un endpoint de MOD-01 no está en ella.
 
 Ejemplo de error:
