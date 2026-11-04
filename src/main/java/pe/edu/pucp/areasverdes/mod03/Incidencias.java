@@ -92,6 +92,10 @@ public class Incidencias {
 
     public record Paso(String estado, OffsetDateTime fechaHora) {}
 
+    /** Incidencia abierta que parece la misma (Figma 391-8469). */
+    public record PosibleDuplicado(
+            long id, String codigo, String tipo, String ejemplar, OffsetDateTime fechaRegistro) {}
+
     public record Evidencia(String url) {}
 
     /** El seguimiento de una propia (Figma 391-8560). */
@@ -253,6 +257,78 @@ public class Incidencias {
                     comoSesion(usuario));
         }
         return id;
+    }
+
+    /**
+     * HU-020 escenario 2: las abiertas (salvo Cerrada y Descartada) del mismo tipo en el mismo
+     * ejemplar o, sin ejemplar, en el mismo espacio.
+     */
+    public List<PosibleDuplicado> posiblesDuplicados(
+            String tipo, String espacio, String ejemplar, UsuarioPlanificacion usuario) {
+        Acceso.registrarIncidencia(usuario);
+        boolean conEjemplar = ejemplar != null && !ejemplar.isBlank();
+        return jdbc.query(
+                """
+                SELECT i.id, i.codigo, t.nombre tipo, e.codigo ejemplar, i.fecha_registro
+                FROM mod03_incidencia i
+                JOIN mod03_tipo_incidencia t ON t.id = i.tipo_incidencia_id
+                JOIN mod02_area_verde a ON a.id = i.area_verde_id
+                LEFT JOIN mod02_ejemplar e ON e.id = i.ejemplar_id
+                WHERE i.estado NOT IN ('Cerrada', 'Descartada') AND t.nombre = :tipo
+                  AND (CASE WHEN :conEjemplar THEN e.codigo = :ejemplar ELSE a.nombre = :espacio END)
+                ORDER BY i.fecha_registro DESC, i.id DESC
+                """,
+                new MapSqlParameterSource()
+                        .addValue("tipo", tipo == null ? "" : tipo.trim())
+                        .addValue("espacio", espacio == null ? "" : espacio.trim())
+                        .addValue("ejemplar", conEjemplar ? ejemplar.trim() : "")
+                        .addValue("conEjemplar", conEjemplar),
+                (rs, n) ->
+                        new PosibleDuplicado(
+                                rs.getLong("id"),
+                                rs.getString("codigo"),
+                                rs.getString("tipo"),
+                                rs.getString("ejemplar"),
+                                instante(rs, "fecha_registro")));
+    }
+
+    /** «Añadir a la existente»: suma la descripción y la foto a una incidencia abierta. */
+    @Transactional
+    public void sumarReporte(
+            long id, String descripcion, MultipartFile foto, UsuarioPlanificacion usuario) {
+        Acceso.registrarIncidencia(usuario);
+        List<String> estado =
+                jdbc.queryForList(
+                        "SELECT estado FROM mod03_incidencia WHERE id = :id FOR UPDATE",
+                        Map.of("id", id),
+                        String.class);
+        if (estado.isEmpty()) {
+            throw new ErrorPlanificacion(
+                    404, "incidencia-no-encontrada", "No existe esa incidencia");
+        }
+        if (Set.of("Cerrada", "Descartada").contains(estado.getFirst())) {
+            throw new ErrorPlanificacion(
+                    409,
+                    "incidencia-cerrada",
+                    "Esa incidencia ya está cerrada: repórtala de nuevo");
+        }
+        String texto = descripcion == null ? "" : descripcion.trim();
+        if (texto.length() > 300) {
+            throw new ErrorPlanificacion(400, "descripcion-larga", "Máximo 300 caracteres");
+        }
+        jdbc.update(
+                "INSERT INTO mod03_reporte_incidencia (incidencia_id, usuario_id, descripcion)"
+                        + " VALUES (:id, :usuario, :descripcion)",
+                Map.of("id", id, "usuario", usuario.id(), "descripcion", texto));
+        if (foto != null && !foto.isEmpty()) {
+            adjuntos.subir(
+                    "incidencia",
+                    id,
+                    UUID.randomUUID(),
+                    "Foto de otro reporte",
+                    foto,
+                    comoSesion(usuario));
+        }
     }
 
     /** La bandeja de la oficina, de la más reciente a la más antigua. */

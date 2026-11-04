@@ -89,6 +89,29 @@ public class IncidenciasController {
         return incidencias.ficha(incidencias.registrar(nueva, foto, clave, usuario));
     }
 
+    @Operation(summary = "Incidencias abiertas iguales: mismo tipo y mismo ejemplar o espacio")
+    @GetMapping({"/posibles-duplicados", "/posibles-duplicados/"})
+    public List<Incidencias.PosibleDuplicado> posiblesDuplicados(
+            UsuarioPlanificacion usuario,
+            @RequestParam String tipo,
+            @RequestParam(required = false) String espacio,
+            @RequestParam(required = false) String ejemplar) {
+        return incidencias.posiblesDuplicados(tipo, espacio, ejemplar, usuario);
+    }
+
+    @Operation(summary = "Suma un reporte (descripción y foto) a una incidencia abierta")
+    @PostMapping(
+            value = {"/{id:\\d+}/reportes", "/{id:\\d+}/reportes/"},
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void sumarReporte(
+            UsuarioPlanificacion usuario,
+            @PathVariable long id,
+            @RequestParam(required = false) String descripcion,
+            @RequestPart(name = "foto", required = false) MultipartFile foto) {
+        incidencias.sumarReporte(id, descripcion, foto, usuario);
+    }
+
     @Operation(summary = "Bandeja de incidencias de la oficina (jefe)")
     @GetMapping({"", "/"})
     public List<Resumen> bandeja(UsuarioPlanificacion usuario) {
