@@ -251,7 +251,8 @@ public class AlertasPlanificacion {
 
     /**
      * Ciclos en curso respecto a su duración máxima con limpieza: excedida (días de exceso) o a un
-     * día o menos de alcanzarla (días que faltan).
+     * día o menos de alcanzarla (días que faltan). Las jornadas completas detenidas por una
+     * interrupción (AV-258) no cuentan.
      */
     private static final String DURACION =
             """
@@ -260,7 +261,10 @@ public class AlertasPlanificacion {
                 CASE WHEN usados > total THEN usados - total ELSE total - usados END dias,
                 NULL proveedor, total maximo
             FROM (SELECT t.id servicio_id, t.nombre servicio, p.id programacion_id,
-                    CAST(:hoy AS date) - p.fecha_inicio_real + 1 usados,
+                    CAST(:hoy AS date) - p.fecha_inicio_real + 1
+                        - coalesce((SELECT sum(i.minutos_descontados) / 480
+                            FROM mod03_interrupcion_corte i WHERE i.programacion_id = p.id), 0)
+                        usados,
                     d.duracion_maxima_dias + coalesce(d.dias_limpieza, 0) total
                 FROM mod03_programacion_servicio p
                 JOIN mod05_tiposervicio t ON t.id = p.tipo_servicio_id
