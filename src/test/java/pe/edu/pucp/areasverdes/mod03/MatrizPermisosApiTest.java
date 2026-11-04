@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -94,6 +95,11 @@ class MatrizPermisosApiTest extends ApiPlanificacion {
                         .content(
                                 "{\"tipo_servicio_id\": 1, \"fecha_inicio_prevista\":"
                                     + " \"2027-01-11\", \"fecha_fin_prevista\": \"2027-01-12\"}"),
+                patch(RUTA + "programaciones/1/")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(
+                                "{\"fecha_inicio_prevista\": \"2027-01-11\","
+                                        + " \"fecha_fin_prevista\": \"2027-01-12\"}"),
                 post(RUTA + "programaciones/1/cancelacion/")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"motivo\": \"Lluvia\"}"),
