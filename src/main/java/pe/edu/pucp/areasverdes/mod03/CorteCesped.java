@@ -49,12 +49,13 @@ public class CorteCesped {
     /**
      * El ciclo con su ruta y sus jornadas de limpieza. {@code dias_corte} son los días con marcas;
      * {@code cumple}, si días de corte más limpieza no pasan de la duración máxima más limpieza
-     * (RN-002, 3 + 1). Las interrupciones llegan con AV-258.
+     * (RN-002, 3 + 1). Las interrupciones (AV-258) descuentan días y dejan detenidos los jardines
+     * pendientes de su zona.
      */
     public record CicloCorte(
             long programacionId,
             List<JardinRuta> jardines,
-            List<Object> interrupciones,
+            List<InterrupcionesCorte.Interrupcion> interrupciones,
             List<Limpieza> limpiezas,
             double diasInterrupcionDescontados,
             int diasCorte,
@@ -90,10 +91,13 @@ public class CorteCesped {
             """;
 
     private final NamedParameterJdbcTemplate jdbc;
+    private final InterrupcionesCorte interrupciones;
     private final Clock reloj;
 
-    public CorteCesped(NamedParameterJdbcTemplate jdbc, Clock reloj) {
+    public CorteCesped(
+            NamedParameterJdbcTemplate jdbc, InterrupcionesCorte interrupciones, Clock reloj) {
         this.jdbc = jdbc;
+        this.interrupciones = interrupciones;
         this.reloj = reloj;
     }
 
@@ -195,6 +199,27 @@ public class CorteCesped {
         List<JardinRuta> jardines =
                 jardines("r.programacion_id = :programacion", Map.of("programacion", programacion));
         List<Limpieza> limpiezas = limpiezas(programacion);
+        List<InterrupcionesCorte.Interrupcion> interrupciones =
+                this.interrupciones.de(programacion);
+        Set<String> detenidas = new TreeSet<>();
+        interrupciones.forEach(i -> detenidas.add(i.zonaAfectada()));
+        jardines =
+                jardines.stream()
+                        .map(
+                                j ->
+                                        "Pendiente".equals(j.estado())
+                                                        && detenidas.contains(j.zona())
+                                                ? new JardinRuta(
+                                                        j.id(),
+                                                        j.codigo(),
+                                                        j.nombre(),
+                                                        j.zona(),
+                                                        j.estado(),
+                                                        j.marcadoEn(),
+                                                        j.marcadoPor(),
+                                                        true)
+                                                : j)
+                        .toList();
         int diasCorte =
                 (int)
                         jardines.stream()
@@ -215,9 +240,9 @@ public class CorteCesped {
         return new CicloCorte(
                 programacion,
                 jardines,
-                List.of(),
+                interrupciones,
                 limpiezas,
-                0,
+                InterrupcionesCorte.diasDescontados(interrupciones),
                 diasCorte,
                 maximo,
                 diasCorte + limpiezas.size() <= maximo);

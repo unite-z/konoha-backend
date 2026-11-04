@@ -251,4 +251,74 @@ class MarcadoCorteApiTest extends ApiPlanificacion {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.estado").value("Completada"));
     }
+
+    @Test
+    void laInterrupcionTrasladaElCorteYDescuentaElTiempo() throws Exception {
+        area("Jardín de Ciencias Norte", sector("Ciencias Norte"));
+        jdbc.getJdbcTemplate()
+                .update(
+                        "INSERT INTO mod05_areaverde (nombre, activo) SELECT n, true FROM"
+                                + " unnest(ARRAY['Jardín de Sociales', 'Patio de Sociales']) n"
+                                + " WHERE NOT EXISTS (SELECT 1 FROM mod05_areaverde v WHERE"
+                                + " v.nombre = n)");
+        jdbc.getJdbcTemplate()
+                .update(
+                        "DELETE FROM mod03_restriccion_calendario WHERE descripcion = 'Ruido"
+                                + " durante el examen'");
+        String creado =
+                accion(
+                                "jefe",
+                                "programaciones/",
+                                ("{\"tipo_servicio_id\": 1, \"fecha_inicio_prevista\": \"%s\","
+                                                + " \"fecha_fin_prevista\": \"%s\", \"zonas\":"
+                                                + " [\"Sociales\", \"Ciencias Norte\"]}")
+                                        .formatted(HOY, HOY))
+                        .andExpect(status().isCreated())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+        long otro = json.readTree(creado).get("id").asLong();
+        http.perform(
+                        get(RUTA + "programaciones/" + otro + "/zonas-alternativas/")
+                                .with(httpBasic("jefe", CLAVE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2));
+        String cuerpo =
+                "{\"zona_afectada\": \"Sociales\", \"zona_alternativa\": \"%s\", \"hora\":"
+                        + " \"%sT13:00:00-05:00\", \"motivo\": \"Ruido durante el examen\","
+                        + " \"aviso_proveedor\": true, \"registrar_restriccion\": true}";
+        accion(
+                        "ingeniero",
+                        "programaciones/" + otro + "/interrupciones/",
+                        cuerpo.formatted("Ciencias Norte", HOY))
+                .andExpect(status().isForbidden());
+        accion(
+                        "jefe",
+                        "programaciones/" + otro + "/interrupciones/",
+                        cuerpo.formatted("Letras", HOY))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("sin-zona-libre"));
+        accion(
+                        "jefe",
+                        "programaciones/" + otro + "/interrupciones/",
+                        cuerpo.formatted("Ciencias Norte", HOY))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.minutos_descontados").value(240))
+                .andExpect(jsonPath("$.registrada_como_restriccion").value(true));
+        http.perform(get(RUTA + "ciclos/" + otro + "/").with(httpBasic("jefe", CLAVE)))
+                .andExpect(jsonPath("$.interrupciones.length()").value(1))
+                .andExpect(jsonPath("$.dias_interrupcion_descontados").value(0.5))
+                .andExpect(
+                        jsonPath("$.jardines[?(@.zona == 'Sociales')].detenido_por_interrupcion")
+                                .value(
+                                        org.hamcrest.Matchers.everyItem(
+                                                org.hamcrest.Matchers.is(true))));
+        assertEquals(
+                2,
+                jdbc.getJdbcTemplate()
+                        .queryForObject(
+                                "SELECT count(*) FROM mod03_restriccion_calendario WHERE"
+                                        + " descripcion = 'Ruido durante el examen'",
+                                Integer.class));
+    }
 }

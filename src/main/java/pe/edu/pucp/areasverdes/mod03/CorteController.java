@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,10 +29,13 @@ public class CorteController {
 
     private final CorteCesped corte;
     private final MarcadoCorte marcado;
+    private final InterrupcionesCorte interrupciones;
 
-    public CorteController(CorteCesped corte, MarcadoCorte marcado) {
+    public CorteController(
+            CorteCesped corte, MarcadoCorte marcado, InterrupcionesCorte interrupciones) {
         this.corte = corte;
         this.marcado = marcado;
+        this.interrupciones = interrupciones;
     }
 
     @Operation(summary = "Ruta de hoy del capataz: el corte del día en sus sectores")
@@ -114,6 +118,26 @@ public class CorteController {
             @PathVariable long id,
             @RequestBody(required = false) NuevaLimpieza cuerpo) {
         return corte.registrarLimpieza(id, cuerpo == null ? null : cuerpo.fecha(), usuario);
+    }
+
+    @Operation(summary = "Zonas pendientes de la ruta sin prohibición hoy, para trasladar el corte")
+    @GetMapping({
+        "/programaciones/{id}/zonas-alternativas",
+        "/programaciones/{id}/zonas-alternativas/"
+    })
+    public List<InterrupcionesCorte.ZonaAlternativa> zonasAlternativas(
+            UsuarioPlanificacion usuario, @PathVariable long id) {
+        return interrupciones.zonasAlternativas(id, usuario);
+    }
+
+    @Operation(summary = "Detiene el corte en una zona y lo traslada a otra (jefe)")
+    @PostMapping({"/programaciones/{id}/interrupciones", "/programaciones/{id}/interrupciones/"})
+    @ResponseStatus(HttpStatus.CREATED)
+    public InterrupcionesCorte.Interrupcion interrumpir(
+            UsuarioPlanificacion usuario,
+            @PathVariable long id,
+            @Valid @RequestBody InterrupcionesCorte.NuevaInterrupcion cuerpo) {
+        return interrupciones.registrar(id, cuerpo, usuario);
     }
 
     @Operation(summary = "Ciclo de corte con su ruta de jardines y sus marcas")
