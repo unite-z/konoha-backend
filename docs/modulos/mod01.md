@@ -61,6 +61,9 @@ Todos bajo `/api/v1/core/`, con y sin barra final. Errores en `{codigo, detalle}
 | `GET adjuntos/?entidad=&registro_id=` | Según la entidad | |
 | `GET adjuntos/{id}/contenido/` | Según la entidad | Descarga con `Content-Disposition: attachment` |
 | `GET exportaciones/{tipo}/` | Según la entidad | `.xlsx` de `actividades` (`CAM.PARTE.CONSULTAR`), `atenciones` (`SER.ATENCION.REGISTRAR`), `incidencias` (`PLA.INCIDENCIA.REGISTRAR`) o `ejemplares` (`INV.INVENTARIO.CONSULTAR`). Sin importes ni datos personales. 409 `entidad-no-disponible` si el módulo aún no tiene la tabla; 409 `volumen-excedido` por encima de 50 000 filas |
+| `POST importaciones/` | Según el tipo | Multipart `tipo` y `archivo` (`.xlsx`, hasta 10 MB y 10 000 filas). Valida sin incorporar datos y responde 201 con el resumen. 400 `archivo-invalido`, `archivo-vacio`, `archivo-demasiado-grande`, `columnas-faltantes` o `tipo-desconocido`; 409 `entidad-no-disponible` para `ruta`, que aún no tiene tabla |
+| `GET importaciones/{id}/` y `GET importaciones/{id}/filas/?page=` | Según el tipo | Resumen y resultado por fila: `Alta`, `Actualización`, `Sin cambios`, `Revisar` o `Error`, con su `detalle` |
+| `POST importaciones/{id}/confirmar/` | Según el tipo | Vuelve a clasificar y aplica las altas y actualizaciones en una transacción. `Revisar` y `Error` no se incorporan. 409 `importacion-ya-confirmada` |
 | `GET repositorio/?tipo=&q=&page=` | Los cuatro roles | `tipo`: `jardin`, `especie`, `sector` o `servicio`. `disponible: false` si la tabla del dueño aún no existe |
 
 La matriz completa por rol está en `src/test/java/.../mod01/Mod01PermisosApiTest.java`. La prueba falla si un endpoint de MOD-01 no está en ella.
