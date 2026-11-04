@@ -97,7 +97,7 @@ Pendiente de decisión (no la cambies por tu cuenta): formato de errores Problem
 ## Seguridad abierta: no empeorar
 
 - MOD-05 y MOD-03 aceptan la sesión de MOD-01 (`SesionCompartida`, AV-234) y siguen aceptando HTTP Basic contra `mod05_usuario` para las pruebas y el smoke test del despliegue. Una cuenta creada solo en MOD-01 entra, pero no puede escribir en MOD-05 hasta la consolidación de usuarios (sus tablas apuntan a `mod05_usuario`).
-- MOD-06 no tiene autenticación (`/api/v1/**` abierto).
+- MOD-06 no tiene autenticación en los reportes antiguos ni en la extracción IA. La lista está congelada en `BRECHAS_CONGELADAS` de `comun/PermisosGlobalesApiTest`: un endpoint nuevo abierto hace fallar CI.
 - Archivos en el disco del contenedor, sin el guard de `S3_PREFIX`.
 - Swagger (`/api/docs`) es público en todos los entornos.
 
