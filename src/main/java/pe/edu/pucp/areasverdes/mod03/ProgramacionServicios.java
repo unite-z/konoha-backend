@@ -1,5 +1,6 @@
 package pe.edu.pucp.areasverdes.mod03;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
@@ -21,13 +22,17 @@ import pe.edu.pucp.areasverdes.mod03.RestriccionesController.Restriccion;
 @Service
 public class ProgramacionServicios {
 
+    /**
+     * Alta de una programación. {@code confirmar_prohibicion} ya no existe (RF-PLA-004 v6, AV-251):
+     * si un cliente antiguo lo envía, se ignora y la prohibición sigue bloqueando.
+     */
+    @JsonIgnoreProperties("confirmar_prohibicion")
     public record NuevaProgramacion(
             @NotNull(message = "Indica el servicio") Long tipoServicioId,
             Long proveedorId,
             @NotNull(message = "Indica el inicio") LocalDate fechaInicioPrevista,
             @NotNull(message = "Indica el fin") LocalDate fechaFinPrevista,
-            @Size(max = 300, message = "Máximo 300 caracteres") String justificacion,
-            Boolean confirmarProhibicion) {}
+            @Size(max = 300, message = "Máximo 300 caracteres") String justificacion) {}
 
     private record Duracion(boolean ruidoso, Integer maxima, Integer limpieza) {}
 
@@ -147,27 +152,34 @@ public class ProgramacionServicios {
         return !Programador.conflictos(List.of(Bloqueo.de(r)), inicio, fin, ruidoso).isEmpty();
     }
 
-    /** Escenarios «Aviso por actividad extracurricular» y «Prohibición por examen de admisión». */
+    /**
+     * RF-PLA-004 v6: una prohibición impide guardar la programación, sin confirmación posible
+     * (escenario «Prohibición por examen de admisión»); un aviso se guarda con motivo (escenario
+     * «Aviso por actividad extracurricular»), que queda como constancia.
+     */
     private static void exigirConstancia(List<Restriccion> conflictos, NuevaProgramacion nueva) {
-        if (conflictos.isEmpty()) {
-            return;
+        List<Restriccion> prohibiciones =
+                conflictos.stream().filter(r -> "Prohibicion".equals(r.efecto())).toList();
+        if (!prohibiciones.isEmpty()) {
+            throw new ErrorPlanificacion(
+                    409,
+                    "fecha-prohibida",
+                    "Coincide con "
+                            + motivos(prohibiciones)
+                            + ", que prohíbe programar en esas fechas. Elige otras");
         }
-        String motivos =
-                String.join(
-                        ", ",
-                        conflictos.stream().map(r -> r.tipo() + " el " + r.fechaInicio()).toList());
-        if (nueva.justificacion() == null || nueva.justificacion().isBlank()) {
+        if (!conflictos.isEmpty()
+                && (nueva.justificacion() == null || nueva.justificacion().isBlank())) {
             throw new ErrorPlanificacion(
                     409,
                     "restricciones-sin-justificar",
-                    "Coincide con " + motivos + ". Justifica la fecha o elige otra");
+                    "Coincide con " + motivos(conflictos) + ". Justifica la fecha o elige otra");
         }
-        if (!Boolean.TRUE.equals(nueva.confirmarProhibicion())
-                && conflictos.stream().anyMatch(r -> "Prohibicion".equals(r.efecto()))) {
-            throw new ErrorPlanificacion(
-                    409,
-                    "confirmacion-requerida",
-                    "Coincide con " + motivos + ", que lo prohíbe. Confírmalo expresamente");
-        }
+    }
+
+    private static String motivos(List<Restriccion> restricciones) {
+        return String.join(
+                ", ",
+                restricciones.stream().map(r -> r.tipo() + " el " + r.fechaInicio()).toList());
     }
 }
