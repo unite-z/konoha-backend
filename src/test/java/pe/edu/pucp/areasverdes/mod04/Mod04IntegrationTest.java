@@ -462,6 +462,56 @@ class Mod04IntegrationTest {
     }
 
     @Test
+    void catalogoJerarquicoConservaNombreHistoricoYBloqueaNuevasAltas() throws Exception {
+        http.perform(get(BASE + "/catalogos/clases-actividad/").with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(9));
+        var entrada = values("nombre", "Poda de formación", "clase_id", 4, "activo", true);
+        long nuevo =
+                postJson("/catalogos/tipos-actividad/", entrada, "jefe", 201).path("id").asLong();
+        http.perform(
+                        get(BASE + "/catalogos/tipos-actividad/?activo=true")
+                                .with(httpBasic("capataz1", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[1].clase_id").value(4));
+        postJson("/catalogos/tipos-actividad/", entrada, "jefe", 409);
+        long equipo = cuadrilla(c1, o1);
+        long parte =
+                postJson("/partes/", values("cuadrilla_id", equipo, "fecha", HOY), "capataz1", 201)
+                        .path("id")
+                        .asLong();
+        var actividad =
+                values(
+                        "parte_id",
+                        parte,
+                        "tipo_actividad_id",
+                        nuevo,
+                        "area_verde_id",
+                        area,
+                        "fecha_hora_actividad",
+                        "2026-10-22T08:00:00-05:00");
+        long anterior = postJson("/actividades/", actividad, "capataz1", 201).path("id").asLong();
+        putJson(
+                "/catalogos/tipos-actividad/" + nuevo + "/",
+                values("nombre", "Poda renovada", "clase_id", 4, "activo", false),
+                "jefe",
+                200);
+        http.perform(get(BASE + "/actividades/" + anterior).with(httpBasic("capataz1", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tipo_actividad_nombre").value("Poda de formación"));
+        http.perform(get(BASE + "/actividades/").with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(
+                        jsonPath("$.results[0].tipo_actividad_nombre").value("Poda de formación"));
+        postJson("/actividades/", actividad, "capataz1", 400);
+        http.perform(
+                        get(BASE + "/catalogos/tipos-actividad/?activo=true")
+                                .with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(1));
+    }
+
+    @Test
     void precargaInicialIdempotenteNoSobrescribe() {
         repo.jdbc()
                 .getJdbcTemplate()
@@ -624,6 +674,27 @@ class Mod04IntegrationTest {
                                 "/catalogos/tipos-actividad",
                                 null,
                                 false,
+                                false),
+                        new Fila(
+                                "catalogo",
+                                "GET",
+                                "/catalogos/clases-actividad",
+                                null,
+                                false,
+                                false),
+                        new Fila(
+                                "crearTipo",
+                                "POST",
+                                "/catalogos/tipos-actividad",
+                                values("nombre", "Tipo de matriz", "clase_id", 3, "activo", true),
+                                true,
+                                false),
+                        new Fila(
+                                "actualizarTipo",
+                                "PUT",
+                                "/catalogos/tipos-actividad/" + tipo,
+                                values("nombre", "Mantenimiento", "clase_id", 3, "activo", true),
+                                true,
                                 false),
                         new Fila("catalogo", "GET", "/catalogos/areas-verdes", null, false, false),
                         new Fila("cuadrilla", "GET", "/cuadrillas/" + equipo, null, false, false),

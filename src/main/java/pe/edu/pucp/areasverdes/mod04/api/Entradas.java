@@ -48,4 +48,9 @@ public final class Entradas {
             @NotNull OffsetDateTime fechaHoraActividad,
             @Positive Long encargoId,
             @Size(max = 1000) String observaciones) {}
+
+    public record TipoActividad(
+            @NotBlank @Size(max = 150) String nombre,
+            @NotNull @Positive Long claseId,
+            @NotNull Boolean activo) {}
 }
