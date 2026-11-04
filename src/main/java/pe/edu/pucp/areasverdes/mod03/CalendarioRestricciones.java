@@ -39,7 +39,8 @@ public class CalendarioRestricciones {
             LocalTime horaFin,
             Long areaVerdeId,
             @Size(max = 200, message = "Máximo 200 caracteres") String descripcion,
-            @Valid Recurrencia recurrencia) {}
+            @Valid Recurrencia recurrencia,
+            Boolean forzar) {}
 
     static final int MAXIMO_REPETICIONES = 200;
 
@@ -78,6 +79,9 @@ public class CalendarioRestricciones {
         List<LocalDate> inicios =
                 nueva.recurrencia() == null ? List.of(nueva.fechaInicio()) : repeticiones(nueva);
         long dias = ChronoUnit.DAYS.between(nueva.fechaInicio(), nueva.fechaFin());
+        if (!Boolean.TRUE.equals(nueva.forzar())) {
+            exigirSinDuplicados(nueva, inicios);
+        }
         var datos =
                 new MapSqlParameterSource()
                         .addValue("tipo", nueva.tipoRestriccionId())
@@ -104,6 +108,36 @@ public class CalendarioRestricciones {
         }
         jdbc.update(AUDITAR, Map.of("ids", ids, "accion", "crear", "usuario", usuario.id()));
         return ids;
+    }
+
+    /**
+     * CU-003 6a: dos restricciones son duplicadas si tienen el mismo tipo, la misma fecha y el
+     * mismo lugar (o las dos sin lugar). En una serie se compara cada fecha generada. Con {@code
+     * forzar} se guarda igualmente.
+     */
+    private void exigirSinDuplicados(NuevaRestriccion nueva, List<LocalDate> inicios) {
+        List<LocalDate> repetidas =
+                jdbc.queryForList(
+                        """
+                        SELECT DISTINCT fecha_inicio FROM mod03_restriccion_calendario
+                        WHERE activo AND tipo_restriccion_id = :tipo AND fecha_inicio IN (:inicios)
+                          AND area_verde_id IS NOT DISTINCT FROM CAST(:area AS bigint)
+                        ORDER BY fecha_inicio
+                        """,
+                        new MapSqlParameterSource()
+                                .addValue("tipo", nueva.tipoRestriccionId())
+                                .addValue("inicios", inicios)
+                                .addValue("area", nueva.areaVerdeId()),
+                        LocalDate.class);
+        if (!repetidas.isEmpty()) {
+            throw new ErrorPlanificacion(
+                    409,
+                    "posible-duplicado",
+                    "Ya existe una restricción igual el "
+                            + String.join(
+                                    ", ", repetidas.stream().map(LocalDate::toString).toList())
+                            + ". Guárdala igualmente con forzar");
+        }
     }
 
     /** Da de baja la restricción o, con {@code serie}, todas las de su serie. Devuelve cuántas. */

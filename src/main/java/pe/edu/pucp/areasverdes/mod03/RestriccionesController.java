@@ -1,5 +1,6 @@
 package pe.edu.pucp.areasverdes.mod03;
 
+import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -47,6 +48,28 @@ public class RestriccionesController {
             Long areaVerdeId,
             String descripcion,
             UUID serie) {}
+
+    /** Ciclo programado o en curso que coincide con una restricción recién creada (CU-003 7a). */
+    public record CicloAfectado(
+            long id, String servicio, LocalDate fechaInicioPrevista, LocalDate fechaFinPrevista) {}
+
+    /** Una restricción del alta, con los ciclos a los que afecta. */
+    public record RestriccionCreada(
+            @JsonUnwrapped Restriccion restriccion, List<CicloAfectado> ciclosAfectados) {}
+
+    /**
+     * Ciclos programados o en curso que se solapan con la restricción y a los que afecta: no los
+     * favorables, y los de «solo ruidosos» solo a los servicios ruidosos.
+     */
+    static final String AFECTADOS =
+            """
+            SELECT p.id, t.nombre servicio, p.fecha_inicio_prevista, p.fecha_fin_prevista
+            FROM mod03_programacion_servicio p JOIN mod05_tiposervicio t ON t.id = p.tipo_servicio_id
+            WHERE p.estado IN ('Programada', 'EnCurso') AND :efecto <> 'Favorable'
+              AND p.fecha_inicio_prevista <= :fin AND p.fecha_fin_prevista >= :inicio
+              AND (NOT :soloRuidosos OR t.es_ruidoso)
+            ORDER BY p.fecha_inicio_prevista, p.id
+            """;
 
     /** Periodo máximo de una consulta, para acotar la respuesta (un año y un mes). */
     static final int DIAS_MAXIMOS = 400;
@@ -100,12 +123,28 @@ public class RestriccionesController {
     @Operation(summary = "Registra una restricción o una serie semanal (jefe de sección)")
     @PostMapping({"/restricciones", "/restricciones/"})
     @ResponseStatus(HttpStatus.CREATED)
-    public List<Restriccion> crear(
+    public List<RestriccionCreada> crear(
             UsuarioPlanificacion usuario, @Valid @RequestBody NuevaRestriccion nueva) {
-        return jdbc.query(
-                CONSULTA.formatted("r.id IN (:ids)"),
-                Map.of("ids", calendario.crear(nueva, usuario)),
-                new DataClassRowMapper<>(Restriccion.class));
+        List<Restriccion> creadas =
+                jdbc.query(
+                        CONSULTA.formatted("r.id IN (:ids)"),
+                        Map.of("ids", calendario.crear(nueva, usuario)),
+                        new DataClassRowMapper<>(Restriccion.class));
+        return creadas.stream()
+                .map(
+                        r ->
+                                new RestriccionCreada(
+                                        r,
+                                        jdbc.query(
+                                                AFECTADOS,
+                                                Map.of(
+                                                        "efecto", r.efecto(),
+                                                        "inicio", r.fechaInicio(),
+                                                        "fin", r.fechaFin(),
+                                                        "soloRuidosos",
+                                                                r.aplicaServiciosRuidosos()),
+                                                new DataClassRowMapper<>(CicloAfectado.class))))
+                .toList();
     }
 
     @Operation(summary = "Da de baja una restricción o, con serie=true, toda su serie (jefe)")
