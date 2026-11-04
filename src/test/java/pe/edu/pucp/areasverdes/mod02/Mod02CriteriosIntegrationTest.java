@@ -10,12 +10,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.math.BigDecimal;
-import java.util.concurrent.Executors;
 import java.util.UUID;
+import java.util.concurrent.Executors;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +27,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import pe.edu.pucp.areasverdes.comun.BaseDePruebas;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -37,24 +38,7 @@ class Mod02CriteriosIntegrationTest {
 
     @DynamicPropertySource
     static void baseDePruebas(DynamicPropertyRegistry propiedades) {
-        String url =
-                System.getenv()
-                        .getOrDefault(
-                                "MOD05_TEST_DB_URL",
-                                "jdbc:postgresql://127.0.0.1:55432/mod05_spring_test");
-        if (!url.endsWith("_test")) {
-            throw new IllegalStateException("Las pruebas requieren una base terminada en _test");
-        }
-        propiedades.add("spring.datasource.url", () -> url);
-        propiedades.add(
-                "spring.datasource.username",
-                () ->
-                        System.getenv()
-                                .getOrDefault(
-                                        "MOD05_TEST_DB_USER", System.getProperty("user.name")));
-        propiedades.add(
-                "spring.datasource.password",
-                () -> System.getenv().getOrDefault("MOD05_TEST_DB_PASSWORD", ""));
+        BaseDePruebas.registrar(propiedades);
     }
 
     @Autowired MockMvc http;
@@ -80,25 +64,28 @@ class Mod02CriteriosIntegrationTest {
         String placaAntigua = "PLACA-" + UUID.randomUUID();
         String especie =
                 http.perform(
-                        post(API + "/especies")
-                                .with(httpBasic("jefe", CLAVE))
-                                .contentType("application/json")
-                                .content("{\"nombre_comun\":\"Molle\",\"nombre_cientifico\":\""
-                                        + nombreCientifico
-                                        + "\",\"forma_biologica\":\"Árbol\"}"))
-                                .andExpect(status().isCreated())
-                                .andExpect(jsonPath("$.nombre_cientifico").value(nombreCientifico))
-                                .andReturn()
-                                .getResponse()
-                                .getContentAsString();
+                                post(API + "/especies")
+                                        .with(httpBasic("jefe", CLAVE))
+                                        .contentType("application/json")
+                                        .content(
+                                                "{\"nombre_comun\":\"Molle\",\"nombre_cientifico\":\""
+                                                        + nombreCientifico
+                                                        + "\",\"forma_biologica\":\"Árbol\"}"))
+                        .andExpect(status().isCreated())
+                        .andExpect(jsonPath("$.nombre_cientifico").value(nombreCientifico))
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
         long especieId = idJson(especie, "$.id");
         http.perform(
                         post(API + "/especies")
                                 .with(httpBasic("jefe", CLAVE))
                                 .contentType("application/json")
-                                .content("{\"nombre_comun\":\"Molle duplicado\",\"nombre_cientifico\":\""
-                                        + nombreCientifico
-                                        + "\",\"forma_biologica\":\"Árbol\"}"))
+                                .content(
+                                        "{\"nombre_comun\":\"Molle"
+                                                + " duplicado\",\"nombre_cientifico\":\""
+                                                + nombreCientifico
+                                                + "\",\"forma_biologica\":\"Árbol\"}"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.codigo").value("especie-duplicada"));
 
@@ -138,7 +125,9 @@ class Mod02CriteriosIntegrationTest {
                                     .with(httpBasic("jefe", CLAVE)))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$[0].codigo").value(codigo))
-                    .andExpect(jsonPath("$[0].codigo_placa_antigua").value(org.hamcrest.Matchers.nullValue()));
+                    .andExpect(
+                            jsonPath("$[0].codigo_placa_antigua")
+                                    .value(org.hamcrest.Matchers.nullValue()));
         }
     }
 
@@ -215,7 +204,9 @@ class Mod02CriteriosIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results[0].id").value(areaId))
                 .andExpect(jsonPath("$.results[0].tipo_cobertura_id").value(coberturaId))
-                .andExpect(jsonPath("$.results[0].tipo_cobertura_nombre").value("Cubresuelo MOD02 test"));
+                .andExpect(
+                        jsonPath("$.results[0].tipo_cobertura_nombre")
+                                .value("Cubresuelo MOD02 test"));
     }
 
     @Test
@@ -233,15 +224,14 @@ class Mod02CriteriosIntegrationTest {
                         .getResponse()
                         .getContentAsString();
         List<Object> superficies =
-                JsonPath.read(
-                        sectores,
-                        "$[?(@.id == " + sectorUno + ")].superficie_m2");
+                JsonPath.read(sectores, "$[?(@.id == " + sectorUno + ")].superficie_m2");
         assertThat(superficies)
                 .hasSize(1)
                 .first()
-                .satisfies(superficie ->
-                        assertThat(new BigDecimal(superficie.toString()))
-                                .isEqualByComparingTo("85.50"));
+                .satisfies(
+                        superficie ->
+                                assertThat(new BigDecimal(superficie.toString()))
+                                        .isEqualByComparingTo("85.50"));
 
         http.perform(
                         patch(API + "/areas-verdes/" + areaId + "/sector")
@@ -276,11 +266,15 @@ class Mod02CriteriosIntegrationTest {
                 .extracting(asignacion -> ((Number) asignacion.get("capataz_id")).longValue())
                 .containsExactlyInAnyOrder(capatazUno, capatazDos);
         assertThat(asignaciones)
-                .filteredOn(asignacion -> ((Number) asignacion.get("capataz_id")).longValue() == capatazDos)
+                .filteredOn(
+                        asignacion ->
+                                ((Number) asignacion.get("capataz_id")).longValue() == capatazDos)
                 .singleElement()
                 .satisfies(asignacion -> assertThat(asignacion.get("fecha_fin")).isNull());
         assertThat(asignaciones)
-                .filteredOn(asignacion -> ((Number) asignacion.get("capataz_id")).longValue() == capatazUno)
+                .filteredOn(
+                        asignacion ->
+                                ((Number) asignacion.get("capataz_id")).longValue() == capatazUno)
                 .singleElement()
                 .satisfies(asignacion -> assertThat(asignacion.get("fecha_fin")).isNotNull());
     }
@@ -336,9 +330,7 @@ class Mod02CriteriosIntegrationTest {
                         .getResponse()
                         .getContentAsString();
         List<Number> areasVinculadas =
-                JsonPath.read(
-                        poligonos,
-                        "$[?(@.id_fuente == '" + idFuente + "')].area_verde_id");
+                JsonPath.read(poligonos, "$[?(@.id_fuente == '" + idFuente + "')].area_verde_id");
         assertThat(areasVinculadas.stream().map(Number::longValue)).containsExactly(areaId);
     }
 

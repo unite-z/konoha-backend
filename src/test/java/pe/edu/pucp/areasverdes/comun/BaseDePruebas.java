@@ -33,6 +33,7 @@ public final class BaseDePruebas {
         p.add("spring.datasource.url", () -> URL);
         p.add("spring.datasource.username", () -> USUARIO);
         p.add("spring.datasource.password", () -> CLAVE);
+        p.add("spring.datasource.hikari.maximum-pool-size", () -> 5);
     }
 
     private static String variable(String nombre, String porDefecto) {
