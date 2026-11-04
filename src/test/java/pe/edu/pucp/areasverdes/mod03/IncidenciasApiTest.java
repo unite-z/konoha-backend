@@ -182,4 +182,63 @@ class IncidenciasApiTest extends ApiPlanificacion {
                 .andExpect(jsonPath("$.espacios[0].nombre").value("Jardín de la Biblioteca"))
                 .andExpect(jsonPath("$.usuarios").isArray());
     }
+
+    long registrada() throws Exception {
+        String ficha =
+                registrar("jefe", cuerpo("Telefono", "{\"nombre\": \"Ana\"}"))
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+        return json.readTree(ficha).get("id").asLong();
+    }
+
+    ResultActions duplicados(String parametros) throws Exception {
+        return http.perform(
+                get(RUTA + "posibles-duplicados/?tipo=Rama caída" + parametros)
+                        .with(httpBasic("ingeniero", CLAVE)));
+    }
+
+    @Test
+    void avisaDeLaAbiertaDelMismoEjemplarOEspacio() throws Exception {
+        long id = registrada();
+        duplicados("&espacio=Jardín de la Biblioteca&ejemplar=T-0412")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(id))
+                .andExpect(jsonPath("$[0].ejemplar").value("T-0412"));
+        duplicados("&espacio=Jardín de la Biblioteca").andExpect(jsonPath("$.length()").value(1));
+        duplicados("&espacio=Otro jardín").andExpect(jsonPath("$.length()").value(0));
+        jdbc.getJdbcTemplate().update("UPDATE mod03_incidencia SET estado = 'Cerrada'");
+        duplicados("&espacio=Jardín de la Biblioteca").andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Test
+    void anadirALaExistenteSumaElReporteYLaFoto() throws Exception {
+        long id = registrada();
+        http.perform(
+                        multipart(RUTA + id + "/reportes/")
+                                .file(new MockMultipartFile("foto", "otra.png", "image/png", PNG))
+                                .param("descripcion", "Ahora bloquea la vereda")
+                                .with(httpBasic("ingeniero", CLAVE)))
+                .andExpect(status().isNoContent());
+        assertEquals(
+                "Ahora bloquea la vereda",
+                jdbc.getJdbcTemplate()
+                        .queryForObject(
+                                "SELECT descripcion FROM mod03_reporte_incidencia", String.class));
+        http.perform(get(RUTA + id + "/").with(httpBasic("jefe", CLAVE)))
+                .andExpect(jsonPath("$.foto_url").isNotEmpty());
+        http.perform(
+                        multipart(RUTA + "999999/reportes/")
+                                .param("descripcion", "x")
+                                .with(httpBasic("ingeniero", CLAVE)))
+                .andExpect(status().isNotFound());
+        jdbc.getJdbcTemplate().update("UPDATE mod03_incidencia SET estado = 'Descartada'");
+        http.perform(
+                        multipart(RUTA + id + "/reportes/")
+                                .param("descripcion", "x")
+                                .with(httpBasic("ingeniero", CLAVE)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("incidencia-cerrada"));
+    }
 }
