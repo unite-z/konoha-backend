@@ -512,6 +512,45 @@ class Mod04IntegrationTest {
     }
 
     @Test
+    void registroDeActividadValidaClaseSolicitudYOrigenSinDuplicar() throws Exception {
+        long equipo = cuadrilla(c1, o1);
+        long parte =
+                postJson("/partes/", values("cuadrilla_id", equipo, "fecha", HOY), "capataz1", 201)
+                        .path("id")
+                        .asLong();
+        var entrada =
+                values(
+                        "parte_id",
+                        parte,
+                        "tipo_actividad_id",
+                        tipo,
+                        "clase_actividad_id",
+                        3,
+                        "area_verde_id",
+                        area,
+                        "fecha_hora_actividad",
+                        "2026-10-22T08:00:00-05:00",
+                        "fecha_solicitud",
+                        "2026-10-21");
+        long actividad = postJson("/actividades/", entrada, "capataz1", 201).path("id").asLong();
+        http.perform(get(BASE + "/actividades/" + actividad).with(httpBasic("capataz1", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.clase_actividad_id").value(3))
+                .andExpect(jsonPath("$.fecha_solicitud").value("2026-10-21"));
+        entrada.put("clase_actividad_id", 4);
+        postJson("/actividades/", entrada, "capataz1", 400);
+        entrada.put("clase_actividad_id", 3);
+        entrada.put("fecha_solicitud", "2026-10-23");
+        postJson("/actividades/", entrada, "capataz1", 400);
+        entrada.put("fecha_solicitud", "2026-10-21");
+        entrada.put("incidencia_id", 999999L);
+        postJson("/actividades/", entrada, "capataz1", 400);
+        http.perform(get(BASE + "/actividades/").with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(1));
+    }
+
+    @Test
     void precargaInicialIdempotenteNoSobrescribe() {
         repo.jdbc()
                 .getJdbcTemplate()

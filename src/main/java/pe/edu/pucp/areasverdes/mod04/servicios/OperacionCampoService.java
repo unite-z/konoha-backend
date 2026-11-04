@@ -431,6 +431,20 @@ public class OperacionCampoService {
         if (body.fechaHoraActividad().toInstant().isAfter(clock.instant()))
             throw ApiError.invalid("La actividad no puede estar en el futuro");
         catalogos(body.tipoActividadId(), body.areaVerdeId());
+        var tipoActividad = repo.get("tipo_actividad", body.tipoActividadId(), false);
+        long claseActividad = number(tipoActividad, "clase_id");
+        if (body.claseActividadId() != null && body.claseActividadId() != claseActividad)
+            throw ApiError.invalid("El tipo de actividad no pertenece a la clase seleccionada");
+        if (body.fechaSolicitud() != null
+                && body.fechaSolicitud().isAfter((LocalDate) part.get("fecha")))
+            throw ApiError.invalid("La solicitud no puede ser posterior a la actividad");
+        if (body.incidenciaId() != null && body.encargoId() != null)
+            throw ApiError.invalid("Selecciona una incidencia o un encargo de origen");
+        if (body.incidenciaId() != null
+                && repo.rows(
+                                "SELECT id FROM mod03_incidencia WHERE id=:id",
+                                Map.of("id", body.incidenciaId()))
+                        .isEmpty()) throw ApiError.invalid("La incidencia de origen no existe");
         if (body.encargoId() != null) {
             var task = repo.get("encargo", body.encargoId(), true);
             LocalDate day = (LocalDate) part.get("fecha");
@@ -452,8 +466,14 @@ public class OperacionCampoService {
                                 body.parteId(),
                                 "tipo_actividad_id",
                                 body.tipoActividadId(),
+                                "clase_actividad_id",
+                                claseActividad,
                                 "area_verde_id",
                                 body.areaVerdeId(),
+                                "fecha_solicitud",
+                                body.fechaSolicitud(),
+                                "incidencia_id",
+                                body.incidenciaId(),
                                 "fecha_hora_actividad",
                                 body.fechaHoraActividad(),
                                 "encargo_id",
