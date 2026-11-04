@@ -58,7 +58,8 @@ class RegistrarRestriccionApiTest extends ApiPlanificacion {
     void devuelveElNombreDelLugarEnElAltaYEnLaConsulta() throws Exception {
         long sociales =
                 jdbc.queryForObject(
-                        "INSERT INTO mod05_areaverde (nombre, activo) VALUES (:n, true) RETURNING id",
+                        "INSERT INTO mod05_areaverde (nombre, activo) VALUES (:n, true) RETURNING"
+                                + " id",
                         Map.of("n", "Sociales y Comedor Central"),
                         Long.class);
         registrar(
