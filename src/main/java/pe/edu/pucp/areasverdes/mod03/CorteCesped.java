@@ -147,6 +147,9 @@ public class CorteCesped {
      * no existe es un 400; sin jardines, también.
      */
     void copiarRuta(long programacion, List<String> zonas) {
+        if (zonas.isEmpty()) {
+            throw new ErrorPlanificacion(400, "ruta-vacia", "Elige al menos una zona de la ruta");
+        }
         Set<String> elegidas = new TreeSet<>(zonas);
         Set<String> existentes = new TreeSet<>();
         jdbc.query(
