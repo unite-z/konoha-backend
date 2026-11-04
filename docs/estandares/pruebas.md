@@ -38,6 +38,8 @@ Cada endpoint tiene una fila en la matriz con el resultado esperado por rol: an�
 - Otra prueba ejecuta cada combinación de rol y endpoint y compara el código HTTP con el esperado.
 - La matriz vive en un único fichero de prueba por módulo, legible como tabla, para que quien revise el PR vea el cambio de permisos de un vistazo.
 
+Además, `comun/PermisosGlobalesApiTest` llama sin credenciales a todos los endpoints de todos los módulos y exige 401 o 403. Falla indicando método y ruta si alguno responde otra cosa. Las excepciones van en la lista `PUBLICOS` de esa prueba, cada una con su motivo.
+
 ## IA
 
 - **Las pruebas nunca llaman a Gemini.** Se usa `ClienteIAFalso` con respuestas grabadas.

@@ -274,7 +274,9 @@ public class AdjuntosService {
                                                 "El módulo de "
                                                         + entidad
                                                         + " aún no está disponible"));
-        // La tabla sale de DESTINOS, no de la petición.
+        // Único nombre de tabla concatenado: `tabla` solo puede ser un valor de la lista blanca
+        // DESTINOS
+        // (la petición elige la clave, nunca el nombre). ConsultasFijasTest comprueba sus valores.
         boolean existe =
                 Boolean.TRUE.equals(
                         jdbc.queryForObject(

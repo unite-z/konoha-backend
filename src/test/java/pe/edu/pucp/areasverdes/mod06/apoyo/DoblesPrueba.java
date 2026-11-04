@@ -1,6 +1,13 @@
 package pe.edu.pucp.areasverdes.mod06.apoyo;
 
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+
 import jakarta.servlet.http.HttpServletRequest;
+import java.util.Map;
+import java.util.Set;
+import org.springframework.boot.test.autoconfigure.web.servlet.MockMvcBuilderCustomizer;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
@@ -15,8 +22,9 @@ import pe.edu.pucp.areasverdes.mod06.permisos.ProveedorUsuario;
 import pe.edu.pucp.areasverdes.mod06.permisos.Usuario;
 
 /**
- * Dobles para las pruebas de la API (fixtures {@code usar_fuente}, {@code usar_cliente_ia}, {@code usuario_con_rol}
- * y {@code sin_ia_real} de {@code conftest.py}). Cada prueba llama a {@link #reiniciar()} antes de empezar.
+ * Dobles para las pruebas de la API (fixtures {@code usar_fuente}, {@code usar_cliente_ia}, {@code
+ * usuario_con_rol} y {@code sin_ia_real} de {@code conftest.py}). Cada prueba llama a {@link
+ * #reiniciar()} antes de empezar.
  */
 @TestConfiguration
 public class DoblesPrueba {
@@ -53,7 +61,10 @@ public class DoblesPrueba {
             this.cliente = c;
         }
 
-        /** Simula {@code settings.GEMINI_API_KEY} y {@code settings.GEMINI_MODEL}, con el SDK prohibido ({@code sin_ia_real}). */
+        /**
+         * Simula {@code settings.GEMINI_API_KEY} y {@code settings.GEMINI_MODEL}, con el SDK
+         * prohibido ({@code sin_ia_real}).
+         */
         public void configuracion(String clave, String modelo) {
             this.clave = clave;
             this.modelo = modelo;
@@ -63,9 +74,12 @@ public class DoblesPrueba {
         public ClienteIA obtenerClienteIa() {
             if (cliente != null) return cliente;
             if (clave != null) {
-                return new ClienteGemini(clave, modelo, parametros -> {
-                    throw new AssertionError("Las pruebas no deben llamar a Gemini");
-                });
+                return new ClienteGemini(
+                        clave,
+                        modelo,
+                        parametros -> {
+                            throw new AssertionError("Las pruebas no deben llamar a Gemini");
+                        });
             }
             throw new AssertionError("Las pruebas no deben llamar a Gemini");
         }
@@ -73,7 +87,7 @@ public class DoblesPrueba {
 
     /** Usuario de la petición ({@code api_client.force_authenticate}). */
     public static class UsuarioPrueba extends ProveedorUsuario {
-        private Usuario usuario = Usuario.ANONIMO;
+        private Usuario usuario;
 
         public void usar(Usuario u) {
             this.usuario = u;
@@ -85,29 +99,15 @@ public class DoblesPrueba {
         }
     }
 
-    /** {@code usuario_con_rol}: sustituye {@code rol_de_usuario} por el rol simulado. */
-    public static class PermisosPrueba extends Permisos {
-        private String rol;
-        private boolean simular;
-
-        public PermisosPrueba(SelectorFuenteDatos selector) {
-            super(selector);
-        }
-
-        public void simularRol(String r) {
-            this.rol = r;
-            this.simular = true;
-        }
-
-        public void dejarDeSimular() {
-            this.simular = false;
-            this.rol = null;
-        }
-
-        @Override
-        public Object rolDeUsuario(Usuario usuario) {
-            return simular ? rol : super.rolDeUsuario(usuario);
-        }
+    /**
+     * Las pruebas de la API simulan al usuario con {@link UsuarioPrueba}: la petición lleva un
+     * autenticado cualquiera para pasar la cadena de seguridad, que cubre {@code
+     * MatrizPermisosMod06ApiTest} con sesiones reales.
+     */
+    @Bean
+    MockMvcBuilderCustomizer peticionesAutenticadas() {
+        return constructor ->
+                constructor.defaultRequest(get("/").with(user("prueba")).with(csrf()));
     }
 
     @Bean
@@ -128,24 +128,27 @@ public class DoblesPrueba {
         return new UsuarioPrueba();
     }
 
-    @Bean
-    @Primary
-    PermisosPrueba permisosPrueba(SelectorPrueba selector) {
-        return new PermisosPrueba(selector);
-    }
+    /** Permisos que MOD-01 concede hoy a cada rol ({@code V9__core_permisos.sql}). */
+    private static final Map<String, Set<String>> PERMISOS_POR_ROL =
+            Map.of(
+                    "Jefe de sección",
+                    Set.of(Permisos.CONSULTAR_REPORTES, Permisos.PROPONER_IA, Permisos.VALIDAR_IA),
+                    "Ingeniero de campo",
+                    Set.of(Permisos.CONSULTAR_REPORTES, Permisos.PROPONER_IA),
+                    "Practicante",
+                    Set.of(Permisos.CONSULTAR_REPORTES, Permisos.PROPONER_IA));
 
-    /** Estado inicial de los dobles. */
-    public static void reiniciar(SelectorPrueba selector, FabricaPrueba fabrica, UsuarioPrueba usuario, PermisosPrueba permisos) {
+    /** Estado inicial de los dobles: un usuario sin id con todos los permisos. */
+    public static void reiniciar(
+            SelectorPrueba selector, FabricaPrueba fabrica, UsuarioPrueba usuario) {
         selector.usar(null);
         fabrica.usar(null);
         fabrica.configuracion(null, null);
-        usuario.usar(Usuario.ANONIMO);
-        permisos.dejarDeSimular();
+        conRol(usuario, "Jefe de sección", null);
     }
 
     /** {@code usuario_con_rol(rol, id_usuario)}. */
-    public static void conRol(UsuarioPrueba usuario, PermisosPrueba permisos, String rol, Object idUsuario) {
-        usuario.usar(new Usuario(true, idUsuario, null));
-        permisos.simularRol(rol);
+    public static void conRol(UsuarioPrueba usuario, String rol, Object idUsuario) {
+        usuario.usar(new Usuario(true, idUsuario, PERMISOS_POR_ROL.getOrDefault(rol, Set.of())));
     }
 }

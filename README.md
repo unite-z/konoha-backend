@@ -9,7 +9,7 @@ Repos hermanos: `konoha-frontend` (PWA) y `konoha-infra` (despliegue, estándare
 | Módulo | Paquete | Rutas | Datos |
 |---|---|---|---|
 | MOD-05 «Atenciones tercerizadas» | `pe.edu.pucp.areasverdes.mod05` | `/api/tercerizados/` (HTTP Basic) | PostgreSQL con Flyway. Ver [docs/modulos/mod05.md](docs/modulos/mod05.md) |
-| MOD-06 «Reportes, indicadores e IA» | `pe.edu.pucp.areasverdes.mod06` | `/api/v1/` (sin autenticación) | `DATA_SOURCE=mock` lee `mock-data/` (`db`, pendiente) |
+| MOD-06 «Reportes, indicadores e IA» | `pe.edu.pucp.areasverdes.mod06` | `/api/v1/` (sesión de MOD-01) | `DATA_SOURCE=mock` lee `mock-data/` (`db`, pendiente) |
 
 Documentación de la API: `http://localhost:8000/api/docs` (OpenAPI en `/api/schema`).
 

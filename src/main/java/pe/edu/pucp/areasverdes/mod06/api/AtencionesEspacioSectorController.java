@@ -35,65 +35,152 @@ import pe.edu.pucp.areasverdes.mod06.servicios.AtencionesEspacioSectorService;
 public class AtencionesEspacioSectorController {
 
     static final String RUTA = "/api/v1/reportes/atenciones-espacio-sector/";
-    static final Vista VISTA = new Vista("Atenciones Espacio Sector", List.of("GET", "HEAD", "OPTIONS"),
-        Permisos.ROLES_CONSULTA_REPORTES, null);
+    static final Vista VISTA =
+            new Vista(
+                    "Atenciones Espacio Sector",
+                    List.of("GET", "HEAD", "OPTIONS"),
+                    Permisos.CONSULTAR_REPORTES,
+                    null);
 
     private final DespachadorDrf drf;
     private final AtencionesEspacioSectorService servicio;
 
-    public AtencionesEspacioSectorController(DespachadorDrf drf, AtencionesEspacioSectorService servicio) {
+    public AtencionesEspacioSectorController(
+            DespachadorDrf drf, AtencionesEspacioSectorService servicio) {
         this.drf = drf;
         this.servicio = servicio;
     }
 
     @GetMapping(RUTA)
-    @Operation(summary = "Atenciones por espacio y sector",
-        description = "Número de atenciones realizadas por sector (agrupador principal), espacio y cuartel (solo si "
-            + "está registrado). Cada evento cuenta una sola vez. «Sin sector» va siempre al final y los eventos sin "
-            + "espacio se informan aparte. Solo lectura.",
-        parameters = {
-            @Parameter(name = "desde", in = ParameterIn.QUERY, required = true, description = PARAM_DESDE,
-                schema = @Schema(type = "string", format = "date")),
-            @Parameter(name = "hasta", in = ParameterIn.QUERY, required = true, description = PARAM_HASTA,
-                schema = @Schema(type = "string", format = "date")),
-            @Parameter(name = "sector_id", in = ParameterIn.QUERY,
-                description = "Sector (SectorMantenimiento.id) o 'sin_sector' para el grupo sin sector.",
-                schema = @Schema(type = "string", example = "sin_sector")),
-            @Parameter(name = "modalidad", in = ParameterIn.QUERY, description = "Modalidad de ejecución (enumerado Ejecutor).",
-                schema = @Schema(type = "string", allowableValues = {"PersonalPropio", "Tercerizado"})),
-            @Parameter(name = "area_verde_id", in = ParameterIn.QUERY, description = "Espacio (AreaVerde.id).",
-                schema = @Schema(type = "integer", minimum = "1")),
-            @Parameter(name = "orden", in = ParameterIn.QUERY,
-                description = "asc: menos atendidos primero (para priorizar); desc (por defecto): más atendidos primero.",
-                schema = @Schema(type = "string", allowableValues = {"asc", "desc"}))},
-        responses = {
-            @ApiResponse(responseCode = "200", content = @Content(schema = @Schema(implementation = Salidas.ResultadoAtencionesEspacioSector.class))),
-            @ApiResponse(responseCode = "400", description = Documentacion.R400, content = @Content(schema = @Schema(type = "object"))),
-            @ApiResponse(responseCode = "403", description = Documentacion.R403, content = @Content(schema = @Schema(implementation = Salidas.Detalle.class))),
-            @ApiResponse(responseCode = "503", description = Documentacion.R503_DATOS, content = @Content(schema = @Schema(implementation = Salidas.Error.class)))})
+    @Operation(
+            summary = "Atenciones por espacio y sector",
+            description =
+                    "Número de atenciones realizadas por sector (agrupador principal), espacio y"
+                        + " cuartel (solo si está registrado). Cada evento cuenta una sola vez."
+                        + " «Sin sector» va siempre al final y los eventos sin espacio se informan"
+                        + " aparte. Solo lectura.",
+            parameters = {
+                @Parameter(
+                        name = "desde",
+                        in = ParameterIn.QUERY,
+                        required = true,
+                        description = PARAM_DESDE,
+                        schema = @Schema(type = "string", format = "date")),
+                @Parameter(
+                        name = "hasta",
+                        in = ParameterIn.QUERY,
+                        required = true,
+                        description = PARAM_HASTA,
+                        schema = @Schema(type = "string", format = "date")),
+                @Parameter(
+                        name = "sector_id",
+                        in = ParameterIn.QUERY,
+                        description =
+                                "Sector (SectorMantenimiento.id) o 'sin_sector' para el grupo sin"
+                                        + " sector.",
+                        schema = @Schema(type = "string", example = "sin_sector")),
+                @Parameter(
+                        name = "modalidad",
+                        in = ParameterIn.QUERY,
+                        description = "Modalidad de ejecución (enumerado Ejecutor).",
+                        schema =
+                                @Schema(
+                                        type = "string",
+                                        allowableValues = {"PersonalPropio", "Tercerizado"})),
+                @Parameter(
+                        name = "area_verde_id",
+                        in = ParameterIn.QUERY,
+                        description = "Espacio (AreaVerde.id).",
+                        schema = @Schema(type = "integer", minimum = "1")),
+                @Parameter(
+                        name = "orden",
+                        in = ParameterIn.QUERY,
+                        description =
+                                "asc: menos atendidos primero (para priorizar); desc (por defecto):"
+                                        + " más atendidos primero.",
+                        schema =
+                                @Schema(
+                                        type = "string",
+                                        allowableValues = {"asc", "desc"}))
+            },
+            responses = {
+                @ApiResponse(
+                        responseCode = "200",
+                        content =
+                                @Content(
+                                        schema =
+                                                @Schema(
+                                                        implementation =
+                                                                Salidas
+                                                                        .ResultadoAtencionesEspacioSector
+                                                                        .class))),
+                @ApiResponse(
+                        responseCode = "400",
+                        description = Documentacion.R400,
+                        content = @Content(schema = @Schema(type = "object"))),
+                @ApiResponse(
+                        responseCode = "403",
+                        description = Documentacion.R403,
+                        content =
+                                @Content(schema = @Schema(implementation = Salidas.Detalle.class))),
+                @ApiResponse(
+                        responseCode = "503",
+                        description = Documentacion.R503_DATOS,
+                        content = @Content(schema = @Schema(implementation = Salidas.Error.class)))
+            })
     public ResponseEntity<byte[]> consultar(@Parameter(hidden = true) HttpServletRequest peticion) {
         return despachar(peticion);
     }
 
     @Hidden
-    @RequestMapping(path = RUTA, method = {RequestMethod.POST, RequestMethod.PUT, RequestMethod.PATCH, RequestMethod.DELETE,
-        RequestMethod.OPTIONS, RequestMethod.TRACE})
+    @RequestMapping(
+            path = RUTA,
+            method = {
+                RequestMethod.POST,
+                RequestMethod.PUT,
+                RequestMethod.PATCH,
+                RequestMethod.DELETE,
+                RequestMethod.OPTIONS,
+                RequestMethod.TRACE
+            })
     public ResponseEntity<byte[]> otrosMetodos(HttpServletRequest peticion) {
         return despachar(peticion);
     }
 
     @Hidden
-    @RequestMapping(path = "/api/v1/reportes/atenciones-espacio-sector", method = {RequestMethod.GET,
-        RequestMethod.POST, RequestMethod.PUT, RequestMethod.PATCH, RequestMethod.DELETE, RequestMethod.OPTIONS, RequestMethod.TRACE})
+    @RequestMapping(
+            path = "/api/v1/reportes/atenciones-espacio-sector",
+            method = {
+                RequestMethod.GET,
+                RequestMethod.POST,
+                RequestMethod.PUT,
+                RequestMethod.PATCH,
+                RequestMethod.DELETE,
+                RequestMethod.OPTIONS,
+                RequestMethod.TRACE
+            })
     public ResponseEntity<byte[]> sinBarraFinal(HttpServletRequest peticion) {
         return DespachadorDrf.sinBarraFinal(peticion);
     }
 
     private ResponseEntity<byte[]> despachar(HttpServletRequest peticion) {
-        return drf.despachar(peticion, VISTA, Map.of("GET", () -> {
-            Map<String, Object> entrada = SerializadoresEntrada.ATENCIONES_ESPACIO_SECTOR_QUERY.validarRaiz(DespachadorDrf.parametrosConsulta(peticion));
-            Map<String, Object> resultado = servicio.calcular(SerializadoresEntrada.periodo(entrada), SerializadoresEntrada.filtros(entrada));
-            return Respuesta.ok(Serializadores.RESULTADO_ATENCIONES_ESPACIO_SECTOR.representar(resultado));
-        }));
+        return drf.despachar(
+                peticion,
+                VISTA,
+                Map.of(
+                        "GET",
+                        () -> {
+                            Map<String, Object> entrada =
+                                    SerializadoresEntrada.ATENCIONES_ESPACIO_SECTOR_QUERY
+                                            .validarRaiz(
+                                                    DespachadorDrf.parametrosConsulta(peticion));
+                            Map<String, Object> resultado =
+                                    servicio.calcular(
+                                            SerializadoresEntrada.periodo(entrada),
+                                            SerializadoresEntrada.filtros(entrada));
+                            return Respuesta.ok(
+                                    Serializadores.RESULTADO_ATENCIONES_ESPACIO_SECTOR.representar(
+                                            resultado));
+                        }));
     }
 }
