@@ -11,8 +11,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.io.IOException;
-import java.nio.file.Files;
 import java.util.Base64;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,8 +18,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.ResultActions;
 
 /** Registro, bandeja y seguimiento de incidencias (AV-274, RF-INC-001, HU-020 y CU-020). */
@@ -30,13 +26,6 @@ class IncidenciasApiTest extends ApiPlanificacion {
     static final String RUTA = "/api/v1/planificacion/incidencias/";
 
     @Autowired ObjectMapper json;
-
-    /** Las fotos de prueba, fuera del repo. */
-    @DynamicPropertySource
-    static void archivos(DynamicPropertyRegistry p) throws IOException {
-        String carpeta = Files.createTempDirectory("incidencias-").toString();
-        p.add("mod05.archivos", () -> carpeta);
-    }
 
     /** PNG de 1 × 1. */
     static final byte[] PNG =

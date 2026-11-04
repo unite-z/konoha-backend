@@ -1,5 +1,8 @@
 package pe.edu.pucp.areasverdes.mod03;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,9 +27,21 @@ abstract class ApiPlanificacion {
 
     static final String CLAVE = "prueba-integration-local";
 
+    /** Los adjuntos de prueba (fotos de incidencias), fuera del repo. */
+    static final String ARCHIVOS;
+
+    static {
+        try {
+            ARCHIVOS = Files.createTempDirectory("mod03-archivos-").toString();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
     @DynamicPropertySource
     static void baseDePruebas(DynamicPropertyRegistry p) {
         BaseDePruebas.registrar(p);
+        p.add("mod05.archivos", () -> ARCHIVOS);
     }
 
     @Autowired MockMvc http;
