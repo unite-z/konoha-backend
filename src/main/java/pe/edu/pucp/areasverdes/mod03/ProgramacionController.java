@@ -2,6 +2,7 @@ package pe.edu.pucp.areasverdes.mod03;
 
 import static pe.edu.pucp.areasverdes.AreasVerdesApplication.LIMA;
 
+import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -43,10 +44,12 @@ public class ProgramacionController {
      * Un ciclo programado. {@code ventana_mes}: mes del tercerizado ({@code null} con personal
      * propio). {@code historial}: sus transiciones con autor y hora, de la más antigua a la más
      * reciente (AV-253). {@code cuadrilla}: la de MOD-04 con personal propio; {@code areas}: las
-     * áreas verdes de MOD-02 con su sector vigente (AV-254).
+     * áreas verdes de MOD-02 con su sector vigente (AV-254). {@code codigo}: el legible del ciclo,
+     * como CC-2026-11 (AV-364; {@code null} en los creados fuera de la api).
      */
     public record Programacion(
             long id,
+            String codigo,
             long tipoServicioId,
             String servicio,
             Long proveedorId,
@@ -63,6 +66,11 @@ public class ProgramacionController {
             String cuadrilla,
             List<Area> areas,
             List<Transicion> historial) {}
+
+    /** Detalle de un ciclo (AV-364): la programación y las restricciones que le afectan. */
+    public record Detalle(
+            @JsonUnwrapped Programacion programacion,
+            List<RestriccionesController.Restriccion> restricciones) {}
 
     /** Área verde (lugar) de la programación, con su sector vigente si lo tiene. */
     public record Area(long id, String nombre, String lugar, Long sectorId, String sector) {}
@@ -82,6 +90,7 @@ public class ProgramacionController {
 
     private record Fila(
             long id,
+            String codigo,
             long tipoServicioId,
             String servicio,
             Long proveedorId,
@@ -244,6 +253,44 @@ public class ProgramacionController {
         return buscar(id);
     }
 
+    @Operation(summary = "Detalle de un ciclo: código, historial y restricciones que le afectan")
+    @GetMapping({"/programaciones/{id}", "/programaciones/{id}/"})
+    public Detalle detalle(UsuarioPlanificacion usuario, @PathVariable long id) {
+        Acceso.consultar(usuario);
+        List<Programacion> encontradas =
+                consultar(CONSULTA.formatted("p.id = :id"), new MapSqlParameterSource("id", id));
+        if (encontradas.isEmpty()) {
+            throw new ErrorPlanificacion(
+                    404, "programacion-no-encontrada", "No existe esa programación");
+        }
+        Programacion ciclo = encontradas.getFirst();
+        boolean ruidoso =
+                jdbc.queryForObject(
+                        "SELECT es_ruidoso FROM mod05_tiposervicio WHERE id = :id",
+                        Map.of("id", ciclo.tipoServicioId()),
+                        Boolean.class);
+        List<RestriccionesController.Restriccion> restricciones =
+                jdbc
+                        .query(
+                                RestriccionesController.CONSULTA.formatted(
+                                        "r.fecha_inicio <= :hasta AND r.fecha_fin >= :desde"),
+                                Map.of(
+                                        "desde", ciclo.fechaInicioPrevista(),
+                                        "hasta", ciclo.fechaFinPrevista()),
+                                new DataClassRowMapper<>(RestriccionesController.Restriccion.class))
+                        .stream()
+                        .filter(
+                                r ->
+                                        !Programador.conflictos(
+                                                        List.of(Programador.Bloqueo.de(r)),
+                                                        ciclo.fechaInicioPrevista(),
+                                                        ciclo.fechaFinPrevista(),
+                                                        ruidoso)
+                                                .isEmpty())
+                        .toList();
+        return new Detalle(ciclo, restricciones);
+    }
+
     Programacion buscar(long id) {
         return consultar(CONSULTA.formatted("p.id = :id"), new MapSqlParameterSource("id", id))
                 .getFirst();
@@ -301,6 +348,7 @@ public class ProgramacionController {
                         f ->
                                 new Programacion(
                                         f.id(),
+                                        f.codigo(),
                                         f.tipoServicioId(),
                                         f.servicio(),
                                         f.proveedorId(),
