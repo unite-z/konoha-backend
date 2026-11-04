@@ -241,4 +241,81 @@ class IncidenciasApiTest extends ApiPlanificacion {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.codigo").value("incidencia-cerrada"));
     }
+
+    ResultActions accion(String usuario, long id, String accion, String cuerpo) throws Exception {
+        return http.perform(
+                post(RUTA + id + "/" + accion + "/")
+                        .with(httpBasic(usuario, CLAVE))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(cuerpo));
+    }
+
+    @Test
+    void elJefeClasificaYCambiarLaViaSugeridaPideMotivo() throws Exception {
+        long id = registrada();
+        accion(
+                        "jefe",
+                        id,
+                        "clasificar",
+                        "{\"severidad\": \"Alta\", \"impacto\": \"Medio\","
+                                + " \"via\": \"Tercerizada\"}")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.codigo").value("motivo-requerido"));
+        accion(
+                        "ingeniero",
+                        id,
+                        "clasificar",
+                        "{\"severidad\": \"Alta\", \"impacto\": \"Medio\","
+                                + " \"via\": \"PersonalPropio\"}")
+                .andExpect(status().isForbidden());
+        accion(
+                        "jefe",
+                        id,
+                        "clasificar",
+                        "{\"severidad\": \"Alta\", \"impacto\": \"Medio\", \"via\":"
+                                + " \"Tercerizada\", \"motivo_cambio_via\": \"Rama a 8 m\"}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estado").value("Clasificada"))
+                .andExpect(jsonPath("$.severidad").value("Alta"))
+                .andExpect(jsonPath("$.impacto").value("Medio"))
+                .andExpect(jsonPath("$.via").value("Tercerizada"))
+                .andExpect(
+                        jsonPath("$.historial[0].texto")
+                                .value("Clasificada · jefe (cambio de vía: Rama a 8 m)"));
+        accion(
+                        "jefe",
+                        id,
+                        "clasificar",
+                        "{\"severidad\": \"Alta\", \"impacto\": \"Medio\","
+                                + " \"via\": \"PersonalPropio\"}")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("transicion-invalida"));
+    }
+
+    @Test
+    void descartarPideMotivoYCierraLaIncidencia() throws Exception {
+        long id = registrada();
+        accion("jefe", id, "descartar", "{}")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.codigo").value("motivo-requerido"));
+        accion("jefe", id, "descartar", "{\"motivo\": \"Ya estaba atendida\"}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estado").value("Descartada"))
+                .andExpect(jsonPath("$.fecha_cierre").isNotEmpty());
+    }
+
+    @Test
+    void laInspeccionVaAUnIngenieroYLaIncidenciaSigueRegistrada() throws Exception {
+        long id = registrada();
+        http.perform(get(RUTA + "inspectores/").with(httpBasic("jefe", CLAVE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].nombre").value(hasItem("ingeniero")));
+        accion("jefe", id, "inspeccion", "{\"responsable_id\": 1}")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.codigo").value("inspector-invalido"));
+        accion("jefe", id, "inspeccion", "{\"responsable_id\": 2, \"que_verificar\": \"Altura\"}")
+                .andExpect(status().isNoContent());
+        http.perform(get(RUTA + id + "/").with(httpBasic("jefe", CLAVE)))
+                .andExpect(jsonPath("$.estado").value("Registrada"));
+    }
 }

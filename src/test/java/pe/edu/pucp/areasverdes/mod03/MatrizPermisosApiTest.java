@@ -95,6 +95,7 @@ class MatrizPermisosApiTest extends ApiPlanificacion {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"motivo\": \"Lluvia\"}"),
                 get(RUTA + "incidencias/"),
+                get(RUTA + "incidencias/inspectores/"),
                 post(RUTA + "alertas/1/motivo/")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"motivo\": \"Lluvia\"}"));

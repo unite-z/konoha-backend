@@ -66,7 +66,13 @@ abstract class ApiPlanificacion {
                             rol_id)
                         SELECT u.id, 'mod05-' || u.usuario, 'mod05-' || u.usuario || '@prueba.pucp.edu.pe',
                             u.nombre, 'sin-clave', r.id
-                        FROM mod05_usuario u, core_rol r WHERE r.codigo = 'jefe-seccion'
+                        FROM mod05_usuario u
+                        LEFT JOIN mod05_usuario_rol ur ON ur.usuario_id = u.id
+                        JOIN core_rol r ON r.codigo = CASE ur.rol
+                            WHEN 'Jefe de sección' THEN 'jefe-seccion'
+                            WHEN 'Ingeniero de campo' THEN 'ingeniero-campo'
+                            WHEN 'Practicante autorizado' THEN 'practicante'
+                            ELSE 'capataz' END
                         """);
     }
 
