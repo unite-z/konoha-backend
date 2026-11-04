@@ -94,6 +94,12 @@ public class CorteController {
         return corte.ruta(id, usuario);
     }
 
+    @Operation(summary = "Avance del ciclo de corte: porcentaje, cortados por día y por cortar")
+    @GetMapping({"/ciclos/{id}/avance", "/ciclos/{id}/avance/"})
+    public CorteCesped.Avance avance(UsuarioPlanificacion usuario, @PathVariable long id) {
+        return corte.avance(id, usuario);
+    }
+
     @Operation(summary = "Ciclo de corte con su ruta de jardines y sus marcas")
     @GetMapping({"/ciclos/{id}", "/ciclos/{id}/"})
     public CicloCorte ciclo(UsuarioPlanificacion usuario, @PathVariable long id) {

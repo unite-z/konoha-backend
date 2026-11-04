@@ -193,4 +193,25 @@ class MarcadoCorteApiTest extends ApiPlanificacion {
                 jdbc.getJdbcTemplate()
                         .queryForObject("SELECT count(*) FROM mod03_fuera_de_ruta", Integer.class));
     }
+
+    @Test
+    void elAvanceCuentaLosCortadosPorDiaYAvisaSiEstaDesactualizado() throws Exception {
+        String avance = RUTA + "ciclos/" + ciclo + "/avance/";
+        http.perform(get(avance).with(httpBasic("jefe", CLAVE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.total").value(2))
+                .andExpect(jsonPath("$.porcentaje").value(0))
+                .andExpect(jsonPath("$.por_cortar.length()").value(2))
+                .andExpect(jsonPath("$.ultima_marca").isEmpty())
+                .andExpect(jsonPath("$.fecha_inicio_prevista").value(HOY.toString()));
+        marcar("ingeniero", UUID.randomUUID(), HOY.minusDays(2) + "T09:00:00-05:00")
+                .andExpect(status().isOk());
+        http.perform(get(avance).with(httpBasic("jefe", CLAVE)))
+                .andExpect(jsonPath("$.cortados").value(1))
+                .andExpect(jsonPath("$.porcentaje").value(50))
+                .andExpect(jsonPath("$.por_dia[0].fecha").value(HOY.minusDays(2).toString()))
+                .andExpect(jsonPath("$.por_dia[0].cortados").value(1))
+                .andExpect(jsonPath("$.por_cortar.length()").value(1))
+                .andExpect(jsonPath("$.desactualizado").value(true));
+    }
 }

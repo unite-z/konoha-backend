@@ -1,13 +1,18 @@
 package pe.edu.pucp.areasverdes.mod03;
 
+import static java.util.stream.Collectors.counting;
+import static java.util.stream.Collectors.groupingBy;
 import static pe.edu.pucp.areasverdes.AreasVerdesApplication.LIMA;
 
+import java.sql.Date;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -45,6 +50,24 @@ public class CorteCesped {
             List<Object> interrupciones,
             List<Object> limpiezas,
             double diasInterrupcionDescontados) {}
+
+    public record CortadosDia(LocalDate fecha, int cortados) {}
+
+    /**
+     * Avance del ciclo (AV-261, RF-COR-003 y 004, HU-012): porcentaje cortado, cortados por día, lo
+     * que falta y la última marca. {@code desactualizado} si la última marca tiene más de 24 h.
+     */
+    public record Avance(
+            long programacionId,
+            int total,
+            int cortados,
+            int porcentaje,
+            List<CortadosDia> porDia,
+            List<JardinRuta> porCortar,
+            OffsetDateTime ultimaMarca,
+            boolean desactualizado,
+            LocalDate fechaInicioPrevista,
+            LocalDate fechaFinPrevista) {}
 
     static final String ZONAS =
             """
@@ -162,6 +185,43 @@ public class CorteCesped {
         List<JardinRuta> jardines =
                 jardines("r.programacion_id = :programacion", Map.of("programacion", programacion));
         return new CicloCorte(programacion, jardines, List.of(), List.of(), 0);
+    }
+
+    public Avance avance(long programacion, UsuarioPlanificacion usuario) {
+        CicloCorte ciclo = ciclo(programacion, usuario);
+        Map<String, Object> fechas =
+                jdbc.queryForMap(
+                        "SELECT fecha_inicio_prevista, fecha_fin_prevista FROM"
+                                + " mod03_programacion_servicio WHERE id = :id",
+                        Map.of("id", programacion));
+        List<JardinRuta> cortados =
+                ciclo.jardines().stream().filter(j -> "Cortado".equals(j.estado())).toList();
+        List<CortadosDia> porDia =
+                cortados.stream()
+                        .collect(
+                                groupingBy(
+                                        j -> j.marcadoEn().toLocalDate(), TreeMap::new, counting()))
+                        .entrySet()
+                        .stream()
+                        .map(e -> new CortadosDia(e.getKey(), e.getValue().intValue()))
+                        .toList();
+        OffsetDateTime ultima =
+                cortados.stream()
+                        .map(JardinRuta::marcadoEn)
+                        .max(Comparator.naturalOrder())
+                        .orElse(null);
+        int total = ciclo.jardines().size();
+        return new Avance(
+                programacion,
+                total,
+                cortados.size(),
+                total == 0 ? 0 : Math.round(cortados.size() * 100f / total),
+                porDia,
+                ciclo.jardines().stream().filter(j -> !"Cortado".equals(j.estado())).toList(),
+                ultima,
+                ultima != null && ultima.isBefore(OffsetDateTime.now(reloj).minusHours(24)),
+                ((Date) fechas.get("fecha_inicio_prevista")).toLocalDate(),
+                ((Date) fechas.get("fecha_fin_prevista")).toLocalDate());
     }
 
     /** Los jardines de la ruta que cumplen el filtro (lo da el código), en su orden. */
