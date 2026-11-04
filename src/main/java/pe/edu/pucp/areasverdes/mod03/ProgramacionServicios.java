@@ -2,8 +2,10 @@ package pe.edu.pucp.areasverdes.mod03;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.List;
 import java.util.Map;
 import org.springframework.jdbc.core.DataClassRowMapper;
@@ -24,7 +26,9 @@ public class ProgramacionServicios {
 
     /**
      * Alta de una programación. {@code confirmar_prohibicion} ya no existe (RF-PLA-004 v6, AV-251):
-     * si un cliente antiguo lo envía, se ignora y la prohibición sigue bloqueando.
+     * si un cliente antiguo lo envía, se ignora y la prohibición sigue bloqueando. {@code
+     * ventana_mes} ({@code AAAA-MM}) solo vale con proveedor: es el mes en que el tercerizado tiene
+     * que ejecutar el servicio (AV-253); sin ella, el mes del inicio.
      */
     @JsonIgnoreProperties("confirmar_prohibicion")
     public record NuevaProgramacion(
@@ -32,7 +36,9 @@ public class ProgramacionServicios {
             Long proveedorId,
             @NotNull(message = "Indica el inicio") LocalDate fechaInicioPrevista,
             @NotNull(message = "Indica el fin") LocalDate fechaFinPrevista,
-            @Size(max = 300, message = "Máximo 300 caracteres") String justificacion) {}
+            @Size(max = 300, message = "Máximo 300 caracteres") String justificacion,
+            @Pattern(regexp = "\\d{4}-(0[1-9]|1[0-2])", message = "La ventana es un mes AAAA-MM")
+                    String ventanaMes) {}
 
     private record Duracion(boolean ruidoso, Integer maxima, Integer limpieza) {}
 
@@ -62,6 +68,7 @@ public class ProgramacionServicios {
         if (servicios.isEmpty()) {
             throw new ErrorPlanificacion(404, "servicio-no-encontrado", "No existe ese servicio");
         }
+        String ventana = ventana(nueva, inicio, fin);
         Duracion servicio = servicios.getFirst();
         if (servicio.maxima() == null) {
             throw new ErrorPlanificacion(
@@ -88,18 +95,20 @@ public class ProgramacionServicios {
                         .addValue("inicio", inicio)
                         .addValue("fin", fin)
                         .addValue("usuario", usuario.id())
-                        .addValue("justificacion", nueva.justificacion());
+                        .addValue("justificacion", nueva.justificacion())
+                        .addValue("ventana", ventana);
         long id =
                 jdbc.queryForObject(
                         """
                         INSERT INTO mod03_programacion_servicio(tipo_servicio_id, proveedor_id, estacion,
-                            fecha_inicio_prevista, fecha_fin_prevista, creado_por_id, usuario_creacion_id,
-                            usuario_modificacion_id)
-                        VALUES (:servicio, :proveedor, :estacion, :inicio, :fin,
+                            fecha_inicio_prevista, fecha_fin_prevista, ventana_mes, creado_por_id,
+                            usuario_creacion_id, usuario_modificacion_id)
+                        VALUES (:servicio, :proveedor, :estacion, :inicio, :fin, :ventana,
                             :usuario, :usuario, :usuario) RETURNING id
                         """,
                         datos,
                         Long.class);
+        registrarTransicion(id, "Programada", usuario, null);
         for (Restriccion r : conflictos) {
             jdbc.update(
                     "INSERT INTO mod03_confirmacion_restriccion(programacion_id, restriccion_id,"
@@ -110,8 +119,12 @@ public class ProgramacionServicios {
         return id;
     }
 
-    /** Cambio de estado con su fecha real (hoy si no se indica): inicio, fin o cancelación. */
-    public record Cambio(LocalDate fecha) {}
+    /**
+     * Cambio de estado con su fecha real (hoy si no se indica): inicio, fin o cancelación. La
+     * cancelación exige {@code motivo} (AV-253).
+     */
+    public record Cambio(
+            LocalDate fecha, @Size(max = 300, message = "Máximo 300 caracteres") String motivo) {}
 
     private record Transicion(String desde, String hasta, String columna) {}
 
@@ -123,10 +136,19 @@ public class ProgramacionServicios {
 
     /** Aplica la transición (inicio, fin o cancelación) si el estado actual lo permite. */
     @Transactional
-    public void cambiar(long id, String accion, LocalDate fecha, UsuarioPlanificacion usuario) {
+    public void cambiar(
+            long id, String accion, LocalDate fecha, String motivo, UsuarioPlanificacion usuario) {
         Acceso.gestionar(usuario);
         Transicion t = TRANSICIONES.get(accion);
-        String fechaReal = t.columna() == null ? "" : t.columna() + " = :fecha, ";
+        boolean cancela = "Cancelada".equals(t.hasta());
+        if (cancela && (motivo == null || motivo.isBlank())) {
+            throw new ErrorPlanificacion(
+                    400, "motivo-requerido", "Escribe el motivo de la cancelación");
+        }
+        String fechaReal =
+                t.columna() == null
+                        ? "motivo_cancelacion = :motivo, "
+                        : t.columna() + " = :fecha, ";
         int filas =
                 jdbc.update(
                         ("UPDATE mod03_programacion_servicio SET estado = :hasta, %s"
@@ -138,6 +160,7 @@ public class ProgramacionServicios {
                                 .addValue("desde", t.desde())
                                 .addValue("hasta", t.hasta())
                                 .addValue("fecha", fecha)
+                                .addValue("motivo", cancela ? motivo.trim() : null)
                                 .addValue("usuario", usuario.id()));
         if (filas == 0) {
             throw new ErrorPlanificacion(
@@ -146,6 +169,40 @@ public class ProgramacionServicios {
                     "Solo se puede registrar %s de una programación en estado %s"
                             .formatted(accion, t.desde()));
         }
+        registrarTransicion(id, t.hasta(), usuario, cancela ? motivo.trim() : null);
+    }
+
+    private void registrarTransicion(
+            long id, String estado, UsuarioPlanificacion usuario, String motivo) {
+        jdbc.update(
+                "INSERT INTO mod03_historial_programacion(programacion_id, estado, usuario_id,"
+                        + " motivo) VALUES (:id, :estado, :usuario, :motivo)",
+                new MapSqlParameterSource()
+                        .addValue("id", id)
+                        .addValue("estado", estado)
+                        .addValue("usuario", usuario.id())
+                        .addValue("motivo", motivo));
+    }
+
+    /**
+     * Ventana mensual de un tercerizado (RF-PLA-004): la indicada o el mes del inicio, y el inicio
+     * y el fin tienen que caer en ella. Con personal propio no hay ventana.
+     */
+    private static String ventana(NuevaProgramacion nueva, LocalDate inicio, LocalDate fin) {
+        if (nueva.proveedorId() == null) {
+            return null;
+        }
+        YearMonth mes =
+                nueva.ventanaMes() == null
+                        ? YearMonth.from(inicio)
+                        : YearMonth.parse(nueva.ventanaMes());
+        if (!YearMonth.from(inicio).equals(mes) || !YearMonth.from(fin).equals(mes)) {
+            throw new ErrorPlanificacion(
+                    400,
+                    "fuera-de-ventana",
+                    "Las fechas tienen que caer en la ventana del proveedor (" + mes + ")");
+        }
+        return mes.toString();
     }
 
     private static boolean afecta(Restriccion r, LocalDate inicio, LocalDate fin, boolean ruidoso) {
