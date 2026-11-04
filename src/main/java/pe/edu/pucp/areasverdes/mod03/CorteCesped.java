@@ -160,30 +160,35 @@ public class CorteCesped {
             throw new ErrorPlanificacion(404, "ciclo-no-encontrado", "No existe ese ciclo");
         }
         List<JardinRuta> jardines =
-                jdbc.query(
-                        """
-                        SELECT a.id, 'J-' || lpad(a.id::text, 3, '0') codigo, a.nombre, r.zona,
-                            r.estado, r.marcado_en, u.nombre marcado_por
-                        FROM mod03_ruta_corte r JOIN mod02_area_verde a ON a.id = r.area_verde_id
-                        LEFT JOIN core_usuario u ON u.id = r.marcado_por_id
-                        WHERE r.programacion_id = :id ORDER BY r.orden
-                        """,
-                        Map.of("id", programacion),
-                        (rs, n) -> {
-                            OffsetDateTime marcado =
-                                    rs.getObject("marcado_en", OffsetDateTime.class);
-                            return new JardinRuta(
-                                    rs.getLong("id"),
-                                    rs.getString("codigo"),
-                                    rs.getString("nombre"),
-                                    rs.getString("zona"),
-                                    rs.getString("estado"),
-                                    marcado == null
-                                            ? null
-                                            : marcado.atZoneSameInstant(LIMA).toOffsetDateTime(),
-                                    rs.getString("marcado_por"),
-                                    false);
-                        });
+                jardines("r.programacion_id = :programacion", Map.of("programacion", programacion));
         return new CicloCorte(programacion, jardines, List.of(), List.of(), 0);
+    }
+
+    /** Los jardines de la ruta que cumplen el filtro (lo da el código), en su orden. */
+    List<JardinRuta> jardines(String filtro, Map<String, ?> datos) {
+        return jdbc.query(
+                """
+                SELECT a.id, 'J-' || lpad(a.id::text, 3, '0') codigo, a.nombre, r.zona,
+                    r.estado, r.marcado_en, u.nombre marcado_por
+                FROM mod03_ruta_corte r JOIN mod02_area_verde a ON a.id = r.area_verde_id
+                LEFT JOIN core_usuario u ON u.id = r.marcado_por_id
+                WHERE %s ORDER BY r.orden
+                """
+                        .formatted(filtro),
+                datos,
+                (rs, n) -> {
+                    OffsetDateTime marcado = rs.getObject("marcado_en", OffsetDateTime.class);
+                    return new JardinRuta(
+                            rs.getLong("id"),
+                            rs.getString("codigo"),
+                            rs.getString("nombre"),
+                            rs.getString("zona"),
+                            rs.getString("estado"),
+                            marcado == null
+                                    ? null
+                                    : marcado.atZoneSameInstant(LIMA).toOffsetDateTime(),
+                            rs.getString("marcado_por"),
+                            false);
+                });
     }
 }

@@ -15,6 +15,7 @@ final class Acceso {
     static final String CONSULTAR = "PLA.PLANIFICACION.CONSULTAR";
     static final String GESTIONAR = "PLA.PLANIFICACION.GESTIONAR";
     static final String LIMPIEZA = "PLA.CORTE.LIMPIEZA";
+    static final String REGISTRAR_CORTE = "PLA.CORTE.REGISTRAR";
     static final String REGISTRAR_INCIDENCIA = "PLA.INCIDENCIA.REGISTRAR";
     static final String CLASIFICAR_INCIDENCIA = "PLA.INCIDENCIA.CLASIFICAR";
 
@@ -31,6 +32,13 @@ final class Acceso {
     /** Lo aplica el registro de la limpieza del ciclo de corte (AV-262). */
     static void registrarLimpieza(UsuarioPlanificacion usuario) {
         exigir(usuario, LIMPIEZA);
+    }
+
+    /**
+     * Marcar jardines de la ruta de corte: capataz, ingeniero y practicante (RF-COR-002, AV-260).
+     */
+    static void registrarCorte(UsuarioPlanificacion usuario) {
+        exigir(usuario, REGISTRAR_CORTE);
     }
 
     /** Reportar y seguir las propias: los cuatro roles (HU-020, AV-274). */
