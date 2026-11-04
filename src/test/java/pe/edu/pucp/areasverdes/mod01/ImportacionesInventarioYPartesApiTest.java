@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.dhatim.fastexcel.Workbook;
 import org.dhatim.fastexcel.Worksheet;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
@@ -31,6 +32,29 @@ class ImportacionesInventarioYPartesApiTest extends ApiCore {
     @BeforeEach
     void prefijo() {
         prefijo = "I" + UUID.randomUUID().toString().substring(0, 6);
+    }
+
+    /** Otras suites cuentan los registros de esta base: no se deja nada. */
+    @AfterEach
+    void limpiar() {
+        Map<String, String> p = Map.of("p", prefijo + "%");
+        jdbc.update(
+                """
+                DELETE FROM mod04_actividad WHERE tipo_actividad_id IN
+                    (SELECT id FROM mod04_tipo_actividad WHERE nombre LIKE :p)
+                """,
+                p);
+        jdbc.update(
+                """
+                DELETE FROM mod04_parte_diario WHERE cuadrilla_id IN
+                    (SELECT id FROM mod04_cuadrilla WHERE nombre LIKE :p)
+                """,
+                p);
+        jdbc.update("DELETE FROM mod04_cuadrilla WHERE nombre LIKE :p", p);
+        jdbc.update("DELETE FROM mod04_tipo_actividad WHERE nombre LIKE :p", p);
+        jdbc.update("DELETE FROM mod04_personal WHERE apellidos LIKE :p", p);
+        jdbc.update("DELETE FROM mod05_areaverde WHERE nombre LIKE :p", p);
+        jdbc.update("DELETE FROM mod02_area_verde WHERE nombre LIKE :p", p);
     }
 
     private JsonNode validar(
