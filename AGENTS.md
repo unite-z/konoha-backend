@@ -18,7 +18,7 @@ Este fichero es la guía para personas y agentes. Estándares comunes y ADR: en 
 | `src/main/java/pe/edu/pucp/areasverdes/mod05/` | MOD-05 «Atenciones tercerizadas»: `/api/tercerizados/`, sesión de MOD-01 (y HTTP Basic para pruebas), JDBC y Flyway |
 | `src/main/java/pe/edu/pucp/areasverdes/mod01/` | MOD-01 «Core y seguridad»: `/api/v1/core/`, sesión con cookie, permisos (`Autorizacion`) y auditoría común (`RegistradorAuditoria`) |
 | `src/main/java/pe/edu/pucp/areasverdes/mod04/` | MOD-04 «Operación de campo»: cuadrillas, encargos y participantes en `/api/v1/operacion-campo/`; sesión común de MOD-01 y referencias a `core_usuario` |
-| `src/main/java/pe/edu/pucp/areasverdes/mod06/` | MOD-06 «Reportes, indicadores e IA»: `/api/v1/`, datos `mock` o `db`, Gemini |
+| `src/main/java/pe/edu/pucp/areasverdes/mod06/` | MOD-06 «Reportes, indicadores e IA»: `/api/v1/`, sesión de MOD-01, datos `mock` o `db`, Gemini |
 | `src/main/java/pe/edu/pucp/areasverdes/comun/` | Lo compartido entre módulos (hoy, la seguridad de `/api/health`) |
 | `src/main/resources/db/migration/` | Migraciones Flyway |
 | `src/main/resources/prompts/` | Prompts de la IA |
@@ -97,7 +97,6 @@ Pendiente de decisión (no la cambies por tu cuenta): formato de errores Problem
 ## Seguridad abierta: no empeorar
 
 - MOD-05 y MOD-03 aceptan la sesión de MOD-01 (`SesionCompartida`, AV-234) y siguen aceptando HTTP Basic contra `mod05_usuario` para las pruebas y el smoke test del despliegue. Una cuenta creada solo en MOD-01 entra, pero no puede escribir en MOD-05 hasta la consolidación de usuarios (sus tablas apuntan a `mod05_usuario`).
-- MOD-06 no tiene autenticación en los reportes antiguos ni en la extracción IA. La lista está congelada en `BRECHAS_CONGELADAS` de `comun/PermisosGlobalesApiTest`: un endpoint nuevo abierto hace fallar CI.
 - Archivos en el disco del contenedor, sin el guard de `S3_PREFIX`.
 - Swagger (`/api/docs`) es público en todos los entornos.
 

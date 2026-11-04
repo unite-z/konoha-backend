@@ -16,14 +16,14 @@ import pe.edu.pucp.areasverdes.mod01.config.SesionCompartida;
 import pe.edu.pucp.areasverdes.mod01.servicios.UsuarioSesion;
 
 /**
- * Rutas de los reportes de gestión del MOD-06 (RF-REP-001, RF-REP-005 y RF-REP-007). Se entra solo
- * con la sesión de MOD-01 (cookie y CSRF, AV-234): el principal es el {@link UsuarioSesion} de
- * MOD-01, sin pasar por los usuarios de MOD-05, y los permisos los decide cada endpoint con {@code
- * AccesoGestion}. Sin sesión responde 401.
+ * Rutas del MOD-06: reportes (RF-REP-*) y extracción IA (RF-IA-001). Se entra solo con la sesión de
+ * MOD-01 (cookie y CSRF, AV-234 y AV-327): el principal es el {@link UsuarioSesion} de MOD-01, sin
+ * pasar por los usuarios de MOD-05, y los permisos los decide cada endpoint ({@code AccesoGestion}
+ * o {@code Permisos}). Sin sesión responde 401.
  *
- * <p>Tiene que ir antes que la cadena de MOD-06 (orden 1), que deja abierto el resto de {@code
- * /api/v1/**}; comparte el orden 0 con otras cadenas que no se solapan. No cambia nada de las demás
- * rutas del MOD-06 (AGENTS.md: «Seguridad abierta: no empeorar»).
+ * <p>Tiene que ir antes que la cadena de MOD-06 (orden 1), que solo deja abiertas la documentación
+ * y la respuesta 404 de {@code /api/v1/**}; comparte el orden 0 con otras cadenas que no se
+ * solapan.
  */
 @Configuration
 public class SeguridadGestion {
@@ -33,12 +33,7 @@ public class SeguridadGestion {
     SecurityFilterChain cadenaSeguridadGestion(
             HttpSecurity http, ObjectMapper json, SesionCompartida sesion) throws Exception {
         http.securityMatcher(
-                        "/api/v1/reportes/panel",
-                        "/api/v1/reportes/panel/**",
-                        "/api/v1/reportes/material-vegetal",
-                        "/api/v1/reportes/material-vegetal/**",
-                        "/api/v1/reportes/mapa-atenciones",
-                        "/api/v1/reportes/mapa-atenciones/**")
+                        "/api/v1/reportes", "/api/v1/reportes/**", "/api/v1/ia", "/api/v1/ia/**")
                 .authorizeHttpRequests(a -> a.anyRequest().authenticated())
                 .csrf(
                         c ->

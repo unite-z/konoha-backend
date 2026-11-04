@@ -47,31 +47,23 @@ public class ExtraccionesController {
             new Vista(
                     "Extracciones",
                     List.of("GET", "POST", "HEAD", "OPTIONS"),
-                    Permisos.ROLES_SOLICITAR_IA,
+                    Permisos.PROPONER_IA,
                     Serializadores.SUGERENCIA_IA);
     static final Vista VISTA_DETALLE =
             new Vista(
                     "Extraccion Detalle",
                     List.of("GET", "HEAD", "OPTIONS"),
-                    Permisos.ROLES_SOLICITAR_IA,
+                    Permisos.PROPONER_IA,
                     null);
     static final Vista VISTA_VALIDAR =
-            new Vista(
-                    "Extraccion Validar",
-                    List.of("POST", "OPTIONS"),
-                    Permisos.ROLES_VALIDAR_IA,
-                    null);
+            new Vista("Extraccion Validar", List.of("POST", "OPTIONS"), Permisos.VALIDAR_IA, null);
     static final Vista VISTA_RECHAZAR =
-            new Vista(
-                    "Extraccion Rechazar",
-                    List.of("POST", "OPTIONS"),
-                    Permisos.ROLES_VALIDAR_IA,
-                    null);
+            new Vista("Extraccion Rechazar", List.of("POST", "OPTIONS"), Permisos.VALIDAR_IA, null);
     static final Vista VISTA_METRICAS =
             new Vista(
                     "Extraccion Metricas",
                     List.of("GET", "HEAD", "OPTIONS"),
-                    Permisos.ROLES_VALIDAR_IA,
+                    Permisos.VALIDAR_IA,
                     null);
 
     private static final String EJEMPLO_SUGERENCIA =

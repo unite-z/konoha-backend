@@ -42,7 +42,7 @@ public class CumplimientoCorteController {
             new Vista(
                     "Cumplimiento Corte",
                     List.of("GET", "HEAD", "OPTIONS"),
-                    Permisos.ROLES_CONSULTA_REPORTES,
+                    Permisos.CONSULTAR_REPORTES,
                     null);
 
     private final DespachadorDrf drf;

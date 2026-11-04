@@ -8,10 +8,10 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
- * El MOD-06 no usa Spring Security (sus permisos van en {@code permisos.Permisos}). Esta cadena se
- * evalúa antes que la del MOD-05 ({@code mod05.Seguridad}, HTTP Basic) y deja pasar sin cambios las
- * rutas del MOD-06 y la documentación, sin cabeceras ni sesión añadidas, para que respondan igual
- * que antes de la fusión.
+ * Deja pasar sin cambios la documentación y la respuesta 404 de las rutas desconocidas de {@code
+ * /api/v1/**}, sin cabeceras ni sesión añadidas. Los reportes y la IA del MOD-06 los protege antes
+ * {@code SeguridadGestion} (orden 0). {@code comun/PermisosGlobalesApiTest} falla si esta cadena
+ * deja abierto un endpoint con datos.
  */
 @Configuration
 public class SeguridadMod06 {

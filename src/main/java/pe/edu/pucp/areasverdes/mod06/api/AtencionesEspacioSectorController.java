@@ -39,7 +39,7 @@ public class AtencionesEspacioSectorController {
             new Vista(
                     "Atenciones Espacio Sector",
                     List.of("GET", "HEAD", "OPTIONS"),
-                    Permisos.ROLES_CONSULTA_REPORTES,
+                    Permisos.CONSULTAR_REPORTES,
                     null);
 
     private final DespachadorDrf drf;

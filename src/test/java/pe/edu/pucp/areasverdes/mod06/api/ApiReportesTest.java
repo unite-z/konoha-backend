@@ -9,11 +9,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static pe.edu.pucp.areasverdes.mod06.apoyo.Datos.d;
 import static pe.edu.pucp.areasverdes.mod06.apoyo.Datos.l;
 
-import ch.qos.logback.classic.Logger;
-import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -21,7 +19,6 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.slf4j.LoggerFactory;
 import org.springframework.mock.web.MockHttpServletResponse;
 import pe.edu.pucp.areasverdes.mod06.apoyo.Datos;
 import pe.edu.pucp.areasverdes.mod06.apoyo.FuenteDatosMemoria;
@@ -360,50 +357,9 @@ class ApiReportesTest extends PruebaApi {
     }
 
     @Test
-    void anonimoPermitidoConAvisoUnico() throws Exception {
-        Permisos.reiniciarAviso();
-        usarFuente(new FuenteDatosMemoria(datosMinimos()));
-        Logger logger = (Logger) LoggerFactory.getLogger(Permisos.class);
-        ListAppender<ILoggingEvent> registro = new ListAppender<>();
-        registro.start();
-        logger.addAppender(registro);
-        try {
-            for (String ruta : RUTAS_REPORTES)
-                assertEquals(200, getUrl(ruta + "?" + PERIODO).getStatus());
-        } finally {
-            logger.detachAppender(registro);
-        }
-        long avisos =
-                registro.list.stream()
-                        .filter(
-                                e ->
-                                        e.getFormattedMessage()
-                                                .contains("falta la autenticación del MOD-01"))
-                        .count();
-        assertEquals(1, avisos);
-    }
-
-    @Test
-    void rolDeUsuarioResuelveElNombreDelRol() {
-        selector.usar(
-                new FuenteDatosMemoria(
-                        Map.of(
-                                "Rol",
-                                l(
-                                        d(
-                                                "id",
-                                                1,
-                                                "nombre",
-                                                "Jefe de sección",
-                                                "descripcion",
-                                                null,
-                                                "activo",
-                                                true)))));
-        Permisos reales = new Permisos(selector);
-        assertEquals("Jefe de sección", reales.rolDeUsuario(new Usuario(true, null, 1L)));
-        assertNull(reales.rolDeUsuario(new Usuario(false, null, 1L)));
-        assertNull(Permisos.idDeUsuario(new Usuario(false, 3L, null)));
-        assertEquals(3L, Permisos.idDeUsuario(new Usuario(true, 3L, null)));
+    void idDeUsuarioSoloExisteConSesion() {
+        assertNull(Permisos.idDeUsuario(Usuario.ANONIMO));
+        assertEquals(3L, Permisos.idDeUsuario(new Usuario(true, 3L, Set.of())));
     }
 
     @ParameterizedTest

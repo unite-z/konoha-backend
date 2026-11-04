@@ -39,7 +39,7 @@ public class DistribucionPersonalController {
             new Vista(
                     "Distribucion Personal",
                     List.of("GET", "HEAD", "OPTIONS"),
-                    Permisos.ROLES_CONSULTA_REPORTES,
+                    Permisos.CONSULTAR_REPORTES,
                     null);
 
     private final DespachadorDrf drf;

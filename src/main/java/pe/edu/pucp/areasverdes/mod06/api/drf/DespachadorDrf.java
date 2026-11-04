@@ -15,7 +15,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
@@ -35,7 +34,7 @@ import pe.edu.pucp.areasverdes.mod06.permisos.Usuario;
  * <ol>
  *   <li>negociación de contenido: {@code ?format=} (404 si no es {@code json} ni {@code api}) y
  *       cabecera {@code Accept} (406);
- *   <li>permisos por rol (403);
+ *   <li>permisos de MOD-01 (403);
  *   <li>método: {@code HEAD} usa el de {@code GET}, {@code OPTIONS} devuelve los metadatos y el
  *       resto, 405;
  *   <li>cabeceras {@code Allow} y {@code Vary: Accept} en todas las respuestas de la vista.
@@ -72,7 +71,7 @@ public class DespachadorDrf {
     public record Vista(
             String nombre,
             List<String> metodos,
-            Set<String> roles,
+            String permiso,
             Salida.Serializador serializadorPost) {
         public String allow() {
             return String.join(", ", metodos);
@@ -110,7 +109,7 @@ public class DespachadorDrf {
         peticion.setAttribute(ATRIBUTO_ALLOW, vista.allow());
         negociar(peticion);
         Usuario usuario = usuario(peticion);
-        if (!permisos.tienePermiso(usuario, vista.roles())) {
+        if (!permisos.tienePermiso(usuario, vista.permiso())) {
             throw new ExcepcionApi(403, Permisos.MENSAJE_ROL_SIN_ACCESO);
         }
         String metodo = peticion.getMethod();
