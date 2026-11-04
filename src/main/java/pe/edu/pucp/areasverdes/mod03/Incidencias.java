@@ -181,10 +181,12 @@ public class Incidencias {
 
     private final NamedParameterJdbcTemplate jdbc;
     private final AdjuntosService adjuntos;
+    private final Avisos avisos;
 
-    public Incidencias(NamedParameterJdbcTemplate jdbc, AdjuntosService adjuntos) {
+    public Incidencias(NamedParameterJdbcTemplate jdbc, AdjuntosService adjuntos, Avisos avisos) {
         this.jdbc = jdbc;
         this.adjuntos = adjuntos;
+        this.avisos = avisos;
     }
 
     public Catalogos catalogos(UsuarioPlanificacion usuario) {
@@ -306,6 +308,7 @@ public class Incidencias {
                     foto,
                     comoSesion(usuario));
         }
+        avisarAlJefe(id);
         return id;
     }
 
@@ -381,12 +384,35 @@ public class Incidencias {
         }
     }
 
+    /** AV-281: cada jefe de sección activo recibe un aviso de la incidencia nueva. */
+    private void avisarAlJefe(long id) {
+        Map<String, Object> i =
+                jdbc.queryForMap(
+                        """
+                        SELECT i.codigo, t.nombre tipo, a.nombre espacio FROM mod03_incidencia i
+                        JOIN mod03_tipo_incidencia t ON t.id = i.tipo_incidencia_id
+                        JOIN mod02_area_verde a ON a.id = i.area_verde_id WHERE i.id = :id
+                        """,
+                        Map.of("id", id));
+        String texto =
+                "%s registrada: %s en %s"
+                        .formatted(i.get("codigo"), i.get("tipo"), i.get("espacio"));
+        for (Long jefe :
+                jdbc.queryForList(
+                        "SELECT u.id FROM core_usuario u JOIN core_rol r ON r.id = u.rol_id WHERE"
+                                + " u.activo AND r.codigo = 'jefe-seccion'",
+                        Map.of(),
+                        Long.class)) {
+            avisos.aUsuario(jefe, texto, "incidencia", id);
+        }
+    }
+
     /**
      * La bandeja de la oficina, de la más reciente a la más antigua. {@code grupo}: abiertas, en
      * proceso o cerradas (AV-279); sin él, todas.
      */
     public List<Resumen> bandeja(String grupo, UsuarioPlanificacion usuario) {
-        Acceso.gestionarIncidencias(usuario);
+        Acceso.consultarIncidencias(usuario);
         if (grupo != null && !GRUPOS.containsKey(grupo)) {
             throw new ErrorPlanificacion(
                     400, "grupo-invalido", "El grupo es abiertas, en_proceso o cerradas");
@@ -413,7 +439,7 @@ public class Incidencias {
     }
 
     public Detalle detalle(long id, UsuarioPlanificacion usuario) {
-        Acceso.gestionarIncidencias(usuario);
+        Acceso.consultarIncidencias(usuario);
         return ficha(id);
     }
 

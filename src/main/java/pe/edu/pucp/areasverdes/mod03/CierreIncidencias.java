@@ -21,10 +21,13 @@ public class CierreIncidencias {
 
     private final NamedParameterJdbcTemplate jdbc;
     private final Incidencias incidencias;
+    private final Avisos avisos;
 
-    public CierreIncidencias(NamedParameterJdbcTemplate jdbc, Incidencias incidencias) {
+    public CierreIncidencias(
+            NamedParameterJdbcTemplate jdbc, Incidencias incidencias, Avisos avisos) {
         this.jdbc = jdbc;
         this.incidencias = incidencias;
+        this.avisos = avisos;
     }
 
     @Transactional
@@ -40,6 +43,18 @@ public class CierreIncidencias {
                         + " :id",
                 Map.of("id", id));
         transicion(id, "Cerrada", usuario, texto(r));
+        // AV-281: quien la reportó, si es usuario del sistema, recibe el aviso del cierre.
+        Map<String, Object> i =
+                jdbc.queryForMap(
+                        "SELECT codigo, reportante_usuario_id FROM mod03_incidencia WHERE id = :id",
+                        Map.of("id", id));
+        if (i.get("reportante_usuario_id") != null) {
+            avisos.aUsuario(
+                    ((Number) i.get("reportante_usuario_id")).longValue(),
+                    "%s cerrada: gracias por reportarla".formatted(i.get("codigo")),
+                    "incidencia",
+                    id);
+        }
     }
 
     @Transactional

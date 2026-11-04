@@ -24,9 +24,11 @@ public class PlazosIncidencias {
     public record Capataz(long id, String nombre, String cuadrilla) {}
 
     private final NamedParameterJdbcTemplate jdbc;
+    private final Avisos avisos;
 
-    public PlazosIncidencias(NamedParameterJdbcTemplate jdbc) {
+    public PlazosIncidencias(NamedParameterJdbcTemplate jdbc, Avisos avisos) {
         this.jdbc = jdbc;
+        this.avisos = avisos;
     }
 
     @Transactional
@@ -74,6 +76,22 @@ public class PlazosIncidencias {
         jdbc.update(
                 "UPDATE mod03_incidencia SET capataz_id = :capataz WHERE id = :id",
                 Map.of("id", id, "capataz", r.capatazId()));
+        // AV-281: el capataz que la recibe, si tiene cuenta, recibe el aviso.
+        Map<String, Object> i =
+                jdbc.queryForMap(
+                        """
+                        SELECT i.codigo, t.nombre tipo, p.usuario_id FROM mod03_incidencia i
+                        JOIN mod03_tipo_incidencia t ON t.id = i.tipo_incidencia_id
+                        JOIN mod04_personal p ON p.id = i.capataz_id WHERE i.id = :id
+                        """,
+                        Map.of("id", id));
+        if (i.get("usuario_id") != null) {
+            avisos.aUsuario(
+                    ((Number) i.get("usuario_id")).longValue(),
+                    "%s te la han asignado: %s".formatted(i.get("codigo"), i.get("tipo")),
+                    "incidencia",
+                    id);
+        }
     }
 
     /** La vía de la incidencia si sigue abierta; 404 si no existe y 409 si ya se cerró. */
