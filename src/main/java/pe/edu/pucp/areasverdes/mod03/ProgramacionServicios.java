@@ -43,9 +43,11 @@ public class ProgramacionServicios {
     private record Duracion(boolean ruidoso, Integer maxima, Integer limpieza) {}
 
     private final NamedParameterJdbcTemplate jdbc;
+    private final AlertasPlanificacion alertas;
 
-    public ProgramacionServicios(NamedParameterJdbcTemplate jdbc) {
+    public ProgramacionServicios(NamedParameterJdbcTemplate jdbc, AlertasPlanificacion alertas) {
         this.jdbc = jdbc;
+        this.alertas = alertas;
     }
 
     @Transactional
@@ -109,6 +111,7 @@ public class ProgramacionServicios {
                         datos,
                         Long.class);
         registrarTransicion(id, "Programada", usuario, null);
+        alertas.atenderFrecuencia(nueva.tipoServicioId(), usuario);
         for (Restriccion r : conflictos) {
             jdbc.update(
                     "INSERT INTO mod03_confirmacion_restriccion(programacion_id, restriccion_id,"
