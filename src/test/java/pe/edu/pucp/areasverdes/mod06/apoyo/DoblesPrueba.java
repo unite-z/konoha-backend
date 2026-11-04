@@ -15,8 +15,9 @@ import pe.edu.pucp.areasverdes.mod06.permisos.ProveedorUsuario;
 import pe.edu.pucp.areasverdes.mod06.permisos.Usuario;
 
 /**
- * Dobles para las pruebas de la API (fixtures {@code usar_fuente}, {@code usar_cliente_ia}, {@code usuario_con_rol}
- * y {@code sin_ia_real} de {@code conftest.py}). Cada prueba llama a {@link #reiniciar()} antes de empezar.
+ * Dobles para las pruebas de la API (fixtures {@code usar_fuente}, {@code usar_cliente_ia}, {@code
+ * usuario_con_rol} y {@code sin_ia_real} de {@code conftest.py}). Cada prueba llama a {@link
+ * #reiniciar()} antes de empezar.
  */
 @TestConfiguration
 public class DoblesPrueba {
@@ -53,7 +54,10 @@ public class DoblesPrueba {
             this.cliente = c;
         }
 
-        /** Simula {@code settings.GEMINI_API_KEY} y {@code settings.GEMINI_MODEL}, con el SDK prohibido ({@code sin_ia_real}). */
+        /**
+         * Simula {@code settings.GEMINI_API_KEY} y {@code settings.GEMINI_MODEL}, con el SDK
+         * prohibido ({@code sin_ia_real}).
+         */
         public void configuracion(String clave, String modelo) {
             this.clave = clave;
             this.modelo = modelo;
@@ -63,9 +67,12 @@ public class DoblesPrueba {
         public ClienteIA obtenerClienteIa() {
             if (cliente != null) return cliente;
             if (clave != null) {
-                return new ClienteGemini(clave, modelo, parametros -> {
-                    throw new AssertionError("Las pruebas no deben llamar a Gemini");
-                });
+                return new ClienteGemini(
+                        clave,
+                        modelo,
+                        parametros -> {
+                            throw new AssertionError("Las pruebas no deben llamar a Gemini");
+                        });
             }
             throw new AssertionError("Las pruebas no deben llamar a Gemini");
         }
@@ -135,7 +142,11 @@ public class DoblesPrueba {
     }
 
     /** Estado inicial de los dobles. */
-    public static void reiniciar(SelectorPrueba selector, FabricaPrueba fabrica, UsuarioPrueba usuario, PermisosPrueba permisos) {
+    public static void reiniciar(
+            SelectorPrueba selector,
+            FabricaPrueba fabrica,
+            UsuarioPrueba usuario,
+            PermisosPrueba permisos) {
         selector.usar(null);
         fabrica.usar(null);
         fabrica.configuracion(null, null);
@@ -144,7 +155,8 @@ public class DoblesPrueba {
     }
 
     /** {@code usuario_con_rol(rol, id_usuario)}. */
-    public static void conRol(UsuarioPrueba usuario, PermisosPrueba permisos, String rol, Object idUsuario) {
+    public static void conRol(
+            UsuarioPrueba usuario, PermisosPrueba permisos, String rol, Object idUsuario) {
         usuario.usar(new Usuario(true, idUsuario, null));
         permisos.simularRol(rol);
     }

@@ -29,41 +29,51 @@ import pe.edu.pucp.areasverdes.mod06.permisos.ProveedorUsuario;
 import pe.edu.pucp.areasverdes.mod06.permisos.Usuario;
 
 /**
- * Ciclo de una petición como en una {@code APIView} de DRF (más el {@code CommonMiddleware} de Django), para que las
- * respuestas sean idénticas a las del Django:
+ * Ciclo de una petición como en una {@code APIView} de DRF (más el {@code CommonMiddleware} de
+ * Django), para que las respuestas sean idénticas a las del Django:
  *
  * <ol>
- *   <li>negociación de contenido: {@code ?format=} (404 si no es {@code json} ni {@code api}) y cabecera
- *   {@code Accept} (406);</li>
- *   <li>permisos por rol (403);</li>
- *   <li>método: {@code HEAD} usa el de {@code GET}, {@code OPTIONS} devuelve los metadatos y el resto, 405;</li>
- *   <li>cabeceras {@code Allow} y {@code Vary: Accept} en todas las respuestas de la vista.</li>
+ *   <li>negociación de contenido: {@code ?format=} (404 si no es {@code json} ni {@code api}) y
+ *       cabecera {@code Accept} (406);
+ *   <li>permisos por rol (403);
+ *   <li>método: {@code HEAD} usa el de {@code GET}, {@code OPTIONS} devuelve los metadatos y el
+ *       resto, 405;
+ *   <li>cabeceras {@code Allow} y {@code Vary: Accept} en todas las respuestas de la vista.
  * </ol>
  *
- * <p>También lee el cuerpo como {@code request.data} (JSON, formulario o multipart; 415 si el tipo no se admite;
- * 400 si el JSON no se puede leer), los parámetros de consulta como un {@code QueryDict} y responde la redirección
- * 301 de las rutas sin barra final ({@code APPEND_SLASH}).
+ * <p>También lee el cuerpo como {@code request.data} (JSON, formulario o multipart; 415 si el tipo
+ * no se admite; 400 si el JSON no se puede leer), los parámetros de consulta como un {@code
+ * QueryDict} y responde la redirección 301 de las rutas sin barra final ({@code APPEND_SLASH}).
  */
 @Component
 public class DespachadorDrf {
 
-    /** Atributo de la petición con la cabecera {@code Allow} de la vista (lo usa el manejador de excepciones). */
+    /**
+     * Atributo de la petición con la cabecera {@code Allow} de la vista (lo usa el manejador de
+     * excepciones).
+     */
     public static final String ATRIBUTO_ALLOW = "mod06.drf.allow";
 
     public static final String TIPO_JSON = "application/json";
     public static final String TIPO_HTML = "text/html; charset=utf-8";
 
-    private static final List<String> METODOS_HTTP = List.of("get", "post", "put", "patch", "delete", "head", "options", "trace");
+    private static final List<String> METODOS_HTTP =
+            List.of("get", "post", "put", "patch", "delete", "head", "options", "trace");
 
     /**
      * Configuración de una vista.
      *
-     * @param nombre          {@code get_view_name()} (metadatos de OPTIONS)
-     * @param metodos         métodos permitidos en el orden de DRF (cabecera {@code Allow})
-     * @param roles           roles permitidos ({@code PermisoPorRol})
-     * @param serializadorPost serializador de las acciones POST en OPTIONS ({@code GenericAPIView}), o {@code null}
+     * @param nombre {@code get_view_name()} (metadatos de OPTIONS)
+     * @param metodos métodos permitidos en el orden de DRF (cabecera {@code Allow})
+     * @param roles roles permitidos ({@code PermisoPorRol})
+     * @param serializadorPost serializador de las acciones POST en OPTIONS ({@code
+     *     GenericAPIView}), o {@code null}
      */
-    public record Vista(String nombre, List<String> metodos, Set<String> roles, Salida.Serializador serializadorPost) {
+    public record Vista(
+            String nombre,
+            List<String> metodos,
+            Set<String> roles,
+            Salida.Serializador serializadorPost) {
         public String allow() {
             return String.join(", ", metodos);
         }
@@ -90,10 +100,13 @@ public class DespachadorDrf {
     }
 
     /**
-     * {@code APIView.dispatch}: negociación, permisos y método. {@code manejadores} se indexa por método en
-     * mayúsculas ({@code GET}, {@code POST}).
+     * {@code APIView.dispatch}: negociación, permisos y método. {@code manejadores} se indexa por
+     * método en mayúsculas ({@code GET}, {@code POST}).
      */
-    public ResponseEntity<byte[]> despachar(HttpServletRequest peticion, Vista vista, Map<String, Supplier<Respuesta>> manejadores) {
+    public ResponseEntity<byte[]> despachar(
+            HttpServletRequest peticion,
+            Vista vista,
+            Map<String, Supplier<Respuesta>> manejadores) {
         peticion.setAttribute(ATRIBUTO_ALLOW, vista.allow());
         negociar(peticion);
         Usuario usuario = usuario(peticion);
@@ -117,7 +130,12 @@ public class DespachadorDrf {
         m.put("name", vista.nombre());
         m.put("description", "");
         m.put("renders", List.of("application/json", "text/html"));
-        m.put("parses", List.of("application/json", "application/x-www-form-urlencoded", "multipart/form-data"));
+        m.put(
+                "parses",
+                List.of(
+                        "application/json",
+                        "application/x-www-form-urlencoded",
+                        "multipart/form-data"));
         if (vista.serializadorPost() != null && vista.metodos().contains("POST")) {
             m.put("actions", Py.dict("POST", vista.serializadorPost().info()));
         }
@@ -132,7 +150,8 @@ public class DespachadorDrf {
         h.set(HttpHeaders.CONTENT_TYPE, TIPO_JSON);
         if (allow != null) h.set(HttpHeaders.ALLOW, allow);
         h.set(HttpHeaders.VARY, "Accept");
-        return new ResponseEntity<>(JsonPy.dumpsRespuesta(datos).getBytes(StandardCharsets.UTF_8), h, estado);
+        return new ResponseEntity<>(
+                JsonPy.dumpsRespuesta(datos).getBytes(StandardCharsets.UTF_8), h, estado);
     }
 
     /** Cabeceras del {@code SecurityMiddleware} de Django. */
@@ -151,17 +170,37 @@ public class DespachadorDrf {
     }
 
     /** Página 404 de Django ({@code page_not_found} sin plantilla). */
-    public static final String PAGINA_404 = "\n<!doctype html>\n<html lang=\"en\">\n<head>\n  <title>Not Found</title>\n</head>\n"
-        + "<body>\n  <h1>Not Found</h1><p>The requested resource was not found on this server.</p>\n</body>\n</html>\n";
+    public static final String PAGINA_404 =
+            "\n"
+                    + "<!doctype html>\n"
+                    + "<html lang=\"en\">\n"
+                    + "<head>\n"
+                    + "  <title>Not Found</title>\n"
+                    + "</head>\n"
+                    + "<body>\n"
+                    + "  <h1>Not Found</h1><p>The requested resource was not found on this"
+                    + " server.</p>\n"
+                    + "</body>\n"
+                    + "</html>\n";
 
     /** Página 500 de Django ({@code server_error} sin plantilla). */
-    public static final String PAGINA_500 = "\n<!doctype html>\n<html lang=\"en\">\n<head>\n  <title>Server Error (500)</title>\n</head>\n"
-        + "<body>\n  <h1>Server Error (500)</h1><p></p>\n</body>\n</html>\n";
+    public static final String PAGINA_500 =
+            "\n"
+                    + "<!doctype html>\n"
+                    + "<html lang=\"en\">\n"
+                    + "<head>\n"
+                    + "  <title>Server Error (500)</title>\n"
+                    + "</head>\n"
+                    + "<body>\n"
+                    + "  <h1>Server Error (500)</h1><p></p>\n"
+                    + "</body>\n"
+                    + "</html>\n";
 
     /**
-     * Ruta sin barra final cuya versión con barra existe ({@code CommonMiddleware} con {@code APPEND_SLASH}):
-     * 301 a la ruta con barra, conservando la consulta. Como el Django en modo {@code DEBUG} (el del {@code .env}),
-     * los métodos POST, PUT y PATCH responden 500 en vez de redirigir, porque se perdería el cuerpo.
+     * Ruta sin barra final cuya versión con barra existe ({@code CommonMiddleware} con {@code
+     * APPEND_SLASH}): 301 a la ruta con barra, conservando la consulta. Como el Django en modo
+     * {@code DEBUG} (el del {@code .env}), los métodos POST, PUT y PATCH responden 500 en vez de
+     * redirigir, porque se perdería el cuerpo.
      */
     public static ResponseEntity<byte[]> sinBarraFinal(HttpServletRequest peticion) {
         String metodo = peticion.getMethod();
@@ -192,8 +231,13 @@ public class DespachadorDrf {
                 if (eq < 0) continue;
                 String nombre = p.substring(0, eq).strip().toLowerCase(Locale.ROOT);
                 String valor = p.substring(eq + 1).strip();
-                if (valor.length() >= 2 && valor.charAt(0) == '"' && valor.charAt(valor.length() - 1) == '"') {
-                    valor = valor.substring(1, valor.length() - 1).replace("\\\\", "\\").replace("\\\"", "\"");
+                if (valor.length() >= 2
+                        && valor.charAt(0) == '"'
+                        && valor.charAt(valor.length() - 1) == '"') {
+                    valor =
+                            valor.substring(1, valor.length() - 1)
+                                    .replace("\\\\", "\\")
+                                    .replace("\\\"", "\"");
                 }
                 params.put(nombre, valor);
             }
@@ -206,30 +250,37 @@ public class DespachadorDrf {
         /** {@code _MediaType.match(otro)}. */
         boolean coincide(TipoMedio otro) {
             for (String clave : parametros.keySet()) {
-                if (!clave.equals("q") && !java.util.Objects.equals(otro.parametros.get(clave), parametros.get(clave))) return false;
+                if (!clave.equals("q")
+                        && !java.util.Objects.equals(
+                                otro.parametros.get(clave), parametros.get(clave))) return false;
             }
             if (!sub.equals("*") && !otro.sub.equals("*") && !otro.sub.equals(sub)) return false;
-            return principal.equals("*") || otro.principal.equals("*") || otro.principal.equals(principal);
+            return principal.equals("*")
+                    || otro.principal.equals("*")
+                    || otro.principal.equals(principal);
         }
 
         int precedencia() {
             if (principal.equals("*")) return 0;
             if (sub.equals("*")) return 1;
-            if (parametros.isEmpty() || (parametros.size() == 1 && parametros.containsKey("q"))) return 2;
+            if (parametros.isEmpty() || (parametros.size() == 1 && parametros.containsKey("q")))
+                return 2;
             return 3;
         }
     }
 
-    private static final List<TipoMedio> RENDERIZADORES = List.of(TipoMedio.de("application/json"), TipoMedio.de("text/html"));
+    private static final List<TipoMedio> RENDERIZADORES =
+            List.of(TipoMedio.de("application/json"), TipoMedio.de("text/html"));
 
     /**
-     * {@code DefaultContentNegotiation.select_renderer}. Si se elige la API navegable de DRF ({@code text/html}),
-     * el Java responde igualmente en JSON.
+     * {@code DefaultContentNegotiation.select_renderer}. Si se elige la API navegable de DRF
+     * ({@code text/html}), el Java responde igualmente en JSON.
      */
     static void negociar(HttpServletRequest peticion) {
         Object formato = parametrosConsulta(peticion).get("format");
         if (Py.truthy(formato)) {
-            if (!formato.equals("json") && !formato.equals("api")) throw new ExcepcionApi(404, ExcepcionApi.NO_ENCONTRADO);
+            if (!formato.equals("json") && !formato.equals("api"))
+                throw new ExcepcionApi(404, ExcepcionApi.NO_ENCONTRADO);
             return;
         }
         String cabecera = peticion.getHeader("Accept");
@@ -256,13 +307,18 @@ public class DespachadorDrf {
     /** {@code request.query_params}: {@code QueryDict} de la consulta sin decodificar. */
     public static Entrada.MultiValor parametrosConsulta(HttpServletRequest peticion) {
         String crudo = peticion.getQueryString();
-        return parseQsl(crudo == null ? "" : bytesATexto(crudo.getBytes(StandardCharsets.ISO_8859_1)));
+        return parseQsl(
+                crudo == null ? "" : bytesATexto(crudo.getBytes(StandardCharsets.ISO_8859_1)));
     }
 
     private static String bytesATexto(byte[] bytes) {
         try {
-            return StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
-                .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString();
+            return StandardCharsets.UTF_8
+                    .newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .decode(ByteBuffer.wrap(bytes))
+                    .toString();
         } catch (java.nio.charset.CharacterCodingException e) {
             return new String(bytes, StandardCharsets.ISO_8859_1);
         }
@@ -291,7 +347,9 @@ public class DespachadorDrf {
         int i = 0;
         while (i < texto.length()) {
             char c = texto.charAt(i);
-            if (c == '%' && i + 3 <= texto.length() && HEX2.matcher(texto.substring(i + 1, i + 3)).matches()) {
+            if (c == '%'
+                    && i + 3 <= texto.length()
+                    && HEX2.matcher(texto.substring(i + 1, i + 3)).matches()) {
                 bytes.write(Integer.parseInt(texto.substring(i + 1, i + 3), 16));
                 i += 3;
                 continue;
@@ -309,8 +367,12 @@ public class DespachadorDrf {
 
     private static String decodificarReemplazando(byte[] b) {
         try {
-            return StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPLACE)
-                .onUnmappableCharacter(CodingErrorAction.REPLACE).decode(ByteBuffer.wrap(b)).toString();
+            return StandardCharsets.UTF_8
+                    .newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPLACE)
+                    .onUnmappableCharacter(CodingErrorAction.REPLACE)
+                    .decode(ByteBuffer.wrap(b))
+                    .toString();
         } catch (java.nio.charset.CharacterCodingException e) {
             throw new IllegalStateException(e);
         }
@@ -318,21 +380,23 @@ public class DespachadorDrf {
 
     // ================================================================== cuerpo (request.data)
 
-    private static final List<String> TIPOS_ANALIZADORES = List.of("application/json", "application/x-www-form-urlencoded",
-        "multipart/form-data");
+    private static final List<String> TIPOS_ANALIZADORES =
+            List.of("application/json", "application/x-www-form-urlencoded", "multipart/form-data");
 
     /**
-     * {@code request.data} de DRF: {@code Map}/{@code List}/... para JSON, {@link Entrada.MultiValor} para
-     * formularios. Sin cuerpo ({@code Content-Length} 0 o ausente) → diccionario vacío. Lanza {@link ExcepcionApi}
-     * 415 si el tipo no se admite y 400 si no se puede leer.
+     * {@code request.data} de DRF: {@code Map}/{@code List}/... para JSON, {@link
+     * Entrada.MultiValor} para formularios. Sin cuerpo ({@code Content-Length} 0 o ausente) →
+     * diccionario vacío. Lanza {@link ExcepcionApi} 415 si el tipo no se admite y 400 si no se
+     * puede leer.
      */
     public static Object datos(HttpServletRequest peticion) {
         String tipoContenido = peticion.getContentType();
         // El servidor de desarrollo de Django (wsgiref) pone text/plain si falta la cabecera.
         if (tipoContenido == null) tipoContenido = "text/plain";
         TipoMedio tipo = TipoMedio.de(tipoContenido);
-        boolean formulario = TipoMedio.de("application/x-www-form-urlencoded").coincide(tipo)
-            || TipoMedio.de("multipart/form-data").coincide(tipo);
+        boolean formulario =
+                TipoMedio.de("application/x-www-form-urlencoded").coincide(tipo)
+                        || TipoMedio.de("multipart/form-data").coincide(tipo);
         if (peticion.getContentLengthLong() <= 0) {
             return formulario ? new Entrada.MultiValor() : new LinkedHashMap<String, Object>();
         }
@@ -366,8 +430,13 @@ public class DespachadorDrf {
                 byte[] b = leer(peticion);
                 String texto;
                 try {
-                    texto = codificacion.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
-                        .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(b)).toString();
+                    texto =
+                            codificacion
+                                    .newDecoder()
+                                    .onMalformedInput(CodingErrorAction.REPORT)
+                                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                                    .decode(ByteBuffer.wrap(b))
+                                    .toString();
                 } catch (java.nio.charset.CharacterCodingException e) {
                     texto = new String(b, StandardCharsets.ISO_8859_1);
                 }
@@ -390,7 +459,10 @@ public class DespachadorDrf {
         try {
             for (Part parte : peticion.getParts()) {
                 if (parte.getSubmittedFileName() == null) {
-                    r.agregar(parte.getName(), new String(parte.getInputStream().readAllBytes(), StandardCharsets.UTF_8));
+                    r.agregar(
+                            parte.getName(),
+                            new String(
+                                    parte.getInputStream().readAllBytes(), StandardCharsets.UTF_8));
                 } else {
                     r.agregar(parte.getName(), parte.getSubmittedFileName());
                 }
@@ -402,16 +474,24 @@ public class DespachadorDrf {
     }
 
     /**
-     * {@code codecs.getreader(codificacion)(flujo).read()}: decodificación estricta con el mensaje de Python; una
-     * secuencia UTF-8 incompleta al final se descarta (el lector incremental no la marca como error).
+     * {@code codecs.getreader(codificacion)(flujo).read()}: decodificación estricta con el mensaje
+     * de Python; una secuencia UTF-8 incompleta al final se descarta (el lector incremental no la
+     * marca como error).
      */
     static String decodificarComoPython(byte[] b, Charset codificacion) {
         if (!codificacion.equals(StandardCharsets.UTF_8)) {
             try {
-                return codificacion.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
-                    .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(b)).toString();
+                return codificacion
+                        .newDecoder()
+                        .onMalformedInput(CodingErrorAction.REPORT)
+                        .onUnmappableCharacter(CodingErrorAction.REPORT)
+                        .decode(ByteBuffer.wrap(b))
+                        .toString();
             } catch (java.nio.charset.CharacterCodingException e) {
-                throw new Py.ValueError("'" + codificacion.name().toLowerCase(Locale.ROOT) + "' codec can't decode bytes");
+                throw new Py.ValueError(
+                        "'"
+                                + codificacion.name().toLowerCase(Locale.ROOT)
+                                + "' codec can't decode bytes");
             }
         }
         StringBuilder sb = new StringBuilder();
@@ -439,7 +519,8 @@ public class DespachadorDrf {
             }
             int k = 1;
             for (; k < n; k++) {
-                if (i + k >= b.length) return sb.toString(); // secuencia incompleta al final: se descarta
+                if (i + k >= b.length)
+                    return sb.toString(); // secuencia incompleta al final: se descarta
                 int x = b[i + k] & 0xff;
                 int lo = k == 1 ? min2 : 0x80, hi = k == 1 ? max2 : 0xbf;
                 if (x < lo || x > hi) throw errorUtf8(c, i, i + k, "invalid continuation byte");
@@ -452,9 +533,15 @@ public class DespachadorDrf {
 
     private static Py.ValueError errorUtf8(int primero, int inicio, int fin, String razon) {
         if (fin - inicio == 1) {
-            return new Py.ValueError(String.format("'utf-8' codec can't decode byte 0x%02x in position %d: %s", primero, inicio, razon));
+            return new Py.ValueError(
+                    String.format(
+                            "'utf-8' codec can't decode byte 0x%02x in position %d: %s",
+                            primero, inicio, razon));
         }
-        return new Py.ValueError(String.format("'utf-8' codec can't decode bytes in position %d-%d: %s", inicio, fin - 1, razon));
+        return new Py.ValueError(
+                String.format(
+                        "'utf-8' codec can't decode bytes in position %d-%d: %s",
+                        inicio, fin - 1, razon));
     }
 
     // ================================================================== URLs
@@ -469,11 +556,17 @@ public class DespachadorDrf {
             host = peticion.getServerName() + (estandar ? "" : ":" + puerto);
         }
         String consulta = peticion.getQueryString();
-        return peticion.getScheme() + "://" + host + peticion.getRequestURI()
-            + (consulta != null && !consulta.isEmpty() ? "?" + consulta : "");
+        return peticion.getScheme()
+                + "://"
+                + host
+                + peticion.getRequestURI()
+                + (consulta != null && !consulta.isEmpty() ? "?" + consulta : "");
     }
 
-    /** {@code rest_framework.utils.urls.replace_query_param} ({@code valor == null}: {@code remove_query_param}). */
+    /**
+     * {@code rest_framework.utils.urls.replace_query_param} ({@code valor == null}: {@code
+     * remove_query_param}).
+     */
     public static String reemplazarParametro(String url, String clave, String valor) {
         int signo = url.indexOf('?');
         int almohadilla = url.indexOf('#');
@@ -482,8 +575,14 @@ public class DespachadorDrf {
             fragmento = url.substring(almohadilla);
             url = url.substring(0, almohadilla);
         }
-        String base = signo >= 0 && (almohadilla < 0 || signo < almohadilla) ? url.substring(0, signo) : url;
-        String consulta = signo >= 0 && (almohadilla < 0 || signo < almohadilla) ? url.substring(signo + 1) : "";
+        String base =
+                signo >= 0 && (almohadilla < 0 || signo < almohadilla)
+                        ? url.substring(0, signo)
+                        : url;
+        String consulta =
+                signo >= 0 && (almohadilla < 0 || signo < almohadilla)
+                        ? url.substring(signo + 1)
+                        : "";
         Map<String, List<String>> parametros = new LinkedHashMap<>();
         for (String par : consulta.split("&", -1)) {
             if (par.isEmpty()) continue;
@@ -497,7 +596,8 @@ public class DespachadorDrf {
         TreeMap<String, List<String>> ordenados = new TreeMap<>(Py::compararTexto);
         ordenados.putAll(parametros);
         List<String> partes = new ArrayList<>();
-        ordenados.forEach((n, vs) -> vs.forEach(v -> partes.add(quotePlus(n) + "=" + quotePlus(v))));
+        ordenados.forEach(
+                (n, vs) -> vs.forEach(v -> partes.add(quotePlus(n) + "=" + quotePlus(v))));
         String q = String.join("&", partes);
         return base + (q.isEmpty() ? "" : "?" + q) + fragmento;
     }
@@ -507,7 +607,13 @@ public class DespachadorDrf {
         StringBuilder sb = new StringBuilder();
         for (byte b : s.getBytes(StandardCharsets.UTF_8)) {
             int c = b & 0xff;
-            if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '.' || c == '-' || c == '~') {
+            if ((c >= 'a' && c <= 'z')
+                    || (c >= 'A' && c <= 'Z')
+                    || (c >= '0' && c <= '9')
+                    || c == '_'
+                    || c == '.'
+                    || c == '-'
+                    || c == '~') {
                 sb.append((char) c);
             } else if (c == ' ') {
                 sb.append('+');

@@ -12,8 +12,8 @@ import pe.edu.pucp.areasverdes.mod06.fuentesdatos.SelectorFuenteDatos;
 /**
  * Permisos por rol del MOD-06.
  *
- * <p>Fuente: matriz de permisos por rol (Historias de Usuario v3, sección 2.1) y catálogo de roles (Modelo de BD v1,
- * tabla 3).
+ * <p>Fuente: matriz de permisos por rol (Historias de Usuario v3, sección 2.1) y catálogo de roles
+ * (Modelo de BD v1, tabla 3).
  *
  * <pre>
  * | Función                                              | Jefe de sección | Ingeniero de campo | Practicante       | Capataz | Operario |
@@ -23,8 +23,8 @@ import pe.edu.pucp.areasverdes.mod06.fuentesdatos.SelectorFuenteDatos;
  * | Validar o rechazar datos propuestos por IA           | Valida          | —                  | —                 | —       | —        |
  * </pre>
  *
- * <p>Mientras el MOD-01 no esté integrado (autenticación vacía: el usuario es anónimo), {@link #tienePermiso}
- * permite el acceso y deja un aviso en el log una sola vez por proceso.
+ * <p>Mientras el MOD-01 no esté integrado (autenticación vacía: el usuario es anónimo), {@link
+ * #tienePermiso} permite el acceso y deja un aviso en el log una sola vez por proceso.
  */
 @Component
 public class Permisos {
@@ -39,13 +39,16 @@ public class Permisos {
     public static final String ROL_CAPATAZ = "Capataz";
     public static final String ROL_OPERARIO = "Operario";
 
-    public static final Set<String> ROLES_CONSULTA_REPORTES = Set.of(ROL_JEFE_SECCION, ROL_INGENIERO_CAMPO, ROL_PRACTICANTE);
-    public static final Set<String> ROLES_SOLICITAR_IA = Set.of(ROL_JEFE_SECCION, ROL_INGENIERO_CAMPO, ROL_PRACTICANTE);
+    public static final Set<String> ROLES_CONSULTA_REPORTES =
+            Set.of(ROL_JEFE_SECCION, ROL_INGENIERO_CAMPO, ROL_PRACTICANTE);
+    public static final Set<String> ROLES_SOLICITAR_IA =
+            Set.of(ROL_JEFE_SECCION, ROL_INGENIERO_CAMPO, ROL_PRACTICANTE);
     public static final Set<String> ROLES_VALIDAR_IA = Set.of(ROL_JEFE_SECCION);
 
     public static final String MENSAJE_ROL_SIN_ACCESO = "Tu rol no tiene acceso a esta función";
     public static final String MENSAJE_SIN_AUTENTICACION =
-        "Permisos de MOD-06 sin aplicar: falta la autenticación del MOD-01 (RF-T-001, RF-T-004)";
+            "Permisos de MOD-06 sin aplicar: falta la autenticación del MOD-01 (RF-T-001,"
+                    + " RF-T-004)";
 
     private static boolean avisoEmitido = false;
     private static final ReentrantLock CANDADO_AVISO = new ReentrantLock();
@@ -63,8 +66,9 @@ public class Permisos {
     /**
      * Nombre del rol del usuario, o {@code null} si es anónimo o no tiene rol.
      *
-     * <p>TODO: ajustar al modelo de usuario del MOD-01 (Usuario.rol_id → Rol.nombre).
-     * Hoy se asume un usuario con {@code rol_id} y se resuelve el nombre en la entidad Rol de la fuente de datos.
+     * <p>TODO: ajustar al modelo de usuario del MOD-01 (Usuario.rol_id → Rol.nombre). Hoy se asume
+     * un usuario con {@code rol_id} y se resuelve el nombre en la entidad Rol de la fuente de
+     * datos.
      */
     public Object rolDeUsuario(Usuario usuario) {
         if (!estaAutenticado(usuario)) return null;
@@ -110,10 +114,10 @@ public class Permisos {
      * Permiso por rol ({@code PermisoPorRol(roles).has_permission} en el Django).
      *
      * <ul>
-     *   <li>Usuario anónimo (MOD-01 aún no integrado): permite y avisa una vez por proceso.
-     *   TODO: cuando el MOD-01 publique la autenticación, rechazar a los usuarios anónimos.</li>
-     *   <li>Usuario autenticado cuyo rol no está en el conjunto: {@code false} (403 «Tu rol no tiene acceso a esta
-     *   función»).</li>
+     *   <li>Usuario anónimo (MOD-01 aún no integrado): permite y avisa una vez por proceso. TODO:
+     *       cuando el MOD-01 publique la autenticación, rechazar a los usuarios anónimos.
+     *   <li>Usuario autenticado cuyo rol no está en el conjunto: {@code false} (403 «Tu rol no
+     *       tiene acceso a esta función»).
      * </ul>
      */
     public boolean tienePermiso(Usuario usuario, Set<String> roles) {
