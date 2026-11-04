@@ -38,7 +38,7 @@ class PropuestaApiTest extends ApiPlanificacion {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.fecha_inicio").value(HOY.toString()))
                 .andExpect(jsonPath("$.fecha_fin").value(HOY.plusDays(3).toString()))
-                .andExpect(jsonPath("$.conflictos[0].tipo").value("Evento masivo"))
+                .andExpect(jsonPath("$.conflictos[0].tipo").value("Examen de admisión"))
                 .andExpect(jsonPath("$.ventana_libre_inicio").value(HOY.plusDays(2).toString()));
         proponer(2) // Control fitosanitario: no es ruidoso y el evento solo afecta a los ruidosos.
                 .andExpect(jsonPath("$.conflictos.length()").value(0))
