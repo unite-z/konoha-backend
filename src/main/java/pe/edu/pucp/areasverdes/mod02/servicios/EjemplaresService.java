@@ -67,9 +67,11 @@ public class EjemplaresService {
                 jdbc.queryForObject(
                         "INSERT INTO mod02_ejemplar (codigo_placa_antigua, especie_id,"
                             + " tipo_vegetacion, ubicacion, ubicacion_geografica, cantidad) VALUES"
-                            + " (:placa, :especie, :vegetacion, :ubicacion, CASE WHEN :latitud IS"
-                            + " NULL THEN NULL ELSE ST_SetSRID(ST_MakePoint(:longitud, :latitud),"
-                            + " 4326)::geometry(Point, 4326) END, :cantidad) RETURNING id",
+                            + " (:placa, :especie, :vegetacion, :ubicacion, CASE WHEN CAST(:latitud"
+                            + " AS numeric) IS NULL THEN NULL ELSE ST_SetSRID"
+                            + " (ST_MakePoint(CAST(:longitud AS double precision), CAST(:latitud AS"
+                            + " double precision)), 4326)::geometry(Point, 4326) END, :cantidad)"
+                            + " RETURNING id",
                         parametros(entrada),
                         Long.class);
         return buscar(id);
