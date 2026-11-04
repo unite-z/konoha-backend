@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.dhatim.fastexcel.Workbook;
 import org.dhatim.fastexcel.Worksheet;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
@@ -47,6 +48,16 @@ class ImportacionesApiTest extends ApiCore {
                 VALUES (:n, :n, 'Árbol')
                 """,
                 Map.of("n", especie));
+    }
+
+    /** Otras suites cuentan las especies y los ejemplares de esta base: no se deja nada. */
+    @AfterEach
+    void limpiar() {
+        jdbc.update(
+                "DELETE FROM mod02_ejemplar WHERE codigo_catastro LIKE :p",
+                Map.of("p", prefijo + "%"));
+        jdbc.update(
+                "DELETE FROM mod02_especie_vegetal WHERE nombre_comun = :n", Map.of("n", especie));
     }
 
     private static byte[] xlsx(List<String> cabeceras, List<List<String>> filas)
