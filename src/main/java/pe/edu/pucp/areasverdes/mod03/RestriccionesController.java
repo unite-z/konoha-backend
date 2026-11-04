@@ -13,7 +13,6 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.DataClassRowMapper;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -24,7 +23,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import pe.edu.pucp.areasverdes.mod03.CalendarioRestricciones.NuevaRestriccion;
-import pe.edu.pucp.areasverdes.mod05.Usuario;
 
 /** Calendario de restricciones (HU-MOD03-003): exámenes, feriados, eventos y demás días. */
 @RestController
@@ -72,7 +70,7 @@ public class RestriccionesController {
 
     @Operation(summary = "Tipos de restricción con su efecto en la programación")
     @GetMapping({"/tipos-restriccion", "/tipos-restriccion/"})
-    public List<TipoRestriccion> tipos(@AuthenticationPrincipal Usuario usuario) {
+    public List<TipoRestriccion> tipos(UsuarioPlanificacion usuario) {
         Acceso.consultar(usuario);
         return jdbc.query(
                 "SELECT * FROM mod03_tipo_restriccion WHERE activo ORDER BY id",
@@ -82,7 +80,7 @@ public class RestriccionesController {
     @Operation(summary = "Restricciones vigentes que se solapan con el periodo [desde, hasta]")
     @GetMapping({"/restricciones", "/restricciones/"})
     public List<Restriccion> restricciones(
-            @AuthenticationPrincipal Usuario usuario,
+            UsuarioPlanificacion usuario,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta) {
         Acceso.consultar(usuario);
@@ -103,7 +101,7 @@ public class RestriccionesController {
     @PostMapping({"/restricciones", "/restricciones/"})
     @ResponseStatus(HttpStatus.CREATED)
     public List<Restriccion> crear(
-            @AuthenticationPrincipal Usuario usuario, @Valid @RequestBody NuevaRestriccion nueva) {
+            UsuarioPlanificacion usuario, @Valid @RequestBody NuevaRestriccion nueva) {
         return jdbc.query(
                 CONSULTA.formatted("r.id IN (:ids)"),
                 Map.of("ids", calendario.crear(nueva, usuario)),
@@ -114,7 +112,7 @@ public class RestriccionesController {
     @DeleteMapping({"/restricciones/{id}", "/restricciones/{id}/"})
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void baja(
-            @AuthenticationPrincipal Usuario usuario,
+            UsuarioPlanificacion usuario,
             @PathVariable long id,
             @RequestParam(defaultValue = "false") boolean serie) {
         calendario.baja(id, serie, usuario);

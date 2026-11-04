@@ -46,7 +46,7 @@ public class SesionCompartida {
     private static final Set<String> METODOS_SEGUROS = Set.of("GET", "HEAD", "OPTIONS", "TRACE");
 
     /** Nombre del rol de MOD-05 que corresponde a cada rol de MOD-01. El capataz no tiene. */
-    static final Map<String, String> ROL_MOD05 =
+    public static final Map<String, String> ROL_MOD05 =
             Map.of(
                     "jefe-seccion", Usuario.JEFE,
                     "ingeniero-campo", "Ingeniero de campo",
