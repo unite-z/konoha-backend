@@ -75,10 +75,17 @@ public class RestriccionesController {
     /** Periodo máximo de una consulta, para acotar la respuesta (un año y un mes). */
     static final int DIAS_MAXIMOS = 400;
 
-    /** Restricciones con su tipo y el nombre de su lugar ({@code null} si es todo el campus). */
+    /**
+     * Restricciones con su tipo y el nombre de su lugar ({@code null} si es todo el campus). «Solo
+     * servicios ruidosos» es el de la restricción o, si no tiene, el de su tipo (AV-366).
+     */
     static final String CONSULTA =
             """
-            SELECT r.*, t.nombre tipo, t.efecto, t.aplica_servicios_ruidosos, a.nombre area_verde
+            SELECT r.id, r.tipo_restriccion_id, r.fecha_inicio, r.fecha_fin, r.hora_inicio,
+                r.hora_fin, r.area_verde_id, r.descripcion, r.serie, t.nombre tipo, t.efecto,
+                coalesce(r.aplica_servicios_ruidosos, t.aplica_servicios_ruidosos)
+                    aplica_servicios_ruidosos,
+                a.nombre area_verde
             FROM mod03_restriccion_calendario r
             JOIN mod03_tipo_restriccion t ON t.id = r.tipo_restriccion_id
             LEFT JOIN mod05_areaverde a ON a.id = r.area_verde_id
