@@ -38,6 +38,7 @@ public class CalendarioRestricciones {
             LocalTime horaInicio,
             LocalTime horaFin,
             Long areaVerdeId,
+            Boolean aplicaServiciosRuidosos,
             @Size(max = 200, message = "Máximo 200 caracteres") String descripcion,
             @Valid Recurrencia recurrencia,
             Boolean forzar) {}
@@ -88,6 +89,7 @@ public class CalendarioRestricciones {
                         .addValue("horaInicio", nueva.horaInicio())
                         .addValue("horaFin", nueva.horaFin())
                         .addValue("area", nueva.areaVerdeId())
+                        .addValue("ruidosos", nueva.aplicaServiciosRuidosos())
                         .addValue("descripcion", nueva.descripcion())
                         .addValue("serie", nueva.recurrencia() == null ? null : UUID.randomUUID())
                         .addValue("usuario", usuario.id());
@@ -99,9 +101,10 @@ public class CalendarioRestricciones {
                             """
                             INSERT INTO mod03_restriccion_calendario(tipo_restriccion_id,
                                 fecha_inicio, fecha_fin, hora_inicio, hora_fin, area_verde_id,
-                                descripcion, serie, usuario_creacion_id, usuario_modificacion_id)
+                                aplica_servicios_ruidosos, descripcion, serie,
+                                usuario_creacion_id, usuario_modificacion_id)
                             VALUES (:tipo, :inicio, :fin, :horaInicio, :horaFin, :area,
-                                :descripcion, :serie, :usuario, :usuario) RETURNING id
+                                :ruidosos, :descripcion, :serie, :usuario, :usuario) RETURNING id
                             """,
                             datos,
                             Long.class));
