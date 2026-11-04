@@ -17,6 +17,7 @@ import java.util.TreeSet;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Ciclo de corte de césped (AV-259, RF-COR-001, HU-010 y CU-010): la ruta de jardines de MOD-02 se
@@ -43,13 +44,22 @@ public class CorteCesped {
             String marcadoPor,
             boolean detenidoPorInterrupcion) {}
 
-    /** El ciclo con su ruta. Interrupciones y limpiezas llegan con AV-258 y AV-262. */
+    public record Limpieza(long id, LocalDate fecha, String autor) {}
+
+    /**
+     * El ciclo con su ruta y sus jornadas de limpieza. {@code dias_corte} son los días con marcas;
+     * {@code cumple}, si días de corte más limpieza no pasan de la duración máxima más limpieza
+     * (RN-002, 3 + 1). Las interrupciones llegan con AV-258.
+     */
     public record CicloCorte(
             long programacionId,
             List<JardinRuta> jardines,
             List<Object> interrupciones,
-            List<Object> limpiezas,
-            double diasInterrupcionDescontados) {}
+            List<Limpieza> limpiezas,
+            double diasInterrupcionDescontados,
+            int diasCorte,
+            int maximoDias,
+            boolean cumple) {}
 
     public record CortadosDia(LocalDate fecha, int cortados) {}
 
@@ -184,7 +194,33 @@ public class CorteCesped {
         }
         List<JardinRuta> jardines =
                 jardines("r.programacion_id = :programacion", Map.of("programacion", programacion));
-        return new CicloCorte(programacion, jardines, List.of(), List.of(), 0);
+        List<Limpieza> limpiezas = limpiezas(programacion);
+        int diasCorte =
+                (int)
+                        jardines.stream()
+                                .filter(j -> j.marcadoEn() != null)
+                                .map(j -> j.marcadoEn().toLocalDate())
+                                .distinct()
+                                .count();
+        int maximo =
+                jdbc.queryForObject(
+                        """
+                        SELECT coalesce(d.duracion_maxima_dias + coalesce(d.dias_limpieza, 0), 4)
+                        FROM mod03_programacion_servicio p
+                        LEFT JOIN mod03_duracion_servicio d ON d.tipo_servicio_id = p.tipo_servicio_id
+                        WHERE p.id = :id
+                        """,
+                        Map.of("id", programacion),
+                        Integer.class);
+        return new CicloCorte(
+                programacion,
+                jardines,
+                List.of(),
+                limpiezas,
+                0,
+                diasCorte,
+                maximo,
+                diasCorte + limpiezas.size() <= maximo);
     }
 
     public Avance avance(long programacion, UsuarioPlanificacion usuario) {
@@ -222,6 +258,82 @@ public class CorteCesped {
                 ultima != null && ultima.isBefore(OffsetDateTime.now(reloj).minusHours(24)),
                 ((Date) fechas.get("fecha_inicio_prevista")).toLocalDate(),
                 ((Date) fechas.get("fecha_fin_prevista")).toLocalDate());
+    }
+
+    /**
+     * Registra una jornada de limpieza (jefe, ingeniero o practicante). Solo con la ruta completa:
+     * si no, 409 {@code ruta-incompleta} con los jardines por cortar.
+     */
+    @Transactional
+    public Limpieza registrarLimpieza(
+            long programacion, LocalDate fecha, UsuarioPlanificacion usuario) {
+        Acceso.registrarLimpieza(usuario);
+        List<JardinRuta> pendientes =
+                jardines(
+                        "r.programacion_id = :programacion AND r.estado = 'Pendiente'",
+                        Map.of("programacion", programacion));
+        if (jdbc.queryForObject(
+                        "SELECT count(*) FROM mod03_ruta_corte WHERE programacion_id = :id",
+                        Map.of("id", programacion),
+                        Integer.class)
+                == 0) {
+            throw new ErrorPlanificacion(
+                    404, "ciclo-no-encontrado", "Ese ciclo no tiene ruta de corte");
+        }
+        if (!pendientes.isEmpty()) {
+            throw new ErrorPlanificacion(
+                    409,
+                    "ruta-incompleta",
+                    "Faltan %d jardines por cortar: %s"
+                            .formatted(
+                                    pendientes.size(),
+                                    String.join(
+                                            ", ",
+                                            pendientes.stream().map(JardinRuta::codigo).toList())));
+        }
+        LocalDate dia = fecha == null ? LocalDate.now(reloj) : fecha;
+        long id =
+                jdbc.queryForObject(
+                        """
+                        INSERT INTO mod03_limpieza_corte (programacion_id, fecha, usuario_id)
+                        VALUES (:programacion, :fecha, :usuario)
+                        ON CONFLICT (programacion_id, fecha) DO UPDATE SET fecha = EXCLUDED.fecha
+                        RETURNING id
+                        """,
+                        Map.of("programacion", programacion, "fecha", dia, "usuario", usuario.id()),
+                        Long.class);
+        return limpiezas(programacion).stream().filter(l -> l.id() == id).findFirst().orElseThrow();
+    }
+
+    /** Si el ciclo tiene ruta y le faltan jardines, no se puede finalizar (CU-014). */
+    void exigirRutaCompleta(long programacion) {
+        Integer pendientes =
+                jdbc.queryForObject(
+                        "SELECT count(*) FROM mod03_ruta_corte WHERE programacion_id = :id AND"
+                                + " estado = 'Pendiente'",
+                        Map.of("id", programacion),
+                        Integer.class);
+        if (pendientes > 0) {
+            throw new ErrorPlanificacion(
+                    409,
+                    "ruta-incompleta",
+                    "Faltan %d jardines por cortar para cerrar el ciclo".formatted(pendientes));
+        }
+    }
+
+    private List<Limpieza> limpiezas(long programacion) {
+        return jdbc.query(
+                """
+                SELECT l.id, l.fecha, u.nombre autor FROM mod03_limpieza_corte l
+                JOIN core_usuario u ON u.id = l.usuario_id
+                WHERE l.programacion_id = :id ORDER BY l.fecha
+                """,
+                Map.of("id", programacion),
+                (rs, n) ->
+                        new Limpieza(
+                                rs.getLong("id"),
+                                rs.getObject("fecha", LocalDate.class),
+                                rs.getString("autor")));
     }
 
     /** Los jardines de la ruta que cumplen el filtro (lo da el código), en su orden. */
