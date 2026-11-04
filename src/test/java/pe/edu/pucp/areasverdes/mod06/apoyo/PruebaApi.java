@@ -50,11 +50,10 @@ public abstract class PruebaApi {
     @Autowired protected DoblesPrueba.SelectorPrueba selector;
     @Autowired protected DoblesPrueba.FabricaPrueba fabrica;
     @Autowired protected DoblesPrueba.UsuarioPrueba usuario;
-    @Autowired protected DoblesPrueba.PermisosPrueba permisos;
 
     @BeforeEach
     void reiniciarDobles() {
-        DoblesPrueba.reiniciar(selector, fabrica, usuario, permisos);
+        DoblesPrueba.reiniciar(selector, fabrica, usuario);
     }
 
     /** {@code usar_fuente(datos, archivos)}. */
@@ -71,7 +70,7 @@ public abstract class PruebaApi {
 
     /** {@code api_client.force_authenticate(user=usuario_con_rol(rol, id_usuario))}. */
     protected void autenticar(String rol, Object idUsuario) {
-        DoblesPrueba.conRol(usuario, permisos, rol, idUsuario);
+        DoblesPrueba.conRol(usuario, rol, idUsuario);
     }
 
     protected void autenticar(String rol) {
