@@ -1,5 +1,6 @@
 package pe.edu.pucp.areasverdes.mod03;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.matchesPattern;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -158,7 +159,8 @@ class IncidenciasApiTest extends ApiPlanificacion {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(2));
         http.perform(get(RUTA).with(httpBasic("ingeniero", CLAVE)))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2));
         String mias =
                 http.perform(get(RUTA + "mias/").with(httpBasic("ingeniero", CLAVE)))
                         .andExpect(jsonPath("$.length()").value(1))
@@ -453,5 +455,23 @@ class IncidenciasApiTest extends ApiPlanificacion {
                 .andExpect(jsonPath("$.responsable").value("Marta R."));
         accion("ingeniero", id, "reasignar", "{\"capataz_id\": " + marta + "}")
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void avisaAlJefeAlRegistrarYAlReportanteAlCerrar() throws Exception {
+        String ficha =
+                registrar("jefe", cuerpo("Telefono", "{\"usuario_id\": 2}"))
+                        .andExpect(status().isCreated())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+        long id = json.readTree(ficha).get("id").asLong();
+        http.perform(get("/api/v1/planificacion/avisos/").with(httpBasic("jefe", CLAVE)))
+                .andExpect(jsonPath("$[0].texto").value(containsString("registrada: Rama caída")))
+                .andExpect(jsonPath("$[0].origen").value("incidencia"));
+        atendida(id, true);
+        accion("jefe", id, "cerrar", "{}").andExpect(status().isOk());
+        http.perform(get("/api/v1/planificacion/avisos/").with(httpBasic("ingeniero", CLAVE)))
+                .andExpect(jsonPath("$[0].texto").value(containsString("cerrada")));
     }
 }

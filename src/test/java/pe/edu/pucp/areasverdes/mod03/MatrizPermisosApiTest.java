@@ -38,6 +38,7 @@ class MatrizPermisosApiTest extends ApiPlanificacion {
                     "servicios/",
                     "incidencias/catalogos-registro/",
                     "incidencias/mias/",
+                    "incidencias/",
                     "incidencias/posibles-duplicados/?tipo=Rama%20ca%C3%ADda",
                     "servicios/1/historial/",
                     "servicios/1/ruta/",
@@ -96,7 +97,6 @@ class MatrizPermisosApiTest extends ApiPlanificacion {
                 post(RUTA + "programaciones/1/cancelacion/")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"motivo\": \"Lluvia\"}"),
-                get(RUTA + "incidencias/"),
                 get(RUTA + "incidencias/inspectores/"),
                 get(RUTA + "incidencias/1/capataces/"),
                 post(RUTA + "alertas/1/motivo/")

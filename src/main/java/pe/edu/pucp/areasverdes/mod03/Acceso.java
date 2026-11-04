@@ -7,7 +7,9 @@ package pe.edu.pucp.areasverdes.mod03;
  *   <li>consultar: los cuatro roles, también el capataz (RF-PLA-007);
  *   <li>gestionar (configurar, restricciones, programar, interrupción y traslado): el jefe;
  *   <li>registrar la limpieza del ciclo de corte: jefe, ingeniero y practicante (RF-COR-006);
- *   <li>reportar incidencias: los cuatro roles; gestionarlas desde la oficina: el jefe.
+ *   <li>reportar y consultar incidencias: los cuatro roles ({@code PLA.INCIDENCIA.REGISTRAR});
+ *       clasificarlas, derivarlas, descartarlas y cerrarlas: el jefe ({@code
+ *       PLA.INCIDENCIA.CLASIFICAR}).
  * </ul>
  */
 final class Acceso {
@@ -46,7 +48,12 @@ final class Acceso {
         exigir(usuario, REGISTRAR_INCIDENCIA);
     }
 
-    /** La bandeja y la ficha de la oficina: el jefe, hasta los permisos propios de AV-281. */
+    /** Consultar la bandeja y la ficha: todos los que reportan (AV-281). */
+    static void consultarIncidencias(UsuarioPlanificacion usuario) {
+        exigir(usuario, REGISTRAR_INCIDENCIA);
+    }
+
+    /** Clasificar, derivar, descartar, cerrar y reasignar: el jefe (AV-281). */
     static void gestionarIncidencias(UsuarioPlanificacion usuario) {
         exigir(usuario, CLASIFICAR_INCIDENCIA);
     }
