@@ -73,13 +73,16 @@ class ConfigurarDuracionApiTest extends ApiPlanificacion {
                 jdbc.getJdbcTemplate()
                         .queryForObject(
                                 "SELECT (valores_anteriores->>'duracion_maxima_dias')::int"
-                                        + " FROM mod05_registroauditoria"
+                                        + " FROM core_registro_auditoria"
+                                        + " WHERE entidad = 'mod03_configuracion_servicio'"
                                         + " ORDER BY id DESC LIMIT 1",
                                 Integer.class));
         assertEquals(
                 3,
                 jdbc.getJdbcTemplate()
                         .queryForObject(
-                                "SELECT count(*) FROM mod05_registroauditoria", Integer.class));
+                                "SELECT count(*) FROM core_registro_auditoria"
+                                        + " WHERE entidad = 'mod03_configuracion_servicio'",
+                                Integer.class));
     }
 }

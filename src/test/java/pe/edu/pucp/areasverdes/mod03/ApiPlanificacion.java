@@ -15,6 +15,8 @@ import pe.edu.pucp.areasverdes.comun.BaseDePruebas;
 /**
  * Base de las pruebas de API de MOD-03: base PostGIS real terminada en {@code _test} y usuarios
  * {@code jefe}, {@code ingeniero}, {@code practicante} y {@code sinrol}, todos con {@link #CLAVE}.
+ * Cada uno tiene su cuenta de MOD-01 con el mismo id, como en producción (copia de {@code V6}),
+ * para la auditoría común, cuyo autor apunta a {@code core_usuario}.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -38,6 +40,19 @@ abstract class ApiPlanificacion {
         usuario("ingeniero", "Ingeniero de campo");
         usuario("practicante", "Practicante autorizado");
         usuario("sinrol", null);
+        jdbc.getJdbcTemplate()
+                .execute(
+                        "TRUNCATE core_sesion, core_registro_acceso, core_registro_auditoria,"
+                                + " core_usuario RESTART IDENTITY CASCADE");
+        jdbc.getJdbcTemplate()
+                .execute(
+                        """
+                        INSERT INTO core_usuario (id, nombre_usuario, correo, nombre, credencial_hash,
+                            rol_id)
+                        SELECT u.id, 'mod05-' || u.usuario, 'mod05-' || u.usuario || '@prueba.pucp.edu.pe',
+                            u.nombre, 'sin-clave', r.id
+                        FROM mod05_usuario u, core_rol r WHERE r.codigo = 'jefe-seccion'
+                        """);
     }
 
     private void usuario(String nombre, String rol) {
