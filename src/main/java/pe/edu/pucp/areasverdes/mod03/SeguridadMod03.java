@@ -39,7 +39,7 @@ public class SeguridadMod03 {
                                                 SesionCompartida.SIN_REGENERAR_CSRF)
                                         .requireCsrfProtectionMatcher(SesionCompartida::exigeCsrf))
                 .addFilterBefore(
-                        sesion.filtro(SesionCompartida::comoUsuarioMod05),
+                        sesion.filtro(UsuarioPlanificacion::deSesion),
                         BasicAuthenticationFilter.class)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .requestCache(c -> c.disable())

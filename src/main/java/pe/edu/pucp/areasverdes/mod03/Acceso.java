@@ -1,23 +1,65 @@
 package pe.edu.pucp.areasverdes.mod03;
 
-import pe.edu.pucp.areasverdes.mod05.Usuario;
-
 /**
- * Permisos de MOD-03 por rol. Consultar: los tres roles. Configurar y programar: jefe de sección.
+ * Permisos de MOD-03 con los códigos de MOD-01 (AV-252, {@code docs/modulos/mod01.md}):
+ *
+ * <ul>
+ *   <li>consultar: los cuatro roles, también el capataz (RF-PLA-007);
+ *   <li>gestionar (configurar, restricciones, programar, interrupción y traslado): el jefe;
+ *   <li>registrar la limpieza del ciclo de corte: jefe, ingeniero y practicante (RF-COR-006);
+ *   <li>reportar y consultar incidencias: los cuatro roles ({@code PLA.INCIDENCIA.REGISTRAR});
+ *       clasificarlas, derivarlas, descartarlas y cerrarlas: el jefe ({@code
+ *       PLA.INCIDENCIA.CLASIFICAR}).
+ * </ul>
  */
 final class Acceso {
 
+    static final String CONSULTAR = "PLA.PLANIFICACION.CONSULTAR";
+    static final String GESTIONAR = "PLA.PLANIFICACION.GESTIONAR";
+    static final String LIMPIEZA = "PLA.CORTE.LIMPIEZA";
+    static final String REGISTRAR_CORTE = "PLA.CORTE.REGISTRAR";
+    static final String REGISTRAR_INCIDENCIA = "PLA.INCIDENCIA.REGISTRAR";
+    static final String CLASIFICAR_INCIDENCIA = "PLA.INCIDENCIA.CLASIFICAR";
+
     private Acceso() {}
 
-    static void consultar(Usuario usuario) {
-        if (usuario == null || !usuario.activo() || usuario.rol() == null) {
-            throw ErrorPlanificacion.sinPermiso();
-        }
+    static void consultar(UsuarioPlanificacion usuario) {
+        exigir(usuario, CONSULTAR);
     }
 
-    static void gestionar(Usuario usuario) {
-        consultar(usuario);
-        if (!usuario.roles().contains(Usuario.JEFE)) {
+    static void gestionar(UsuarioPlanificacion usuario) {
+        exigir(usuario, GESTIONAR);
+    }
+
+    /** Lo aplica el registro de la limpieza del ciclo de corte (AV-262). */
+    static void registrarLimpieza(UsuarioPlanificacion usuario) {
+        exigir(usuario, LIMPIEZA);
+    }
+
+    /**
+     * Marcar jardines de la ruta de corte: capataz, ingeniero y practicante (RF-COR-002, AV-260).
+     */
+    static void registrarCorte(UsuarioPlanificacion usuario) {
+        exigir(usuario, REGISTRAR_CORTE);
+    }
+
+    /** Reportar y seguir las propias: los cuatro roles (HU-020, AV-274). */
+    static void registrarIncidencia(UsuarioPlanificacion usuario) {
+        exigir(usuario, REGISTRAR_INCIDENCIA);
+    }
+
+    /** Consultar la bandeja y la ficha: todos los que reportan (AV-281). */
+    static void consultarIncidencias(UsuarioPlanificacion usuario) {
+        exigir(usuario, REGISTRAR_INCIDENCIA);
+    }
+
+    /** Clasificar, derivar, descartar, cerrar y reasignar: el jefe (AV-281). */
+    static void gestionarIncidencias(UsuarioPlanificacion usuario) {
+        exigir(usuario, CLASIFICAR_INCIDENCIA);
+    }
+
+    private static void exigir(UsuarioPlanificacion usuario, String permiso) {
+        if (usuario == null || !usuario.tiene(permiso)) {
             throw ErrorPlanificacion.sinPermiso();
         }
     }

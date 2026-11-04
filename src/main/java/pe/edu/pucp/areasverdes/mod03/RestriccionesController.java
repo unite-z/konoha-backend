@@ -1,5 +1,6 @@
 package pe.edu.pucp.areasverdes.mod03;
 
+import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -13,7 +14,6 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.DataClassRowMapper;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -24,7 +24,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import pe.edu.pucp.areasverdes.mod03.CalendarioRestricciones.NuevaRestriccion;
-import pe.edu.pucp.areasverdes.mod05.Usuario;
 
 /** Calendario de restricciones (HU-MOD03-003): exámenes, feriados, eventos y demás días. */
 @RestController
@@ -47,17 +46,49 @@ public class RestriccionesController {
             LocalTime horaInicio,
             LocalTime horaFin,
             Long areaVerdeId,
+            String areaVerde,
             String descripcion,
             UUID serie) {}
+
+    /** Ciclo programado o en curso que coincide con una restricción recién creada (CU-003 7a). */
+    public record CicloAfectado(
+            long id, String servicio, LocalDate fechaInicioPrevista, LocalDate fechaFinPrevista) {}
+
+    /** Una restricción del alta, con los ciclos a los que afecta. */
+    public record RestriccionCreada(
+            @JsonUnwrapped Restriccion restriccion, List<CicloAfectado> ciclosAfectados) {}
+
+    /**
+     * Ciclos programados o en curso que se solapan con la restricción y a los que afecta: no los
+     * favorables, y los de «solo ruidosos» solo a los servicios ruidosos.
+     */
+    static final String AFECTADOS =
+            """
+            SELECT p.id, t.nombre servicio, p.fecha_inicio_prevista, p.fecha_fin_prevista
+            FROM mod03_programacion_servicio p JOIN mod05_tiposervicio t ON t.id = p.tipo_servicio_id
+            WHERE p.estado IN ('Programada', 'EnCurso') AND :efecto <> 'Favorable'
+              AND p.fecha_inicio_prevista <= :fin AND p.fecha_fin_prevista >= :inicio
+              AND (NOT :soloRuidosos OR t.es_ruidoso)
+            ORDER BY p.fecha_inicio_prevista, p.id
+            """;
 
     /** Periodo máximo de una consulta, para acotar la respuesta (un año y un mes). */
     static final int DIAS_MAXIMOS = 400;
 
+    /**
+     * Restricciones con su tipo y el nombre de su lugar ({@code null} si es todo el campus). «Solo
+     * servicios ruidosos» es el de la restricción o, si no tiene, el de su tipo (AV-366).
+     */
     static final String CONSULTA =
             """
-            SELECT r.*, t.nombre tipo, t.efecto, t.aplica_servicios_ruidosos
+            SELECT r.id, r.tipo_restriccion_id, r.fecha_inicio, r.fecha_fin, r.hora_inicio,
+                r.hora_fin, r.area_verde_id, r.descripcion, r.serie, t.nombre tipo, t.efecto,
+                coalesce(r.aplica_servicios_ruidosos, t.aplica_servicios_ruidosos)
+                    aplica_servicios_ruidosos,
+                a.nombre area_verde
             FROM mod03_restriccion_calendario r
             JOIN mod03_tipo_restriccion t ON t.id = r.tipo_restriccion_id
+            LEFT JOIN mod05_areaverde a ON a.id = r.area_verde_id
             WHERE r.activo AND %s ORDER BY r.fecha_inicio, r.hora_inicio NULLS FIRST, r.id
             """;
 
@@ -72,7 +103,7 @@ public class RestriccionesController {
 
     @Operation(summary = "Tipos de restricción con su efecto en la programación")
     @GetMapping({"/tipos-restriccion", "/tipos-restriccion/"})
-    public List<TipoRestriccion> tipos(@AuthenticationPrincipal Usuario usuario) {
+    public List<TipoRestriccion> tipos(UsuarioPlanificacion usuario) {
         Acceso.consultar(usuario);
         return jdbc.query(
                 "SELECT * FROM mod03_tipo_restriccion WHERE activo ORDER BY id",
@@ -82,7 +113,7 @@ public class RestriccionesController {
     @Operation(summary = "Restricciones vigentes que se solapan con el periodo [desde, hasta]")
     @GetMapping({"/restricciones", "/restricciones/"})
     public List<Restriccion> restricciones(
-            @AuthenticationPrincipal Usuario usuario,
+            UsuarioPlanificacion usuario,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta) {
         Acceso.consultar(usuario);
@@ -102,19 +133,35 @@ public class RestriccionesController {
     @Operation(summary = "Registra una restricción o una serie semanal (jefe de sección)")
     @PostMapping({"/restricciones", "/restricciones/"})
     @ResponseStatus(HttpStatus.CREATED)
-    public List<Restriccion> crear(
-            @AuthenticationPrincipal Usuario usuario, @Valid @RequestBody NuevaRestriccion nueva) {
-        return jdbc.query(
-                CONSULTA.formatted("r.id IN (:ids)"),
-                Map.of("ids", calendario.crear(nueva, usuario)),
-                new DataClassRowMapper<>(Restriccion.class));
+    public List<RestriccionCreada> crear(
+            UsuarioPlanificacion usuario, @Valid @RequestBody NuevaRestriccion nueva) {
+        List<Restriccion> creadas =
+                jdbc.query(
+                        CONSULTA.formatted("r.id IN (:ids)"),
+                        Map.of("ids", calendario.crear(nueva, usuario)),
+                        new DataClassRowMapper<>(Restriccion.class));
+        return creadas.stream()
+                .map(
+                        r ->
+                                new RestriccionCreada(
+                                        r,
+                                        jdbc.query(
+                                                AFECTADOS,
+                                                Map.of(
+                                                        "efecto", r.efecto(),
+                                                        "inicio", r.fechaInicio(),
+                                                        "fin", r.fechaFin(),
+                                                        "soloRuidosos",
+                                                                r.aplicaServiciosRuidosos()),
+                                                new DataClassRowMapper<>(CicloAfectado.class))))
+                .toList();
     }
 
     @Operation(summary = "Da de baja una restricción o, con serie=true, toda su serie (jefe)")
     @DeleteMapping({"/restricciones/{id}", "/restricciones/{id}/"})
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void baja(
-            @AuthenticationPrincipal Usuario usuario,
+            UsuarioPlanificacion usuario,
             @PathVariable long id,
             @RequestParam(defaultValue = "false") boolean serie) {
         calendario.baja(id, serie, usuario);

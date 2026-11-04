@@ -20,7 +20,6 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import pe.edu.pucp.areasverdes.mod05.Usuario;
 
 /** Alta y baja de restricciones del calendario (HU-MOD03-003), sueltas o en serie semanal. */
 @Service
@@ -39,8 +38,10 @@ public class CalendarioRestricciones {
             LocalTime horaInicio,
             LocalTime horaFin,
             Long areaVerdeId,
+            Boolean aplicaServiciosRuidosos,
             @Size(max = 200, message = "Máximo 200 caracteres") String descripcion,
-            @Valid Recurrencia recurrencia) {}
+            @Valid Recurrencia recurrencia,
+            Boolean forzar) {}
 
     static final int MAXIMO_REPETICIONES = 200;
 
@@ -60,7 +61,7 @@ public class CalendarioRestricciones {
 
     /** Crea la restricción, o una por cada repetición con la misma serie, y devuelve sus ids. */
     @Transactional
-    public List<Long> crear(NuevaRestriccion nueva, Usuario usuario) {
+    public List<Long> crear(NuevaRestriccion nueva, UsuarioPlanificacion usuario) {
         Acceso.gestionar(usuario);
         if (nueva.fechaFin().isBefore(nueva.fechaInicio())
                 || (nueva.horaInicio() != null
@@ -79,12 +80,16 @@ public class CalendarioRestricciones {
         List<LocalDate> inicios =
                 nueva.recurrencia() == null ? List.of(nueva.fechaInicio()) : repeticiones(nueva);
         long dias = ChronoUnit.DAYS.between(nueva.fechaInicio(), nueva.fechaFin());
+        if (!Boolean.TRUE.equals(nueva.forzar())) {
+            exigirSinDuplicados(nueva, inicios);
+        }
         var datos =
                 new MapSqlParameterSource()
                         .addValue("tipo", nueva.tipoRestriccionId())
                         .addValue("horaInicio", nueva.horaInicio())
                         .addValue("horaFin", nueva.horaFin())
                         .addValue("area", nueva.areaVerdeId())
+                        .addValue("ruidosos", nueva.aplicaServiciosRuidosos())
                         .addValue("descripcion", nueva.descripcion())
                         .addValue("serie", nueva.recurrencia() == null ? null : UUID.randomUUID())
                         .addValue("usuario", usuario.id());
@@ -96,9 +101,10 @@ public class CalendarioRestricciones {
                             """
                             INSERT INTO mod03_restriccion_calendario(tipo_restriccion_id,
                                 fecha_inicio, fecha_fin, hora_inicio, hora_fin, area_verde_id,
-                                descripcion, serie, usuario_creacion_id, usuario_modificacion_id)
+                                aplica_servicios_ruidosos, descripcion, serie,
+                                usuario_creacion_id, usuario_modificacion_id)
                             VALUES (:tipo, :inicio, :fin, :horaInicio, :horaFin, :area,
-                                :descripcion, :serie, :usuario, :usuario) RETURNING id
+                                :ruidosos, :descripcion, :serie, :usuario, :usuario) RETURNING id
                             """,
                             datos,
                             Long.class));
@@ -107,9 +113,39 @@ public class CalendarioRestricciones {
         return ids;
     }
 
+    /**
+     * CU-003 6a: dos restricciones son duplicadas si tienen el mismo tipo, la misma fecha y el
+     * mismo lugar (o las dos sin lugar). En una serie se compara cada fecha generada. Con {@code
+     * forzar} se guarda igualmente.
+     */
+    private void exigirSinDuplicados(NuevaRestriccion nueva, List<LocalDate> inicios) {
+        List<LocalDate> repetidas =
+                jdbc.queryForList(
+                        """
+                        SELECT DISTINCT fecha_inicio FROM mod03_restriccion_calendario
+                        WHERE activo AND tipo_restriccion_id = :tipo AND fecha_inicio IN (:inicios)
+                          AND area_verde_id IS NOT DISTINCT FROM CAST(:area AS bigint)
+                        ORDER BY fecha_inicio
+                        """,
+                        new MapSqlParameterSource()
+                                .addValue("tipo", nueva.tipoRestriccionId())
+                                .addValue("inicios", inicios)
+                                .addValue("area", nueva.areaVerdeId()),
+                        LocalDate.class);
+        if (!repetidas.isEmpty()) {
+            throw new ErrorPlanificacion(
+                    409,
+                    "posible-duplicado",
+                    "Ya existe una restricción igual el "
+                            + String.join(
+                                    ", ", repetidas.stream().map(LocalDate::toString).toList())
+                            + ". Guárdala igualmente con forzar");
+        }
+    }
+
     /** Da de baja la restricción o, con {@code serie}, todas las de su serie. Devuelve cuántas. */
     @Transactional
-    public int baja(long id, boolean serie, Usuario usuario) {
+    public int baja(long id, boolean serie, UsuarioPlanificacion usuario) {
         Acceso.gestionar(usuario);
         List<Long> ids =
                 jdbc.queryForList(

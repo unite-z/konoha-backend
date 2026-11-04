@@ -42,7 +42,7 @@ class CoreMigracionIntegrationTest extends ApiCore {
 
     @Test
     void laMatrizDeMinimoPrivilegioEstaCargada() {
-        assertEquals(29, permisos("jefe-seccion"));
+        assertEquals(30, permisos("jefe-seccion"));
         assertEquals(0, permisos("operario"));
         assertEquals(
                 0,

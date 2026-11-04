@@ -14,7 +14,6 @@ import java.util.Optional;
 import java.util.Set;
 import org.springframework.jdbc.core.DataClassRowMapper;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -25,7 +24,6 @@ import pe.edu.pucp.areasverdes.mod03.ConfiguracionServicios.NuevaDuracion;
 import pe.edu.pucp.areasverdes.mod03.ConfiguracionServicios.NuevaFrecuencia;
 import pe.edu.pucp.areasverdes.mod03.Programador.Bloqueo;
 import pe.edu.pucp.areasverdes.mod03.RestriccionesController.Restriccion;
-import pe.edu.pucp.areasverdes.mod05.Usuario;
 
 @RestController
 @RequestMapping("/api/v1/planificacion")
@@ -35,25 +33,39 @@ public class ServiciosController {
 
     private final ServiciosRepository servicios;
     private final ConfiguracionServicios configuracion;
+    private final HistorialServicio historial;
     private final NamedParameterJdbcTemplate jdbc;
     private final Clock reloj;
+    private final ValoresIniciales valoresIniciales;
 
     public ServiciosController(
             ServiciosRepository servicios,
             ConfiguracionServicios configuracion,
+            HistorialServicio historial,
             NamedParameterJdbcTemplate jdbc,
-            Clock reloj) {
+            Clock reloj,
+            ValoresIniciales valoresIniciales) {
         this.servicios = servicios;
         this.configuracion = configuracion;
+        this.historial = historial;
         this.jdbc = jdbc;
         this.reloj = reloj;
+        this.valoresIniciales = valoresIniciales;
     }
 
     @Operation(summary = "Servicios periódicos con su frecuencia por estación y su duración máxima")
     @GetMapping({"/servicios", "/servicios/"})
-    public List<ServicioPeriodico> listar(@AuthenticationPrincipal Usuario usuario) {
+    public List<ServicioPeriodico> listar(UsuarioPlanificacion usuario) {
         Acceso.consultar(usuario);
         return servicios.periodicos();
+    }
+
+    @Operation(summary = "Valores iniciales de la sección para configurar el servicio (AV-363)")
+    @GetMapping({"/servicios/{id}/valores-iniciales", "/servicios/{id}/valores-iniciales/"})
+    public ValoresIniciales.Valores valoresIniciales(
+            UsuarioPlanificacion usuario, @PathVariable long id) {
+        Acceso.consultar(usuario);
+        return valoresIniciales.de(id);
     }
 
     @Operation(summary = "Configura la frecuencia de un servicio en una estación (jefe de sección)")
@@ -62,7 +74,7 @@ public class ServiciosController {
         "/servicios/{id}/frecuencias/{estacion}/"
     })
     public ServicioPeriodico configurarFrecuencia(
-            @AuthenticationPrincipal Usuario usuario,
+            UsuarioPlanificacion usuario,
             @PathVariable long id,
             @PathVariable String estacion,
             @Valid @RequestBody NuevaFrecuencia nueva) {
@@ -73,7 +85,7 @@ public class ServiciosController {
     @Operation(summary = "Configura la duración máxima de un servicio (jefe de sección)")
     @PutMapping({"/servicios/{id}/duracion", "/servicios/{id}/duracion/"})
     public ServicioPeriodico configurarDuracion(
-            @AuthenticationPrincipal Usuario usuario,
+            UsuarioPlanificacion usuario,
             @PathVariable long id,
             @Valid @RequestBody NuevaDuracion nueva) {
         configuracion.duracion(id, nueva, usuario);
@@ -94,9 +106,18 @@ public class ServiciosController {
 
     static final int HORIZONTE_DIAS = 60;
 
+    @Operation(
+            summary = "Historial de la configuración del servicio, del más reciente al más antiguo")
+    @GetMapping({"/servicios/{id}/historial", "/servicios/{id}/historial/"})
+    public List<HistorialServicio.CambioServicio> historial(
+            UsuarioPlanificacion usuario, @PathVariable long id) {
+        Acceso.consultar(usuario);
+        return historial.de(id);
+    }
+
     @Operation(summary = "Propone las fechas del siguiente ciclo y avisa de las restricciones")
     @GetMapping({"/servicios/{id}/propuesta", "/servicios/{id}/propuesta/"})
-    public Propuesta propuesta(@AuthenticationPrincipal Usuario usuario, @PathVariable long id) {
+    public Propuesta propuesta(UsuarioPlanificacion usuario, @PathVariable long id) {
         Acceso.consultar(usuario);
         LocalDate hoy = LocalDate.now(reloj);
         String estacion = Programador.estacion(hoy);
