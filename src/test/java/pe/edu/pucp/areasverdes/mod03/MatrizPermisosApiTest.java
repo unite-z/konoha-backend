@@ -86,7 +86,12 @@ class MatrizPermisosApiTest extends ApiPlanificacion {
                         .content(
                                 "{\"tipo_servicio_id\": 1, \"fecha_inicio_prevista\":"
                                     + " \"2027-01-11\", \"fecha_fin_prevista\": \"2027-01-12\"}"),
-                post(RUTA + "programaciones/1/cancelacion/"));
+                post(RUTA + "programaciones/1/cancelacion/")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"motivo\": \"Lluvia\"}"),
+                post(RUTA + "alertas/1/motivo/")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"motivo\": \"Lluvia\"}"));
     }
 
     @Test
