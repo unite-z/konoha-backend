@@ -89,6 +89,8 @@ public class RepositorioService {
         if (disponibles.isEmpty()) {
             return new Resultado(false, 0, List.of());
         }
+        // Lo concatenado sale solo de las constantes de FUENTES (ConsultasFijasTest); la petición
+        // elige la clave y su texto va siempre en los parámetros :q y :patron.
         String seleccion =
                 String.join(" UNION ALL ", disponibles.stream().map(Fuente::seleccion).toList());
         String consulta =
