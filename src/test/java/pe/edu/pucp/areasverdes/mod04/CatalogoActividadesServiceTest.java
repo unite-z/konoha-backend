@@ -31,7 +31,7 @@ class CatalogoActividadesServiceTest {
     @Test
     void rechazaUnaClaseInactiva() {
         var jefe = new Usuario(1, "jefe", "Jefe", "", true, List.of(Usuario.JEFE));
-        when(repo.get("clase_actividad", 4L, false)).thenReturn(Map.of("activo", false));
+        when(repo.get("clase_actividad", 4L, true)).thenReturn(Map.of("activo", false));
         assertEquals(
                 "La clase de actividad debe estar activa",
                 assertThrows(ApiError.class, () -> service.guardar(null, entrada, jefe))
@@ -41,7 +41,7 @@ class CatalogoActividadesServiceTest {
     @Test
     void rechazaNombresDuplicadosDentroDeLaClase() {
         var jefe = new Usuario(1, "jefe", "Jefe", "", true, List.of(Usuario.JEFE));
-        when(repo.get("clase_actividad", 4L, false)).thenReturn(Map.of("activo", true));
+        when(repo.get("clase_actividad", 4L, true)).thenReturn(Map.of("activo", true));
         when(repo.rows(any(), any())).thenReturn(List.of(Map.of("id", 12L)));
         assertEquals(
                 "Ya existe un tipo con ese nombre en la clase",

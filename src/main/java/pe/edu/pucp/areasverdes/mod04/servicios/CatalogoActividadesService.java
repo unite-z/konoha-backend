@@ -23,7 +23,7 @@ public class CatalogoActividadesService {
         OperacionCampoService.exigirJefe(usuario);
         String nombre = entrada.nombre().strip();
         if (nombre.isEmpty()) throw ApiError.invalid("El nombre del tipo es obligatorio");
-        var clase = repo.get("clase_actividad", entrada.claseId(), false);
+        var clase = repo.get("clase_actividad", entrada.claseId(), true);
         if (!Boolean.TRUE.equals(clase.get("activo")))
             throw ApiError.invalid("La clase de actividad debe estar activa");
         Map<String, Object> anterior = id == null ? Map.of() : repo.get("tipo_actividad", id, true);

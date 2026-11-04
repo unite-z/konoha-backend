@@ -18,6 +18,45 @@ SELECT setval(pg_get_serial_sequence('mod04_clase_actividad','id'),9);
 
 ALTER TABLE mod04_tipo_actividad ADD COLUMN clase_id bigint NOT NULL DEFAULT 3
  REFERENCES mod04_clase_actividad(id);
+UPDATE mod04_tipo_actividad t SET clase_id=semilla.clase_id
+FROM (VALUES
+ (1,1,'Preparación del terreno'),
+ (2,1,'Incorporación de sustrato'),
+ (3,1,'Instalación de plantas'),
+ (4,1,'Instalación de césped'),
+ (5,1,'Colocación de cobertura ornamental'),
+ (6,1,'Instalación de tutores'),
+ (7,2,'Reposición de plantas'),
+ (8,2,'Recuperación de áreas verdes'),
+ (9,2,'Renovación de jardineras'),
+ (10,2,'Mejoramiento del suelo'),
+ (11,2,'Renovación de cobertura ornamental'),
+ (12,2,'Resiembra'),
+ (13,2,'Reubicación de macetas'),
+ (24,4,'Poda de mantenimiento'),
+ (25,4,'Poda de formación'),
+ (26,4,'Poda sanitaria'),
+ (27,4,'Poda de despeje/reducción'),
+ (28,5,'Propagación por división de matas'),
+ (29,5,'Propagación por esquejes'),
+ (30,5,'Trasplante'),
+ (31,5,'Siembra de plantas'),
+ (32,5,'Plantación de árboles'),
+ (33,5,'Plantación de arbustos'),
+ (34,5,'Plantación de cubresuelos'),
+ (35,5,'Plantación en macetas'),
+ (36,5,'Trasplante a macetas'),
+ (37,5,'Cambio de maceta'),
+ (38,6,'Riego manual'),
+ (39,6,'Riego nocturno'),
+ (40,6,'Riego de establecimiento'),
+ (41,6,'Verificación del sistema de riego'),
+ (42,8,'Recolección de hojarasca'),
+ (43,8,'Recolección de ramas'),
+ (44,8,'Triturado de residuos'),
+ (45,8,'Disposición o aprovechamiento de residuos')
+) AS semilla(id,clase_id,nombre)
+WHERE t.id=semilla.id AND t.nombre=semilla.nombre;
 CREATE UNIQUE INDEX mod04_tipo_actividad_clase_nombre
  ON mod04_tipo_actividad(clase_id,lower(trim(nombre)));
 ALTER TABLE mod04_tipo_actividad ADD CONSTRAINT mod04_tipo_actividad_nombre_valido
