@@ -36,6 +36,7 @@ class MatrizPermisosApiTest extends ApiPlanificacion {
                     "restricciones/?desde=2027-01-01&hasta=2027-01-31",
                     "programaciones/?desde=2027-01-01&hasta=2027-01-31",
                     "servicios/",
+                    "servicios/1/historial/",
                     "calendario-cuadrilla/?desde=2027-01-01&hasta=2027-01-31");
 
     @BeforeEach

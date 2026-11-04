@@ -33,16 +33,19 @@ public class ServiciosController {
 
     private final ServiciosRepository servicios;
     private final ConfiguracionServicios configuracion;
+    private final HistorialServicio historial;
     private final NamedParameterJdbcTemplate jdbc;
     private final Clock reloj;
 
     public ServiciosController(
             ServiciosRepository servicios,
             ConfiguracionServicios configuracion,
+            HistorialServicio historial,
             NamedParameterJdbcTemplate jdbc,
             Clock reloj) {
         this.servicios = servicios;
         this.configuracion = configuracion;
+        this.historial = historial;
         this.jdbc = jdbc;
         this.reloj = reloj;
     }
@@ -91,6 +94,15 @@ public class ServiciosController {
             boolean ruidoso, Integer frecuencia, Integer duracion, LocalDate ultimoFin) {}
 
     static final int HORIZONTE_DIAS = 60;
+
+    @Operation(
+            summary = "Historial de la configuración del servicio, del más reciente al más antiguo")
+    @GetMapping({"/servicios/{id}/historial", "/servicios/{id}/historial/"})
+    public List<HistorialServicio.CambioServicio> historial(
+            UsuarioPlanificacion usuario, @PathVariable long id) {
+        Acceso.consultar(usuario);
+        return historial.de(id);
+    }
 
     @Operation(summary = "Propone las fechas del siguiente ciclo y avisa de las restricciones")
     @GetMapping({"/servicios/{id}/propuesta", "/servicios/{id}/propuesta/"})
