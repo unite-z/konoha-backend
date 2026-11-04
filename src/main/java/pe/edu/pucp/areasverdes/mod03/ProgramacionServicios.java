@@ -93,6 +93,7 @@ public class ProgramacionServicios {
                         """,
                         datos,
                         Long.class);
+        asignarCodigo(id, inicio);
         registrarTransicion(id, "Programada", usuario, null);
         for (Long area : areas(nueva)) {
             jdbc.update(
@@ -315,6 +316,26 @@ public class ProgramacionServicios {
                             .formatted(accion, t.desde()));
         }
         registrarTransicion(id, t.hasta(), usuario, cancela ? motivo.trim() : null);
+    }
+
+    /**
+     * AV-364: código legible del ciclo, como CC-2026-11 (iniciales del servicio, año del inicio y
+     * correlativo). El bloqueo serializa las altas simultáneas para que el número no se repita.
+     */
+    private void asignarCodigo(long id, LocalDate inicio) {
+        jdbc.query(
+                "SELECT pg_advisory_xact_lock(hashtext('mod03_codigo_ciclo'))", Map.of(), rs -> {});
+        jdbc.update(
+                """
+                UPDATE mod03_programacion_servicio p SET codigo = c.prefijo || '-' || :anio || '-'
+                    || lpad((SELECT count(*) + 1 FROM mod03_programacion_servicio o
+                        WHERE o.codigo LIKE c.prefijo || '-' || :anio || '-%')::text, 2, '0')
+                FROM (SELECT mod03_prefijo_servicio(t.nombre) prefijo FROM mod05_tiposervicio t
+                    JOIN mod03_programacion_servicio q ON q.tipo_servicio_id = t.id
+                    WHERE q.id = :id) c
+                WHERE p.id = :id
+                """,
+                Map.of("id", id, "anio", String.valueOf(inicio.getYear())));
     }
 
     private void registrarTransicion(

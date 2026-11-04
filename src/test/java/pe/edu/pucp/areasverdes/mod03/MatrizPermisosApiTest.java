@@ -121,6 +121,14 @@ class MatrizPermisosApiTest extends ApiPlanificacion {
     }
 
     @Test
+    void losCuatroRolesPasanElPermisoDelDetalleDeUnCiclo() throws Exception {
+        for (String rol : ROLES) {
+            http.perform(get(RUTA + "programaciones/999999/").cookie(sesion(rol)))
+                    .andExpect(status().isNotFound());
+        }
+    }
+
+    @Test
     void soloElJefeEscribe() throws Exception {
         for (String rol : List.of("ingeniero-campo", "practicante", "capataz")) {
             Cookie cookie = sesion(rol);
