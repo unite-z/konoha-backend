@@ -595,6 +595,40 @@ class Mod04IntegrationTest {
     }
 
     @Test
+    void materialYTrasladoSeAsocianALaActividadConPermisos() throws Exception {
+        long equipo = cuadrilla(c1, o1);
+        long actividad = actividad(equipo);
+        var entrada =
+                values(
+                        "material_id",
+                        1,
+                        "cantidad",
+                        4,
+                        "unidad_medida_id",
+                        1,
+                        "origen",
+                        "Vivero",
+                        "destino",
+                        "Jardín A");
+        postJson("/actividades/" + actividad + "/materiales/", entrada, "capataz1", 201);
+        http.perform(
+                        get(BASE + "/actividades/" + actividad + "/materiales/")
+                                .with(httpBasic("capataz1", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].nombre_material").value("Esquejes"))
+                .andExpect(jsonPath("$[0].origen").value("Vivero"))
+                .andExpect(jsonPath("$[0].destino").value("Jardín A"));
+        entrada.put("destino", null);
+        postJson("/actividades/" + actividad + "/materiales/", entrada, "capataz1", 400);
+        postJson("/actividades/" + actividad + "/materiales/", entrada, "capataz2", 403);
+        http.perform(
+                        get(BASE + "/actividades/" + actividad + "/materiales/")
+                                .with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1));
+    }
+
+    @Test
     void precargaInicialIdempotenteNoSobrescribe() {
         repo.jdbc()
                 .getJdbcTemplate()
@@ -772,6 +806,7 @@ class Mod04IntegrationTest {
                                 null,
                                 false,
                                 false),
+                        new Fila("catalogo", "GET", "/catalogos/materiales", null, false, false),
                         new Fila(
                                 "crearTipo",
                                 "POST",
@@ -790,6 +825,20 @@ class Mod04IntegrationTest {
                         new Fila("cuadrilla", "GET", "/cuadrillas/" + equipo, null, false, false),
                         new Fila("encargo", "GET", "/encargos/" + enc, null, false, false),
                         new Fila("actividad", "GET", "/actividades/" + act, null, false, false),
+                        new Fila(
+                                "materiales",
+                                "GET",
+                                "/actividades/" + act + "/materiales",
+                                null,
+                                false,
+                                false),
+                        new Fila(
+                                "crearMaterial",
+                                "POST",
+                                "/actividades/" + act + "/materiales",
+                                values("material_id", 1, "cantidad", 2, "unidad_medida_id", 1),
+                                false,
+                                true),
                         new Fila(
                                 "participantes",
                                 "GET",
