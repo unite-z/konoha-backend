@@ -74,6 +74,8 @@ El frontend conserva `VITE_API_TERCERIZADOS_URL=/api/tercerizados`. Su proxy Vit
 
 Los grupos conservan exactamente los nombres `Jefe de sección`, `Ingeniero de campo`, `Practicante autorizado`. Solo estos tres roles pueden consultar el módulo; `/me/` admite a cualquier usuario activo autenticado para informar si tiene acceso.
 
+El monto de un contrato es confidencial (RNF-008): `monto_fijo` solo llega con valor al jefe de sección. A los demás roles la clave les llega con `null`, así que un cliente no debe interpretar el nulo como «contrato sin monto».
+
 Ejemplo de registro:
 
 ```json
