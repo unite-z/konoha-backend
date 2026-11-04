@@ -30,8 +30,16 @@ public class ServiciosRepository {
             "SELECT d.*, u.nombre modificado_por FROM mod03_duracion_servicio d"
                     + " JOIN mod05_usuario u ON u.id = d.usuario_modificacion_id";
     private static final String SERVICIOS =
-            "SELECT id, nombre, es_ruidoso FROM mod05_tiposervicio"
-                    + " WHERE activo AND es_periodico ORDER BY id";
+            """
+            SELECT t.id, t.nombre, t.es_ruidoso, t.ejecutor via,
+                CASE WHEN t.ejecutor = 'Tercerizado' THEN (SELECT v.razon_social
+                    FROM mod05_contrato c JOIN mod05_proveedor v ON v.id = c.proveedor_id
+                    WHERE c.tipo_servicio_id = t.id
+                    ORDER BY (current_date BETWEEN c.vigencia_inicio AND c.vigencia_fin) DESC,
+                        c.vigencia_fin DESC, c.id DESC
+                    LIMIT 1) END proveedor
+            FROM mod05_tiposervicio t WHERE t.activo AND t.es_periodico ORDER BY t.id
+            """;
 
     private final NamedParameterJdbcTemplate jdbc;
 
@@ -53,6 +61,8 @@ public class ServiciosRepository {
                                 rs.getLong("id"),
                                 rs.getString("nombre"),
                                 rs.getBoolean("es_ruidoso"),
+                                rs.getString("via"),
+                                rs.getString("proveedor"),
                                 frecuencias.getOrDefault(rs.getLong("id"), List.of()),
                                 duraciones.get(rs.getLong("id"))));
     }
