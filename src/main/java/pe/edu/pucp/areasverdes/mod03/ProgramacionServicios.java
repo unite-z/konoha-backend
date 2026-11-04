@@ -6,6 +6,7 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import org.springframework.jdbc.core.DataClassRowMapper;
@@ -48,12 +49,17 @@ public class ProgramacionServicios {
     private final NamedParameterJdbcTemplate jdbc;
     private final AlertasPlanificacion alertas;
     private final CorteCesped corte;
+    private final Avisos avisos;
 
     public ProgramacionServicios(
-            NamedParameterJdbcTemplate jdbc, AlertasPlanificacion alertas, CorteCesped corte) {
+            NamedParameterJdbcTemplate jdbc,
+            AlertasPlanificacion alertas,
+            CorteCesped corte,
+            Avisos avisos) {
         this.jdbc = jdbc;
         this.alertas = alertas;
         this.corte = corte;
+        this.avisos = avisos;
     }
 
     @Transactional
@@ -61,41 +67,11 @@ public class ProgramacionServicios {
         Acceso.gestionar(usuario);
         LocalDate inicio = nueva.fechaInicioPrevista();
         LocalDate fin = nueva.fechaFinPrevista();
-        if (fin.isBefore(inicio)) {
-            throw new ErrorPlanificacion(
-                    400, "periodo-invalido", "El fin debe ser posterior al inicio");
-        }
-        List<Duracion> servicios =
-                jdbc.query(
-                        "SELECT t.es_ruidoso ruidoso, d.duracion_maxima_dias maxima,"
-                            + " coalesce(d.dias_limpieza, 0) limpieza FROM mod05_tiposervicio t"
-                            + " LEFT JOIN mod03_duracion_servicio d ON d.tipo_servicio_id = t.id"
-                            + " WHERE t.id = :id AND t.activo AND t.es_periodico",
-                        Map.of("id", nueva.tipoServicioId()),
-                        new DataClassRowMapper<>(Duracion.class));
-        if (servicios.isEmpty()) {
-            throw new ErrorPlanificacion(404, "servicio-no-encontrado", "No existe ese servicio");
-        }
-        String ventana = ventana(nueva, inicio, fin);
+        exigirPeriodo(inicio, fin);
+        Duracion servicio = servicio(nueva.tipoServicioId());
+        String ventana = ventana(nueva.proveedorId(), nueva.ventanaMes(), inicio, fin);
         exigirCuadrillaYAreas(nueva);
-        Duracion servicio = servicios.getFirst();
-        if (servicio.maxima() == null) {
-            throw new ErrorPlanificacion(
-                    409, "configuracion-incompleta", "Configura antes la duración del servicio");
-        }
-        Programador.exigirDuracion(
-                Programador.dias(inicio, fin), servicio.maxima(), servicio.limpieza());
-        List<Restriccion> conflictos =
-                jdbc
-                        .query(
-                                RestriccionesController.CONSULTA.formatted(
-                                        "r.fecha_inicio <= :hasta AND r.fecha_fin >= :desde"),
-                                Map.of("desde", inicio, "hasta", fin),
-                                new DataClassRowMapper<>(Restriccion.class))
-                        .stream()
-                        .filter(r -> afecta(r, inicio, fin, servicio.ruidoso()))
-                        .toList();
-        exigirConstancia(conflictos, nueva);
+        List<Restriccion> conflictos = conflictos(servicio, inicio, fin, nueva.justificacion());
         var datos =
                 new MapSqlParameterSource()
                         .addValue("servicio", nueva.tipoServicioId())
@@ -104,7 +80,6 @@ public class ProgramacionServicios {
                         .addValue("inicio", inicio)
                         .addValue("fin", fin)
                         .addValue("usuario", usuario.id())
-                        .addValue("justificacion", nueva.justificacion())
                         .addValue("ventana", ventana)
                         .addValue("cuadrilla", nueva.cuadrillaId());
         long id =
@@ -130,14 +105,160 @@ public class ProgramacionServicios {
             corte.copiarRuta(id, nueva.zonas());
         }
         alertas.atenderFrecuencia(nueva.tipoServicioId(), usuario);
+        guardarConstancias(id, conflictos, nueva.justificacion(), usuario);
+        return id;
+    }
+
+    /** Nuevas fechas de una programación aún no iniciada, con la justificación si hace falta. */
+    public record Reprogramacion(
+            @NotNull(message = "Indica el inicio") LocalDate fechaInicioPrevista,
+            @NotNull(message = "Indica el fin") LocalDate fechaFinPrevista,
+            @Size(max = 300, message = "Máximo 300 caracteres") String justificacion) {}
+
+    private record Actual(
+            long tipoServicioId,
+            Long proveedorId,
+            String ventanaMes,
+            String estado,
+            LocalDate fechaInicioPrevista,
+            LocalDate fechaFinPrevista) {}
+
+    private static final DateTimeFormatter DIA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+
+    /**
+     * AV-362: cambia las fechas de una programación en estado Programada, con las mismas reglas que
+     * el alta (periodo, duración máxima, ventana del proveedor, prohibiciones y avisos con
+     * justificación). Queda en el historial y, si es de un tercerizado, se le avisa del traslado
+     * (AV-264).
+     */
+    @Transactional
+    public void reprogramar(long id, Reprogramacion nueva, UsuarioPlanificacion usuario) {
+        Acceso.gestionar(usuario);
+        List<Actual> filas =
+                jdbc.query(
+                        "SELECT tipo_servicio_id, proveedor_id, ventana_mes, estado,"
+                                + " fecha_inicio_prevista, fecha_fin_prevista FROM"
+                                + " mod03_programacion_servicio WHERE id = :id FOR UPDATE",
+                        Map.of("id", id),
+                        new DataClassRowMapper<>(Actual.class));
+        if (filas.isEmpty()) {
+            throw new ErrorPlanificacion(
+                    404, "programacion-no-encontrada", "No existe esa programación");
+        }
+        Actual actual = filas.getFirst();
+        if (!"Programada".equals(actual.estado())) {
+            throw new ErrorPlanificacion(
+                    409,
+                    "transicion-invalida",
+                    "Solo se puede reprogramar una programación en estado Programada");
+        }
+        LocalDate inicio = nueva.fechaInicioPrevista();
+        LocalDate fin = nueva.fechaFinPrevista();
+        exigirPeriodo(inicio, fin);
+        ventana(actual.proveedorId(), actual.ventanaMes(), inicio, fin);
+        List<Restriccion> conflictos =
+                conflictos(servicio(actual.tipoServicioId()), inicio, fin, nueva.justificacion());
+        jdbc.update(
+                "UPDATE mod03_programacion_servicio SET fecha_inicio_prevista = :inicio,"
+                        + " fecha_fin_prevista = :fin, estacion = :estacion, fecha_modificacion ="
+                        + " now(), usuario_modificacion_id = :usuario WHERE id = :id",
+                new MapSqlParameterSource()
+                        .addValue("id", id)
+                        .addValue("inicio", inicio)
+                        .addValue("fin", fin)
+                        .addValue("estacion", Programador.estacion(inicio))
+                        .addValue("usuario", usuario.id()));
+        guardarConstancias(id, conflictos, nueva.justificacion(), usuario);
+        String fechas =
+                "del %s al %s (antes, del %s al %s)"
+                        .formatted(
+                                DIA.format(inicio),
+                                DIA.format(fin),
+                                DIA.format(actual.fechaInicioPrevista()),
+                                DIA.format(actual.fechaFinPrevista()));
+        String motivo =
+                "Reprogramada "
+                        + fechas
+                        + (nueva.justificacion() == null || nueva.justificacion().isBlank()
+                                ? ""
+                                : ": " + nueva.justificacion().trim());
+        registrarTransicion(
+                id,
+                "Programada",
+                usuario,
+                motivo.length() > 300 ? motivo.substring(0, 300) : motivo);
+        if (actual.proveedorId() != null) {
+            avisos.aProveedor(
+                    actual.proveedorId(), "Servicio trasladado " + fechas, "programacion", id);
+        }
+    }
+
+    private static void exigirPeriodo(LocalDate inicio, LocalDate fin) {
+        if (fin.isBefore(inicio)) {
+            throw new ErrorPlanificacion(
+                    400, "periodo-invalido", "El fin debe ser posterior al inicio");
+        }
+    }
+
+    /** El servicio periódico activo con su duración máxima; 404 si no existe. */
+    private Duracion servicio(long tipoServicioId) {
+        List<Duracion> servicios =
+                jdbc.query(
+                        "SELECT t.es_ruidoso ruidoso, d.duracion_maxima_dias maxima,"
+                            + " coalesce(d.dias_limpieza, 0) limpieza FROM mod05_tiposervicio t"
+                            + " LEFT JOIN mod03_duracion_servicio d ON d.tipo_servicio_id = t.id"
+                            + " WHERE t.id = :id AND t.activo AND t.es_periodico",
+                        Map.of("id", tipoServicioId),
+                        new DataClassRowMapper<>(Duracion.class));
+        if (servicios.isEmpty()) {
+            throw new ErrorPlanificacion(404, "servicio-no-encontrado", "No existe ese servicio");
+        }
+        return servicios.getFirst();
+    }
+
+    /**
+     * Duración máxima (RN-002) y restricciones que afectan al periodo, que tienen que constar
+     * (RN-003). Devuelve las restricciones con las que coincide.
+     */
+    private List<Restriccion> conflictos(
+            Duracion servicio, LocalDate inicio, LocalDate fin, String justificacion) {
+        if (servicio.maxima() == null) {
+            throw new ErrorPlanificacion(
+                    409, "configuracion-incompleta", "Configura antes la duración del servicio");
+        }
+        Programador.exigirDuracion(
+                Programador.dias(inicio, fin), servicio.maxima(), servicio.limpieza());
+        List<Restriccion> conflictos =
+                jdbc
+                        .query(
+                                RestriccionesController.CONSULTA.formatted(
+                                        "r.fecha_inicio <= :hasta AND r.fecha_fin >= :desde"),
+                                Map.of("desde", inicio, "hasta", fin),
+                                new DataClassRowMapper<>(Restriccion.class))
+                        .stream()
+                        .filter(r -> afecta(r, inicio, fin, servicio.ruidoso()))
+                        .toList();
+        exigirConstancia(conflictos, justificacion);
+        return conflictos;
+    }
+
+    private void guardarConstancias(
+            long id,
+            List<Restriccion> conflictos,
+            String justificacion,
+            UsuarioPlanificacion usuario) {
         for (Restriccion r : conflictos) {
             jdbc.update(
                     "INSERT INTO mod03_confirmacion_restriccion(programacion_id, restriccion_id,"
                             + " usuario_id, justificacion) VALUES (:id, :restriccion, :usuario,"
-                            + " :justificacion)",
-                    datos.addValue("id", id).addValue("restriccion", r.id()));
+                            + " :justificacion) ON CONFLICT (programacion_id, restriccion_id) DO"
+                            + " NOTHING",
+                    new MapSqlParameterSource()
+                            .addValue("id", id)
+                            .addValue("restriccion", r.id())
+                            .addValue("usuario", usuario.id())
+                            .addValue("justificacion", justificacion));
         }
-        return id;
     }
 
     /**
@@ -250,14 +371,12 @@ public class ProgramacionServicios {
      * Ventana mensual de un tercerizado (RF-PLA-004): la indicada o el mes del inicio, y el inicio
      * y el fin tienen que caer en ella. Con personal propio no hay ventana.
      */
-    private static String ventana(NuevaProgramacion nueva, LocalDate inicio, LocalDate fin) {
-        if (nueva.proveedorId() == null) {
+    private static String ventana(
+            Long proveedorId, String ventanaMes, LocalDate inicio, LocalDate fin) {
+        if (proveedorId == null) {
             return null;
         }
-        YearMonth mes =
-                nueva.ventanaMes() == null
-                        ? YearMonth.from(inicio)
-                        : YearMonth.parse(nueva.ventanaMes());
+        YearMonth mes = ventanaMes == null ? YearMonth.from(inicio) : YearMonth.parse(ventanaMes);
         if (!YearMonth.from(inicio).equals(mes) || !YearMonth.from(fin).equals(mes)) {
             throw new ErrorPlanificacion(
                     400,
@@ -276,7 +395,7 @@ public class ProgramacionServicios {
      * (escenario «Prohibición por examen de admisión»); un aviso se guarda con motivo (escenario
      * «Aviso por actividad extracurricular»), que queda como constancia.
      */
-    private static void exigirConstancia(List<Restriccion> conflictos, NuevaProgramacion nueva) {
+    private static void exigirConstancia(List<Restriccion> conflictos, String justificacion) {
         List<Restriccion> prohibiciones =
                 conflictos.stream().filter(r -> "Prohibicion".equals(r.efecto())).toList();
         if (!prohibiciones.isEmpty()) {
@@ -287,8 +406,7 @@ public class ProgramacionServicios {
                             + motivos(prohibiciones)
                             + ", que prohíbe programar en esas fechas. Elige otras");
         }
-        if (!conflictos.isEmpty()
-                && (nueva.justificacion() == null || nueva.justificacion().isBlank())) {
+        if (!conflictos.isEmpty() && (justificacion == null || justificacion.isBlank())) {
             throw new ErrorPlanificacion(
                     409,
                     "restricciones-sin-justificar",

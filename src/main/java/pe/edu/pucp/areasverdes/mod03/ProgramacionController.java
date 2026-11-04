@@ -20,6 +20,7 @@ import org.springframework.jdbc.core.DataClassRowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -29,6 +30,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import pe.edu.pucp.areasverdes.mod03.ProgramacionServicios.Cambio;
 import pe.edu.pucp.areasverdes.mod03.ProgramacionServicios.NuevaProgramacion;
+import pe.edu.pucp.areasverdes.mod03.ProgramacionServicios.Reprogramacion;
 
 /** Programaciones de servicios periódicos (HU-MOD03-004 y 005). */
 @RestController
@@ -229,6 +231,16 @@ public class ProgramacionController {
         LocalDate fecha =
                 cambio == null || cambio.fecha() == null ? LocalDate.now(reloj) : cambio.fecha();
         programacion.cambiar(id, accion, fecha, cambio == null ? null : cambio.motivo(), usuario);
+        return buscar(id);
+    }
+
+    @Operation(summary = "Reprograma un ciclo aún no iniciado: nuevas fechas (jefe de sección)")
+    @PatchMapping({"/programaciones/{id}", "/programaciones/{id}/"})
+    public Programacion reprogramar(
+            UsuarioPlanificacion usuario,
+            @PathVariable long id,
+            @Valid @RequestBody Reprogramacion nueva) {
+        programacion.reprogramar(id, nueva, usuario);
         return buscar(id);
     }
 
