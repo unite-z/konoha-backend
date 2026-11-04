@@ -38,7 +38,9 @@ public class ProgramacionServicios {
             @NotNull(message = "Indica el fin") LocalDate fechaFinPrevista,
             @Size(max = 300, message = "Máximo 300 caracteres") String justificacion,
             @Pattern(regexp = "\\d{4}-(0[1-9]|1[0-2])", message = "La ventana es un mes AAAA-MM")
-                    String ventanaMes) {}
+                    String ventanaMes,
+            Long cuadrillaId,
+            @Size(max = 200, message = "Máximo 200 áreas") List<Long> areaVerdeIds) {}
 
     private record Duracion(boolean ruidoso, Integer maxima, Integer limpieza) {}
 
@@ -71,6 +73,7 @@ public class ProgramacionServicios {
             throw new ErrorPlanificacion(404, "servicio-no-encontrado", "No existe ese servicio");
         }
         String ventana = ventana(nueva, inicio, fin);
+        exigirCuadrillaYAreas(nueva);
         Duracion servicio = servicios.getFirst();
         if (servicio.maxima() == null) {
             throw new ErrorPlanificacion(
@@ -98,19 +101,26 @@ public class ProgramacionServicios {
                         .addValue("fin", fin)
                         .addValue("usuario", usuario.id())
                         .addValue("justificacion", nueva.justificacion())
-                        .addValue("ventana", ventana);
+                        .addValue("ventana", ventana)
+                        .addValue("cuadrilla", nueva.cuadrillaId());
         long id =
                 jdbc.queryForObject(
                         """
                         INSERT INTO mod03_programacion_servicio(tipo_servicio_id, proveedor_id, estacion,
-                            fecha_inicio_prevista, fecha_fin_prevista, ventana_mes, creado_por_id,
-                            usuario_creacion_id, usuario_modificacion_id)
+                            fecha_inicio_prevista, fecha_fin_prevista, ventana_mes, cuadrilla_id,
+                            creado_por_id, usuario_creacion_id, usuario_modificacion_id)
                         VALUES (:servicio, :proveedor, :estacion, :inicio, :fin, :ventana,
-                            :usuario, :usuario, :usuario) RETURNING id
+                            :cuadrilla, :usuario, :usuario, :usuario) RETURNING id
                         """,
                         datos,
                         Long.class);
         registrarTransicion(id, "Programada", usuario, null);
+        for (Long area : areas(nueva)) {
+            jdbc.update(
+                    "INSERT INTO mod03_programacion_area(programacion_id, area_verde_id) VALUES"
+                            + " (:id, :area)",
+                    Map.of("id", id, "area", area));
+        }
         alertas.atenderFrecuencia(nueva.tipoServicioId(), usuario);
         for (Restriccion r : conflictos) {
             jdbc.update(
@@ -185,6 +195,44 @@ public class ProgramacionServicios {
                         .addValue("estado", estado)
                         .addValue("usuario", usuario.id())
                         .addValue("motivo", motivo));
+    }
+
+    private static List<Long> areas(NuevaProgramacion nueva) {
+        return nueva.areaVerdeIds() == null
+                ? List.of()
+                : nueva.areaVerdeIds().stream().distinct().toList();
+    }
+
+    /**
+     * La cuadrilla (MOD-04) solo con personal propio, activa; las áreas verdes (MOD-02), activas
+     * (AV-254).
+     */
+    private void exigirCuadrillaYAreas(NuevaProgramacion nueva) {
+        if (nueva.cuadrillaId() != null) {
+            if (nueva.proveedorId() != null) {
+                throw new ErrorPlanificacion(
+                        400,
+                        "cuadrilla-con-proveedor",
+                        "Un servicio tercerizado no lleva cuadrilla propia");
+            }
+            if (jdbc.queryForObject(
+                            "SELECT count(*) FROM mod04_cuadrilla WHERE id = :id AND activa",
+                            Map.of("id", nueva.cuadrillaId()),
+                            Integer.class)
+                    == 0) {
+                throw new ErrorPlanificacion(400, "cuadrilla-invalida", "No existe esa cuadrilla");
+            }
+        }
+        List<Long> areas = areas(nueva);
+        if (!areas.isEmpty()
+                && jdbc.queryForObject(
+                                "SELECT count(*) FROM mod02_area_verde WHERE id IN (:ids) AND"
+                                        + " activo",
+                                Map.of("ids", areas),
+                                Integer.class)
+                        != areas.size()) {
+            throw new ErrorPlanificacion(400, "area-invalida", "Alguna área verde no existe");
+        }
     }
 
     /**

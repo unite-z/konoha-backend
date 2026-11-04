@@ -40,7 +40,8 @@ public class ProgramacionController {
     /**
      * Un ciclo programado. {@code ventana_mes}: mes del tercerizado ({@code null} con personal
      * propio). {@code historial}: sus transiciones con autor y hora, de la más antigua a la más
-     * reciente (AV-253).
+     * reciente (AV-253). {@code cuadrilla}: la de MOD-04 con personal propio; {@code areas}: las
+     * áreas verdes de MOD-02 con su sector vigente (AV-254).
      */
     public record Programacion(
             long id,
@@ -56,7 +57,22 @@ public class ProgramacionController {
             LocalDate fechaFinReal,
             String ventanaMes,
             String motivoCancelacion,
+            Long cuadrillaId,
+            String cuadrilla,
+            List<Area> areas,
             List<Transicion> historial) {}
+
+    /** Área verde (lugar) de la programación, con su sector vigente si lo tiene. */
+    public record Area(long id, String nombre, String lugar, Long sectorId, String sector) {}
+
+    /**
+     * El calendario de la cuadrilla del capataz (AV-271): sus ciclos y las restricciones del
+     * periodo.
+     */
+    public record CalendarioCuadrilla(
+            String cuadrilla,
+            List<Programacion> programaciones,
+            List<RestriccionesController.Restriccion> restricciones) {}
 
     /** Una transición del ciclo: a qué estado pasó, cuándo, quién y, al cancelar, por qué. */
     public record Transicion(
@@ -75,13 +91,17 @@ public class ProgramacionController {
             LocalDate fechaInicioReal,
             LocalDate fechaFinReal,
             String ventanaMes,
-            String motivoCancelacion) {}
+            String motivoCancelacion,
+            Long cuadrillaId,
+            String cuadrilla) {}
 
     static final String CONSULTA =
             """
-            SELECT p.*, t.nombre servicio, v.razon_social proveedor FROM mod03_programacion_servicio p
+            SELECT p.*, t.nombre servicio, v.razon_social proveedor, c.nombre cuadrilla
+            FROM mod03_programacion_servicio p
             JOIN mod05_tiposervicio t ON t.id = p.tipo_servicio_id
             LEFT JOIN mod05_proveedor v ON v.id = p.proveedor_id
+            LEFT JOIN mod04_cuadrilla c ON c.id = p.cuadrilla_id
             WHERE %s ORDER BY p.fecha_inicio_prevista, p.id
             """;
 
@@ -112,7 +132,10 @@ public class ProgramacionController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta,
             @RequestParam(name = "tipo_servicio_id", required = false) Long tipoServicioId,
             @RequestParam(name = "proveedor_id", required = false) Long proveedorId,
-            @RequestParam(required = false) String estado) {
+            @RequestParam(required = false) String estado,
+            @RequestParam(name = "cuadrilla_id", required = false) Long cuadrillaId,
+            @RequestParam(name = "sector_id", required = false) Long sectorId,
+            @RequestParam(name = "lugar_id", required = false) Long lugarId) {
         Acceso.consultar(usuario);
         if (hasta.isBefore(desde)
                 || desde.plusDays(RestriccionesController.DIAS_MAXIMOS).isBefore(hasta)) {
@@ -125,7 +148,10 @@ public class ProgramacionController {
                         .addValue("hasta", hasta)
                         .addValue("servicio", tipoServicioId)
                         .addValue("proveedor", proveedorId)
-                        .addValue("estado", estado);
+                        .addValue("estado", estado)
+                        .addValue("cuadrilla", cuadrillaId)
+                        .addValue("sector", sectorId)
+                        .addValue("lugar", lugarId);
         return consultar(
                 CONSULTA.formatted(
                         """
@@ -133,8 +159,61 @@ public class ProgramacionController {
                         AND (CAST(:servicio AS bigint) IS NULL OR p.tipo_servicio_id = :servicio)
                         AND (CAST(:proveedor AS bigint) IS NULL OR p.proveedor_id = :proveedor)
                         AND (CAST(:estado AS varchar) IS NULL OR p.estado = :estado)
+                        AND (CAST(:cuadrilla AS bigint) IS NULL OR p.cuadrilla_id = :cuadrilla)
+                        AND (CAST(:lugar AS bigint) IS NULL OR EXISTS (SELECT 1
+                            FROM mod03_programacion_area pa
+                            WHERE pa.programacion_id = p.id AND pa.area_verde_id = :lugar))
+                        AND (CAST(:sector AS bigint) IS NULL OR EXISTS (SELECT 1
+                            FROM mod03_programacion_area pa
+                            JOIN mod02_historial_area_sector h ON h.area_verde_id = pa.area_verde_id
+                                AND h.fecha_fin IS NULL
+                            WHERE pa.programacion_id = p.id AND h.sector_id = :sector))
                         """),
                 datos);
+    }
+
+    @Operation(summary = "Calendario de la cuadrilla del capataz: sus ciclos y las restricciones")
+    @GetMapping({"/calendario-cuadrilla", "/calendario-cuadrilla/"})
+    public CalendarioCuadrilla calendarioCuadrilla(
+            UsuarioPlanificacion usuario,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate desde,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hasta) {
+        Acceso.consultar(usuario);
+        if (hasta.isBefore(desde)
+                || desde.plusDays(RestriccionesController.DIAS_MAXIMOS).isBefore(hasta)) {
+            throw new ErrorPlanificacion(
+                    400, "periodo-invalido", "El periodo debe empezar antes de terminar");
+        }
+        List<Map<String, Object>> cuadrillas =
+                jdbc.queryForList(
+                        """
+                        SELECT c.id, c.nombre FROM mod04_cuadrilla c
+                        JOIN mod04_personal p ON p.id = c.capataz_id
+                        WHERE p.usuario_id = :usuario AND c.activa ORDER BY c.id
+                        """,
+                        Map.of("usuario", usuario.id()));
+        var periodo = new MapSqlParameterSource().addValue("desde", desde).addValue("hasta", hasta);
+        List<RestriccionesController.Restriccion> restricciones =
+                jdbc.query(
+                        RestriccionesController.CONSULTA.formatted(
+                                "r.fecha_inicio <= :hasta AND r.fecha_fin >= :desde"),
+                        periodo,
+                        new DataClassRowMapper<>(RestriccionesController.Restriccion.class));
+        if (cuadrillas.isEmpty()) {
+            return new CalendarioCuadrilla(null, List.of(), restricciones);
+        }
+        periodo.addValue(
+                "cuadrillas",
+                cuadrillas.stream().map(c -> ((Number) c.get("id")).longValue()).toList());
+        return new CalendarioCuadrilla(
+                (String) cuadrillas.getFirst().get("nombre"),
+                consultar(
+                        CONSULTA.formatted(
+                                "p.fecha_inicio_prevista <= :hasta AND p.fecha_fin_prevista >="
+                                    + " :desde AND p.cuadrilla_id IN (:cuadrillas) AND p.estado <>"
+                                    + " 'Cancelada'"),
+                        periodo),
+                restricciones);
     }
 
     @Operation(summary = "Registra el inicio, el fin o la cancelación de una programación (jefe)")
@@ -164,6 +243,27 @@ public class ProgramacionController {
         if (filas.isEmpty()) {
             return List.of();
         }
+        Map<Long, List<Area>> areas = new HashMap<>();
+        jdbc.query(
+                """
+                SELECT pa.programacion_id, a.id, a.nombre, a.lugar, s.id sector_id, s.nombre sector
+                FROM mod03_programacion_area pa JOIN mod02_area_verde a ON a.id = pa.area_verde_id
+                LEFT JOIN mod02_historial_area_sector h ON h.area_verde_id = a.id
+                    AND h.fecha_fin IS NULL
+                LEFT JOIN mod02_sector s ON s.id = h.sector_id
+                WHERE pa.programacion_id IN (:ids) ORDER BY a.nombre, a.id
+                """,
+                Map.of("ids", filas.stream().map(Fila::id).toList()),
+                (ResultSet rs) -> {
+                    areas.computeIfAbsent(rs.getLong("programacion_id"), k -> new ArrayList<>())
+                            .add(
+                                    new Area(
+                                            rs.getLong("id"),
+                                            rs.getString("nombre"),
+                                            rs.getString("lugar"),
+                                            rs.getObject("sector_id", Long.class),
+                                            rs.getString("sector")));
+                });
         Map<Long, List<Transicion>> historial = new HashMap<>();
         jdbc.query(
                 """
@@ -201,6 +301,9 @@ public class ProgramacionController {
                                         f.fechaFinReal(),
                                         f.ventanaMes(),
                                         f.motivoCancelacion(),
+                                        f.cuadrillaId(),
+                                        f.cuadrilla(),
+                                        areas.getOrDefault(f.id(), List.of()),
                                         historial.getOrDefault(f.id(), List.of())))
                 .toList();
     }
