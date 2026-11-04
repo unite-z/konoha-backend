@@ -48,7 +48,12 @@ public class Incidencias {
             String ejemplar,
             @Size(max = 300, message = "Máximo 300 caracteres") String descripcion) {}
 
-    /** Fila de la bandeja y de «Mis incidencias». {@code responsable}: capataz o proveedor. */
+    /**
+     * Fila de la bandeja y de «Mis incidencias». {@code responsable}: capataz o proveedor. {@code
+     * nivel_plazo} (RN-019, AV-280): en las sencillas del personal propio sin atender,
+     * «SuperaObjetivo» pasadas 24 h, «CercaMaximo» desde 40 h y «Vencida» pasadas 48 h; si no,
+     * nulo.
+     */
     public record Resumen(
             long id,
             String codigo,
@@ -62,7 +67,8 @@ public class Incidencias {
             OffsetDateTime fechaRegistro,
             OffsetDateTime fechaCierre,
             String responsable,
-            Long minutosCierre) {}
+            Long minutosCierre,
+            String nivelPlazo) {}
 
     public record Ejemplar(String codigo, String especie, Double alturaM) {}
 
@@ -157,12 +163,20 @@ public class Incidencias {
             """
             SELECT i.id, i.codigo, t.nombre tipo, t.sencilla tipo_sencilla, a.nombre espacio,
                 i.severidad, i.via, i.estado, i.canal, i.fecha_registro, i.fecha_cierre,
-                NULL responsable,
+                cp.nombres || ' ' || left(cp.apellidos, 1) || '.' responsable,
                 CAST(floor(extract(epoch FROM i.fecha_cierre - i.fecha_registro) / 60) AS bigint)
-                    minutos_cierre
+                    minutos_cierre,
+                CASE WHEN t.sencilla AND coalesce(i.via, 'PersonalPropio') <> 'Tercerizada'
+                        AND i.estado NOT IN ('Atendida', 'Cerrada', 'Descartada') THEN
+                    CASE WHEN now() - i.fecha_registro > interval '48 hours' THEN 'Vencida'
+                        WHEN now() - i.fecha_registro >= interval '40 hours' THEN 'CercaMaximo'
+                        WHEN now() - i.fecha_registro > interval '24 hours' THEN 'SuperaObjetivo'
+                    END
+                END nivel_plazo
             FROM mod03_incidencia i
             JOIN mod03_tipo_incidencia t ON t.id = i.tipo_incidencia_id
             JOIN mod02_area_verde a ON a.id = i.area_verde_id
+            LEFT JOIN mod04_personal cp ON cp.id = i.capataz_id
             """;
 
     private final NamedParameterJdbcTemplate jdbc;
@@ -611,7 +625,8 @@ public class Incidencias {
                 instante(rs, "fecha_registro"),
                 instante(rs, "fecha_cierre"),
                 rs.getString("responsable"),
-                rs.getObject("minutos_cierre", Long.class));
+                rs.getObject("minutos_cierre", Long.class),
+                rs.getString("nivel_plazo"));
     }
 
     static OffsetDateTime instante(ResultSet rs, String columna) throws SQLException {

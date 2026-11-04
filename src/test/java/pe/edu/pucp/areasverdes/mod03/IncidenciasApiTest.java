@@ -391,4 +391,67 @@ class IncidenciasApiTest extends ApiPlanificacion {
                         jsonPath("$.historial[0].texto")
                                 .value("En atención · jefe (devuelta: Falta retirar la rama)"));
     }
+
+    long capataz() {
+        var sql = jdbc.getJdbcTemplate();
+        long personal =
+                sql.queryForObject(
+                        "INSERT INTO mod04_personal (nombres, apellidos, tipo_personal) VALUES"
+                                + " ('Marta', 'Ríos', 'Capataz') RETURNING id",
+                        Long.class);
+        sql.update(
+                "INSERT INTO mod04_cuadrilla (nombre, capataz_id, usuario_creacion_id,"
+                        + " usuario_modificacion_id) VALUES ('Cuadrilla A', ?, 1, 1)",
+                personal);
+        return personal;
+    }
+
+    @Test
+    void elNivelDePlazoSiguelaReglaDeLasSencillas() throws Exception {
+        long id = registrada();
+        var sql = jdbc.getJdbcTemplate();
+        http.perform(get(RUTA + id + "/").with(httpBasic("jefe", CLAVE)))
+                .andExpect(jsonPath("$.nivel_plazo").isEmpty());
+        sql.update("UPDATE mod03_incidencia SET fecha_registro = now() - interval '31 hours'");
+        http.perform(get(RUTA).with(httpBasic("jefe", CLAVE)))
+                .andExpect(jsonPath("$[0].nivel_plazo").value("SuperaObjetivo"));
+        sql.update("UPDATE mod03_incidencia SET fecha_registro = now() - interval '46 hours'");
+        http.perform(get(RUTA).with(httpBasic("jefe", CLAVE)))
+                .andExpect(jsonPath("$[0].nivel_plazo").value("CercaMaximo"));
+        sql.update("UPDATE mod03_incidencia SET fecha_registro = now() - interval '50 hours'");
+        http.perform(get(RUTA).with(httpBasic("jefe", CLAVE)))
+                .andExpect(jsonPath("$[0].nivel_plazo").value("Vencida"));
+        sql.update("UPDATE mod03_incidencia SET via = 'Tercerizada'");
+        http.perform(get(RUTA).with(httpBasic("jefe", CLAVE)))
+                .andExpect(jsonPath("$[0].nivel_plazo").isEmpty());
+    }
+
+    @Test
+    void laCausaSeGuardaConSuAutorYSeReasignaElCapataz() throws Exception {
+        long id = registrada();
+        long marta = capataz();
+        accion("jefe", id, "causa-retraso", "{}")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.codigo").value("causa-requerida"));
+        accion("jefe", id, "causa-retraso", "{\"causa\": \"Lluvia toda la mañana\"}")
+                .andExpect(status().isNoContent());
+        assertEquals(
+                "Lluvia toda la mañana jefe",
+                jdbc.getJdbcTemplate()
+                        .queryForObject(
+                                "SELECT c.causa || ' ' || u.nombre FROM mod03_causa_retraso c"
+                                        + " JOIN core_usuario u ON u.id = c.usuario_id",
+                                String.class));
+        http.perform(get(RUTA + id + "/capataces/").with(httpBasic("jefe", CLAVE)))
+                .andExpect(jsonPath("$[0].nombre").value("Marta R."))
+                .andExpect(jsonPath("$[0].cuadrilla").value("Cuadrilla A"));
+        accion("jefe", id, "reasignar", "{\"capataz_id\": 999999}")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.codigo").value("capataz-invalido"));
+        accion("jefe", id, "reasignar", "{\"capataz_id\": " + marta + "}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.responsable").value("Marta R."));
+        accion("ingeniero", id, "reasignar", "{\"capataz_id\": " + marta + "}")
+                .andExpect(status().isForbidden());
+    }
 }

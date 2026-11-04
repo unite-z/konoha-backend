@@ -40,6 +40,7 @@ public class IncidenciasController {
     private final Incidencias incidencias;
     private final ClasificacionIncidencias clasificacion;
     private final CierreIncidencias cierre;
+    private final PlazosIncidencias plazos;
     private final ObjectMapper json;
     private final Validator validador;
 
@@ -47,11 +48,13 @@ public class IncidenciasController {
             Incidencias incidencias,
             ClasificacionIncidencias clasificacion,
             CierreIncidencias cierre,
+            PlazosIncidencias plazos,
             ObjectMapper json,
             Validator validador) {
         this.incidencias = incidencias;
         this.clasificacion = clasificacion;
         this.cierre = cierre;
+        this.plazos = plazos;
         this.json = json;
         this.validador = validador;
     }
@@ -175,6 +178,33 @@ public class IncidenciasController {
             @Valid @RequestBody(required = false) CierreIncidencias.Revision cuerpo) {
         cierre.devolver(id, cuerpo, usuario);
         return incidencias.ficha(id);
+    }
+
+    @Operation(summary = "Anota la causa del retraso de una alerta de plazo (jefe)")
+    @PostMapping({"/{id:\\d+}/causa-retraso", "/{id:\\d+}/causa-retraso/"})
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void causaRetraso(
+            UsuarioPlanificacion usuario,
+            @PathVariable long id,
+            @Valid @RequestBody(required = false) PlazosIncidencias.CausaRetraso cuerpo) {
+        plazos.anotarCausa(id, cuerpo, usuario);
+    }
+
+    @Operation(summary = "Capataces a los que se puede reasignar la incidencia (jefe)")
+    @GetMapping({"/{id:\\d+}/capataces", "/{id:\\d+}/capataces/"})
+    public List<PlazosIncidencias.Capataz> capataces(
+            UsuarioPlanificacion usuario, @PathVariable long id) {
+        return plazos.capataces(id, usuario);
+    }
+
+    @Operation(summary = "Reasigna el capataz responsable de la incidencia (jefe)")
+    @PostMapping({"/{id:\\d+}/reasignar", "/{id:\\d+}/reasignar/"})
+    public Resumen reasignar(
+            UsuarioPlanificacion usuario,
+            @PathVariable long id,
+            @Valid @RequestBody PlazosIncidencias.Reasignacion cuerpo) {
+        plazos.reasignar(id, cuerpo, usuario);
+        return incidencias.ficha(id).resumen();
     }
 
     @Operation(summary = "Bandeja de incidencias de la oficina (jefe)")
