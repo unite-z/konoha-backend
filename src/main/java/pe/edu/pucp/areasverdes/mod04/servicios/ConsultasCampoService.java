@@ -63,6 +63,8 @@ public class ConsultasCampoService {
                                     + " mod04_tipo_actividad";
                     case "clases-actividad" ->
                             "SELECT id,nombre,activo,nombre texto FROM mod04_clase_actividad";
+                    case "unidades-medida" ->
+                            "SELECT id,nombre,simbolo,nombre texto FROM mod04_unidad_medida";
                     case "areas-verdes" ->
                             "SELECT id,nombre,activo,nombre texto FROM mod05_areaverde";
                     default -> throw ApiError.missing("Catálogo inexistente");
@@ -82,6 +84,7 @@ public class ConsultasCampoService {
                     case "partes" -> Map.of("cuadrilla_id", "id", "fecha", "date");
                     case "actividades" ->
                             Map.of("cuadrilla_id", "id", "parte_id", "id", "fecha", "date");
+                    case "unidades-medida" -> Map.of();
                     default -> Map.of("activo", "bool");
                 };
         Set<String> allowed = new HashSet<>(filters.keySet());

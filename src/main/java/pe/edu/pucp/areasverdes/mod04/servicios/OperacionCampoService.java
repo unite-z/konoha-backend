@@ -440,6 +440,14 @@ public class OperacionCampoService {
             throw ApiError.invalid("La solicitud no puede ser posterior a la actividad");
         if (body.incidenciaId() != null && body.encargoId() != null)
             throw ApiError.invalid("Selecciona una incidencia o un encargo de origen");
+        boolean hayCantidad = body.cantidadSolicitada() != null || body.cantidadEjecutada() != null;
+        if (hayCantidad != (body.unidadMedidaId() != null))
+            throw ApiError.invalid("Las cantidades requieren una unidad de medida");
+        if (body.unidadMedidaId() != null
+                && repo.rows(
+                                "SELECT id FROM mod04_unidad_medida WHERE id=:id",
+                                Map.of("id", body.unidadMedidaId()))
+                        .isEmpty()) throw ApiError.invalid("La unidad de medida no existe");
         if (body.incidenciaId() != null
                 && repo.rows(
                                 "SELECT id FROM mod03_incidencia WHERE id=:id",
@@ -474,6 +482,16 @@ public class OperacionCampoService {
                                 body.fechaSolicitud(),
                                 "incidencia_id",
                                 body.incidenciaId(),
+                                "superficie_m2",
+                                body.superficieM2(),
+                                "cantidad_solicitada",
+                                body.cantidadSolicitada(),
+                                "cantidad_ejecutada",
+                                body.cantidadEjecutada(),
+                                "unidad_medida_id",
+                                body.unidadMedidaId(),
+                                "tiempo_minutos",
+                                body.tiempoMinutos(),
                                 "fecha_hora_actividad",
                                 body.fechaHoraActividad(),
                                 "encargo_id",
