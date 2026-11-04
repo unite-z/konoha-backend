@@ -40,16 +40,20 @@ public class ProgramacionServicios {
             @Pattern(regexp = "\\d{4}-(0[1-9]|1[0-2])", message = "La ventana es un mes AAAA-MM")
                     String ventanaMes,
             Long cuadrillaId,
-            @Size(max = 200, message = "Máximo 200 áreas") List<Long> areaVerdeIds) {}
+            @Size(max = 200, message = "Máximo 200 áreas") List<Long> areaVerdeIds,
+            @Size(max = 50, message = "Máximo 50 zonas") List<String> zonas) {}
 
     private record Duracion(boolean ruidoso, Integer maxima, Integer limpieza) {}
 
     private final NamedParameterJdbcTemplate jdbc;
     private final AlertasPlanificacion alertas;
+    private final CorteCesped corte;
 
-    public ProgramacionServicios(NamedParameterJdbcTemplate jdbc, AlertasPlanificacion alertas) {
+    public ProgramacionServicios(
+            NamedParameterJdbcTemplate jdbc, AlertasPlanificacion alertas, CorteCesped corte) {
         this.jdbc = jdbc;
         this.alertas = alertas;
+        this.corte = corte;
     }
 
     @Transactional
@@ -120,6 +124,10 @@ public class ProgramacionServicios {
                     "INSERT INTO mod03_programacion_area(programacion_id, area_verde_id) VALUES"
                             + " (:id, :area)",
                     Map.of("id", id, "area", area));
+        }
+        // Corte de césped: la ruta de las zonas elegidas se copia en el ciclo (AV-259).
+        if (nueva.zonas() != null) {
+            corte.copiarRuta(id, nueva.zonas());
         }
         alertas.atenderFrecuencia(nueva.tipoServicioId(), usuario);
         for (Restriccion r : conflictos) {

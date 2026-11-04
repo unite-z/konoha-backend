@@ -40,6 +40,7 @@ class MatrizPermisosApiTest extends ApiPlanificacion {
                     "incidencias/mias/",
                     "incidencias/posibles-duplicados/?tipo=Rama%20ca%C3%ADda",
                     "servicios/1/historial/",
+                    "servicios/1/ruta/",
                     "calendario-cuadrilla/?desde=2027-01-01&hasta=2027-01-31");
 
     @BeforeEach
