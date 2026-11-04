@@ -195,7 +195,8 @@ public class InterrupcionesCorte {
                 SELECT t.id, :dia, :dia, v.id, :motivo, :usuario, :usuario
                 FROM mod03_ruta_corte r
                 JOIN mod02_area_verde a ON a.id = r.area_verde_id
-                JOIN mod05_areaverde v ON v.nombre = a.nombre
+                JOIN LATERAL (SELECT min(m.id) id FROM mod05_areaverde m WHERE m.nombre = a.nombre) v
+                    ON v.id IS NOT NULL
                 JOIN mod03_tipo_restriccion t ON t.nombre = 'Actividad extracurricular'
                 WHERE r.programacion_id = :programacion AND r.zona = :zona
                 """,

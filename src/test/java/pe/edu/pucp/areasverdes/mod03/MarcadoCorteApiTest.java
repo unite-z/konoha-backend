@@ -257,8 +257,14 @@ class MarcadoCorteApiTest extends ApiPlanificacion {
         area("Jardín de Ciencias Norte", sector("Ciencias Norte"));
         jdbc.getJdbcTemplate()
                 .update(
-                        "INSERT INTO mod05_areaverde (nombre, activo) VALUES ('Jardín de Sociales',"
-                                + " true), ('Patio de Sociales', true)");
+                        "INSERT INTO mod05_areaverde (nombre, activo) SELECT n, true FROM"
+                                + " unnest(ARRAY['Jardín de Sociales', 'Patio de Sociales']) n"
+                                + " WHERE NOT EXISTS (SELECT 1 FROM mod05_areaverde v WHERE"
+                                + " v.nombre = n)");
+        jdbc.getJdbcTemplate()
+                .update(
+                        "DELETE FROM mod03_restriccion_calendario WHERE descripcion = 'Ruido"
+                                + " durante el examen'");
         String creado =
                 accion(
                                 "jefe",
