@@ -321,4 +321,88 @@ class MarcadoCorteApiTest extends ApiPlanificacion {
                                         + " descripcion = 'Ruido durante el examen'",
                                 Integer.class));
     }
+
+    long programarCon(String quien) throws Exception {
+        area("Jardín de Letras", sector("Letras"));
+        String creado =
+                accion(
+                                "jefe",
+                                "programaciones/",
+                                ("{\"tipo_servicio_id\": 2, \"fecha_inicio_prevista\": \"%s\","
+                                                + " \"fecha_fin_prevista\": \"%s\", %s"
+                                                + " \"zonas\": [\"Sociales\", \"Letras\"]}")
+                                        .formatted(HOY, HOY, quien))
+                        .andExpect(status().isCreated())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+        return json.readTree(creado).get("id").asLong();
+    }
+
+    String interrupcion() {
+        return ("{\"zona_afectada\": \"Sociales\", \"zona_alternativa\": \"Letras\", \"hora\":"
+                        + " \"%sT10:15:00-05:00\", \"motivo\": \"Examen en el aula\","
+                        + " \"aviso_proveedor\": true, \"registrar_restriccion\": false}")
+                .formatted(HOY);
+    }
+
+    @Test
+    void conPersonalPropioElAvisoLlegaAlCapatazDeLaCuadrilla() throws Exception {
+        var sql = jdbc.getJdbcTemplate();
+        long capataz =
+                sql.queryForObject(
+                        "INSERT INTO mod04_personal (nombres, apellidos, tipo_personal, usuario_id)"
+                                + " VALUES ('Jorge', 'Ramos', 'Capataz', 2) RETURNING id",
+                        Long.class);
+        long cuadrilla =
+                sql.queryForObject(
+                        "INSERT INTO mod04_cuadrilla (nombre, capataz_id, usuario_creacion_id,"
+                            + " usuario_modificacion_id) VALUES ('Cuadrilla J', ?, 1, 1) RETURNING"
+                            + " id",
+                        Long.class,
+                        capataz);
+        long otro = programarCon("\"cuadrilla_id\": " + cuadrilla + ",");
+        accion("jefe", "programaciones/" + otro + "/interrupciones/", interrupcion())
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.aviso_id").isNumber());
+        String avisos =
+                http.perform(get(RUTA + "avisos/").with(httpBasic("ingeniero", CLAVE)))
+                        .andExpect(status().isOk())
+                        .andExpect(jsonPath("$.length()").value(1))
+                        .andExpect(
+                                jsonPath("$[0].texto")
+                                        .value(
+                                                startsWith(
+                                                        "Corte detenido en Sociales a las 10:15")))
+                        .andExpect(jsonPath("$[0].leido").value(false))
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+        long aviso = json.readTree(avisos).get(0).get("id").asLong();
+        accion("practicante", "avisos/" + aviso + "/leido/", "{}").andExpect(status().isNotFound());
+        accion("ingeniero", "avisos/" + aviso + "/leido/", "{}").andExpect(status().isNoContent());
+        http.perform(get(RUTA + "avisos/").with(httpBasic("ingeniero", CLAVE)))
+                .andExpect(jsonPath("$[0].leido").value(true));
+    }
+
+    @Test
+    void conProveedorElAvisoQuedaRegistradoParaEl() throws Exception {
+        long proveedor =
+                jdbc.getJdbcTemplate()
+                        .queryForObject(
+                                "INSERT INTO mod05_proveedor(razon_social, activo) VALUES ('Cortes"
+                                        + " Demo', true) RETURNING id",
+                                Long.class);
+        long otro = programarCon("\"proveedor_id\": " + proveedor + ",");
+        accion("jefe", "programaciones/" + otro + "/interrupciones/", interrupcion())
+                .andExpect(status().isCreated());
+        assertEquals(
+                1,
+                jdbc.getJdbcTemplate()
+                        .queryForObject(
+                                "SELECT count(*) FROM mod03_aviso WHERE destinatario_proveedor_id ="
+                                        + " ?",
+                                Integer.class,
+                                proveedor));
+    }
 }
