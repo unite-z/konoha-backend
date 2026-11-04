@@ -173,6 +173,14 @@ class Mod01PermisosApiTest extends ApiCore {
                             "ok"),
                     new Fila(
                             "GET",
+                            "/exportaciones/{tipo}",
+                            "/api/v1/core/exportaciones/ejemplares/",
+                            "ok",
+                            "ok",
+                            "ok",
+                            "ok"),
+                    new Fila(
+                            "GET",
                             "/repositorio",
                             "/api/v1/core/repositorio/?tipo=jardin",
                             "ok",
