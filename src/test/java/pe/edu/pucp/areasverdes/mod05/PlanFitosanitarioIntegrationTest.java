@@ -67,6 +67,28 @@ class PlanFitosanitarioIntegrationTest {
                             Map.of("id", id, "rol", role));
             if (name.equals("jefe")) jefeId = id;
         }
+        // mod03_duracion_servicio referencia core_usuario (AV-287): las cuentas de mod05_usuario
+        // necesitan su copia, con el mismo id, igual que en ApiPlanificacion.
+        repo.jdbc()
+                .getJdbcTemplate()
+                .execute(
+                        "TRUNCATE core_sesion, core_registro_acceso, core_registro_auditoria,"
+                                + " core_usuario RESTART IDENTITY CASCADE");
+        repo.jdbc()
+                .getJdbcTemplate()
+                .execute(
+                        """
+                        INSERT INTO core_usuario (id, nombre_usuario, correo, nombre, credencial_hash, rol_id)
+                        SELECT u.id, 'mod05-' || u.usuario, 'mod05-' || u.usuario || '@prueba.pucp.edu.pe',
+                            u.nombre, 'sin-clave', r.id
+                        FROM mod05_usuario u
+                        LEFT JOIN mod05_usuario_rol ur ON ur.usuario_id = u.id
+                        JOIN core_rol r ON r.codigo = CASE ur.rol
+                            WHEN 'Jefe de sección' THEN 'jefe-seccion'
+                            WHEN 'Ingeniero de campo' THEN 'ingeniero-campo'
+                            WHEN 'Practicante autorizado' THEN 'practicante'
+                            ELSE 'capataz' END
+                        """);
         tipo =
                 repo.insert(
                         "tiposervicio",
