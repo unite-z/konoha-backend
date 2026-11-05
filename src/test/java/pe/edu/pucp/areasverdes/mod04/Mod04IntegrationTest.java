@@ -464,17 +464,20 @@ class Mod04IntegrationTest {
                 .andExpect(jsonPath("$.count").value(1))
                 .andExpect(jsonPath("$.results[0].id").value(actividad))
                 .andExpect(jsonPath("$.results[0].tipo_actividad_nombre").value("Mantenimiento"))
-                .andExpect(jsonPath("$.results[0].fecha_hora_actividad").value("2026-10-22T13:00:00Z"))
-                .andExpect(jsonPath("$.results[0].fecha_hora_registro").value("2026-10-22T18:00:00Z"));
+                .andExpect(
+                        jsonPath("$.results[0].fecha_hora_actividad")
+                                .value("2026-10-22T08:00:00-05:00"))
+                .andExpect(
+                        jsonPath("$.results[0].fecha_hora_registro")
+                                .value("2026-10-22T13:00:00-05:00"));
         http.perform(get(BASE + "/actividades/?cuadrilla_id=" + otraCuadrilla).cookie(sesion))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.count").value(0));
-        http.perform(get(consulta + "3").cookie(sesion))
-                .andExpect(status().isBadRequest());
+        http.perform(get(consulta + "3").cookie(sesion)).andExpect(status().isBadRequest());
         http.perform(get(BASE + "/actividades/?fecha=" + HOY.plusDays(1)).cookie(sesion))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.count").value(0));
-        http.perform(get(consulta).cookie(sesionCore("sinrol")))
+        http.perform(get(consulta).with(httpBasic("sinrol", PASSWORD)))
                 .andExpect(status().isForbidden());
     }
 
