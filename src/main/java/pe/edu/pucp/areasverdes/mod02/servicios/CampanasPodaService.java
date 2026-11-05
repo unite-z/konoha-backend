@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import pe.edu.pucp.areasverdes.mod01.api.Pagina;
 import pe.edu.pucp.areasverdes.mod01.servicios.RegistradorAuditoria;
 import pe.edu.pucp.areasverdes.mod02.api.ErrorCoberturas;
+import pe.edu.pucp.areasverdes.mod02.servicios.ReglasCampanaPoda.Avance;
 import pe.edu.pucp.areasverdes.mod02.servicios.ReglasCampanaPoda.Capacidad;
 import pe.edu.pucp.areasverdes.mod02.servicios.ReglasCampanaPoda.ClaseCampana;
 import pe.edu.pucp.areasverdes.mod02.servicios.ReglasCampanaPoda.EstadoCampana;
@@ -39,10 +40,15 @@ public class CampanasPodaService {
             SELECT c.id, c.anio, c.nombre, c.clase, c.motivo_extraordinaria, c.fecha_inicio,
                 c.fecha_fin, c.objetivo_diario, c.estado, c.atencion_id,
                 (SELECT count(*) FROM mod02_campana_ejemplar l WHERE l.campana_id = c.id)
-                    total_ejemplares
+                    total_ejemplares,
+                (SELECT count(DISTINCT i.ejemplar_id) FROM mod02_intervencion_arbolado i
+                    WHERE i.campana_id = c.id AND i.activo AND %s) verificables,
+                (SELECT count(DISTINCT i.ejemplar_id) FROM mod02_intervencion_arbolado i
+                    WHERE i.campana_id = c.id AND i.activo) con_registro
             FROM mod02_campana_poda c
             WHERE c.activo
-            """;
+            """
+                    .formatted(IntervencionesPodaService.TIENE_FOTO);
 
     private static final String CIERRES =
             """
@@ -99,7 +105,8 @@ public class CampanasPodaService {
             EstadoCampana estado,
             Long atencionId,
             long totalEjemplares,
-            Capacidad capacidad) {}
+            Capacidad capacidad,
+            Avance avance) {}
 
     public record EjemplarCampana(
             long id,
@@ -108,7 +115,8 @@ public class CampanasPodaService {
             String codigoPlacaAntigua,
             String especieNombreComun,
             String ubicacion,
-            Long areaVerdeId) {}
+            Long areaVerdeId,
+            String estadoIntervencion) {}
 
     public record VentanaCierre(
             int anio, LocalDate fechaInicio, LocalDate fechaFin, int duracionMaximaDias) {}
@@ -125,7 +133,9 @@ public class CampanasPodaService {
             int objetivoDiario,
             EstadoCampana estado,
             Long atencionId,
-            long totalEjemplares) {
+            long totalEjemplares,
+            long verificables,
+            long conRegistro) {
 
         Campana comoCampana() {
             return new Campana(
@@ -141,7 +151,9 @@ public class CampanasPodaService {
                     atencionId,
                     totalEjemplares,
                     ReglasCampanaPoda.capacidad(
-                            fechaInicio, fechaFin, objetivoDiario, totalEjemplares));
+                            fechaInicio, fechaFin, objetivoDiario, totalEjemplares),
+                    ReglasCampanaPoda.avance(
+                            verificables, conRegistro - verificables, totalEjemplares));
         }
     }
 
@@ -210,8 +222,18 @@ public class CampanasPodaService {
                 jdbc.query(
                         """
                         SELECT e.id, e.codigo, e.referencia_catastro, e.codigo_placa_antigua,
-                            s.nombre_comun especie_nombre_comun, e.ubicacion, e.area_verde_id
+                            s.nombre_comun especie_nombre_comun, e.ubicacion, e.area_verde_id,
+                            CASE
+                                WHEN EXISTS (SELECT 1 FROM mod02_intervencion_arbolado i
+                                    WHERE i.campana_id = l.campana_id AND i.ejemplar_id = e.id
+                                    AND i.activo AND %s) THEN 'Verificada'
+                                WHEN EXISTS (SELECT 1 FROM mod02_intervencion_arbolado i
+                                    WHERE i.campana_id = l.campana_id AND i.ejemplar_id = e.id
+                                    AND i.activo) THEN 'Incompleta'
+                                ELSE 'Pendiente'
+                            END estado_intervencion
                         """
+                                        .formatted(IntervencionesPodaService.TIENE_FOTO)
                                 + desde
                                 + " ORDER BY e.codigo LIMIT :limite OFFSET :offset",
                         filtros,

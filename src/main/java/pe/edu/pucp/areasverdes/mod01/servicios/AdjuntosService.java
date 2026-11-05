@@ -65,6 +65,11 @@ public class AdjuntosService {
                     new Destino(
                             List.of("mod02_ejemplar", "mod05_ejemplar"),
                             "INV.INVENTARIO.REGISTRAR",
+                            "INV.INVENTARIO.CONSULTAR"),
+                    "intervencion",
+                    new Destino(
+                            List.of("mod02_intervencion_arbolado"),
+                            "INV.PODA.REGISTRAR",
                             "INV.INVENTARIO.CONSULTAR"));
 
     private static final String SELECCION =
@@ -293,7 +298,7 @@ public class AdjuntosService {
         if (destino == null) {
             throw ErrorCore.invalido(
                     "entidad-desconocida",
-                    "La entidad debe ser actividad, atencion, incidencia o ejemplar");
+                    "La entidad debe ser actividad, atencion, incidencia, ejemplar o intervencion");
         }
         return destino;
     }
