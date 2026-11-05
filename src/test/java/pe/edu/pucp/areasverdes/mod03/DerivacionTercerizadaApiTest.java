@@ -10,11 +10,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.ResultActions;
 
@@ -36,7 +38,7 @@ class DerivacionTercerizadaApiTest extends ApiPlanificacion {
     long vencido;
 
     @BeforeEach
-    void escenario() {
+    void escenario() throws Exception {
         var sql = jdbc.getJdbcTemplate();
         long sector =
                 sql.queryForObject(
@@ -55,13 +57,12 @@ class DerivacionTercerizadaApiTest extends ApiPlanificacion {
                 area,
                 sector);
         sql.update("INSERT INTO mod02_ejemplar (codigo) VALUES ('T-0278') ON CONFLICT DO NOTHING");
-        long servicio =
-                sql.queryForObject(
-                        "INSERT INTO mod05_tiposervicio (nombre, ejecutor, es_riesgo, activo,"
-                                + " es_periodico, es_ruidoso) VALUES (?, 'Tercerizado', false,"
-                                + " true, false, false) RETURNING id",
-                        Long.class,
-                        "Poda en altura " + UUID.randomUUID().toString().substring(0, 8));
+        // Tipos de servicio con ids fijos: el 3 es «Poda mayor programada», tercerizada y sin
+        // riesgo.
+        sql.execute(
+                new ClassPathResource("mod03/escenario-programacion.sql")
+                        .getContentAsString(StandardCharsets.UTF_8));
+        long servicio = 3;
         proveedor = proveedor("Podas Altura Demo");
         otro = proveedor("Otro Demo");
         contrato =
