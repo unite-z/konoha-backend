@@ -3,6 +3,7 @@ package pe.edu.pucp.areasverdes.mod04.servicios;
 import static pe.edu.pucp.areasverdes.mod04.datos.Mod04Repository.number;
 import static pe.edu.pucp.areasverdes.mod04.datos.Mod04Repository.values;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -349,7 +350,48 @@ public class OperacionCampoService {
                 "area_verde_nombre",
                 repo.get("areaverde", number(result, "area_verde_id"), false).get("nombre"));
         result.put("participantes", repo.participantes(id));
+        Object ejemplarId = result.get("ejemplar_id");
+        if (ejemplarId != null) {
+            var ejemplar =
+                    repo.one(
+                            "SELECT codigo,altura_total_m FROM mod02_ejemplar WHERE id=:id",
+                            Map.of("id", ejemplarId));
+            result.put("ejemplar_codigo", ejemplar.get("codigo"));
+            result.put("ejemplar_altura_m", ejemplar.get("altura_total_m"));
+        } else {
+            result.put("ejemplar_codigo", null);
+            result.put("ejemplar_altura_m", null);
+        }
+        Object verificador = result.get("verificado_por_usuario_id");
+        result.put(
+                "verificado_por_nombre",
+                verificador == null
+                        ? null
+                        : repo.one(
+                                        "SELECT nombre FROM core_usuario WHERE id=:id",
+                                        Map.of("id", verificador))
+                                .get("nombre"));
         return result;
+    }
+
+    @Transactional
+    public Map<String, Object> verificarActividad(
+            long id, Entradas.Verificacion body, Usuario user) {
+        exigirJefe(user);
+        var before = repo.get("actividad", id, true);
+        repo.update(
+                "actividad",
+                id,
+                values(
+                        "verificacion_observaciones",
+                        body.observaciones().strip(),
+                        "verificado_por_usuario_id",
+                        user.id(),
+                        "fecha_verificacion",
+                        OffsetDateTime.now(clock)));
+        var after = repo.get("actividad", id, false);
+        repo.audit("Actividad", id, "Verificar", user.id(), before, after);
+        return actividad(id, user);
     }
 
     @Transactional
@@ -431,6 +473,37 @@ public class OperacionCampoService {
         if (body.fechaHoraActividad().toInstant().isAfter(clock.instant()))
             throw ApiError.invalid("La actividad no puede estar en el futuro");
         catalogos(body.tipoActividadId(), body.areaVerdeId());
+        var tipoActividad = repo.get("tipo_actividad", body.tipoActividadId(), false);
+        long claseActividad = number(tipoActividad, "clase_id");
+        if (body.claseActividadId() != null && body.claseActividadId() != claseActividad)
+            throw ApiError.invalid("El tipo de actividad no pertenece a la clase seleccionada");
+        if (body.fechaSolicitud() != null
+                && body.fechaSolicitud().isAfter((LocalDate) part.get("fecha")))
+            throw ApiError.invalid("La solicitud no puede ser posterior a la actividad");
+        if (body.incidenciaId() != null && body.encargoId() != null)
+            throw ApiError.invalid("Selecciona una incidencia o un encargo de origen");
+        boolean podaMenor =
+                "Poda menor".equalsIgnoreCase(String.valueOf(tipoActividad.get("nombre")).strip());
+        boolean pendienteVinculacion = Boolean.TRUE.equals(body.pendienteVinculacion());
+        if (podaMenor && (body.ejemplarId() == null) == !pendienteVinculacion)
+            throw ApiError.invalid(
+                    "La poda menor debe indicar un ejemplar o quedar pendiente de vinculación");
+        if (!podaMenor && (body.ejemplarId() != null || pendienteVinculacion))
+            throw ApiError.invalid("La referencia de ejemplar solo corresponde a una poda menor");
+        if (body.ejemplarId() != null) validarEjemplarPoda(body.ejemplarId(), body.areaVerdeId());
+        boolean hayCantidad = body.cantidadSolicitada() != null || body.cantidadEjecutada() != null;
+        if (hayCantidad != (body.unidadMedidaId() != null))
+            throw ApiError.invalid("Las cantidades requieren una unidad de medida");
+        if (body.unidadMedidaId() != null
+                && repo.rows(
+                                "SELECT id FROM mod04_unidad_medida WHERE id=:id",
+                                Map.of("id", body.unidadMedidaId()))
+                        .isEmpty()) throw ApiError.invalid("La unidad de medida no existe");
+        if (body.incidenciaId() != null
+                && repo.rows(
+                                "SELECT id FROM mod03_incidencia WHERE id=:id",
+                                Map.of("id", body.incidenciaId()))
+                        .isEmpty()) throw ApiError.invalid("La incidencia de origen no existe");
         if (body.encargoId() != null) {
             var task = repo.get("encargo", body.encargoId(), true);
             LocalDate day = (LocalDate) part.get("fecha");
@@ -452,8 +525,28 @@ public class OperacionCampoService {
                                 body.parteId(),
                                 "tipo_actividad_id",
                                 body.tipoActividadId(),
+                                "clase_actividad_id",
+                                claseActividad,
                                 "area_verde_id",
                                 body.areaVerdeId(),
+                                "fecha_solicitud",
+                                body.fechaSolicitud(),
+                                "incidencia_id",
+                                body.incidenciaId(),
+                                "superficie_m2",
+                                body.superficieM2(),
+                                "cantidad_solicitada",
+                                body.cantidadSolicitada(),
+                                "cantidad_ejecutada",
+                                body.cantidadEjecutada(),
+                                "unidad_medida_id",
+                                body.unidadMedidaId(),
+                                "tiempo_minutos",
+                                body.tiempoMinutos(),
+                                "ejemplar_id",
+                                body.ejemplarId(),
+                                "pendiente_vinculacion",
+                                pendienteVinculacion,
                                 "fecha_hora_actividad",
                                 body.fechaHoraActividad(),
                                 "encargo_id",
@@ -465,5 +558,21 @@ public class OperacionCampoService {
         var result = repo.get("actividad", id, false);
         repo.audit("Actividad", id, "Crear", user.id(), Map.of(), result);
         return actividad(id, user);
+    }
+
+    private void validarEjemplarPoda(long ejemplarId, long areaVerdeId) {
+        var ejemplar =
+                repo.one(
+                        "SELECT area_verde_id,altura_total_m FROM mod02_ejemplar WHERE id=:id",
+                        Map.of("id", ejemplarId));
+        if (number(ejemplar, "area_verde_id") != areaVerdeId)
+            throw ApiError.invalid("El ejemplar no pertenece al espacio verde seleccionado");
+        Object altura = ejemplar.get("altura_total_m");
+        if (altura == null)
+            throw ApiError.invalid(
+                    "El ejemplar no tiene altura registrada; actualiza el catastro antes de podar");
+        if (((BigDecimal) altura).compareTo(BigDecimal.valueOf(5)) >= 0)
+            throw ApiError.conflict(
+                    "Los ejemplares de 5 metros o más deben reportarse como incidencia");
     }
 }

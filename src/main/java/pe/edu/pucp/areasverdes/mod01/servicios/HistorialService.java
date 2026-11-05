@@ -58,14 +58,15 @@ public class HistorialService {
     }
 
     public List<Entrada> consultar(String entidad, long registroId, UsuarioSesion usuario) {
-        String permiso = PERMISO_POR_ENTIDAD.get(entidad);
+        String entidadCanonica = entidad.toLowerCase(Locale.ROOT);
+        String permiso = PERMISO_POR_ENTIDAD.get(entidadCanonica);
         if (permiso == null) {
             throw ErrorCore.invalido("entidad-desconocida", "La entidad no tiene historial");
         }
         autorizacion.exigir(usuario, "CORE.HISTORIAL.CONSULTAR");
         autorizacion.exigir(usuario, permiso);
         List<Entrada> entradas = new ArrayList<>();
-        bitacora.cambios(entidad, registroId)
+        bitacora.cambios(entidadCanonica, registroId)
                 .forEach(
                         c ->
                                 entradas.add(
@@ -76,7 +77,7 @@ public class HistorialService {
                                                 c.valoresAnteriores(),
                                                 c.valoresNuevos(),
                                                 c.motivo())));
-        if ("atencion".equals(entidad)) {
+        if ("atencion".equals(entidadCanonica)) {
             entradas.addAll(atencionMod05(registroId));
         }
         boolean montos = autorizacion.puedeVerMontos(usuario);

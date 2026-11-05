@@ -54,15 +54,23 @@ public class ConsultasCampoService {
                     case "actividades" ->
                             """
                             SELECT a.*,p.cuadrilla_id,p.capataz_id,p.fecha,p.estado,t.nombre texto,
-                                COALESCE(a.tipo_actividad_nombre,t.nombre) tipo_actividad_nombre,av.nombre area_verde_nombre,c.nombre cuadrilla_nombre FROM mod04_actividad a
+                                COALESCE(a.tipo_actividad_nombre,t.nombre) tipo_actividad_nombre,av.nombre area_verde_nombre,c.nombre cuadrilla_nombre,
+                                u.nombre verificado_por_nombre,e.codigo ejemplar_codigo,
+                                e.altura_total_m ejemplar_altura_m FROM mod04_actividad a
                             JOIN mod04_parte_diario p ON p.id=a.parte_id JOIN mod04_tipo_actividad t ON t.id=a.tipo_actividad_id
                             JOIN mod05_areaverde av ON av.id=a.area_verde_id JOIN mod04_cuadrilla c ON c.id=p.cuadrilla_id
+                            LEFT JOIN core_usuario u ON u.id=a.verificado_por_usuario_id
+                            LEFT JOIN mod02_ejemplar e ON e.id=a.ejemplar_id
                             """;
                     case "tipos-actividad" ->
                             "SELECT id,nombre,activo,clase_id,nombre texto FROM"
                                     + " mod04_tipo_actividad";
                     case "clases-actividad" ->
                             "SELECT id,nombre,activo,nombre texto FROM mod04_clase_actividad";
+                    case "unidades-medida" ->
+                            "SELECT id,nombre,simbolo,nombre texto FROM mod04_unidad_medida";
+                    case "materiales" ->
+                            "SELECT id,nombre,activo,nombre texto FROM mod04_material_catalogo";
                     case "areas-verdes" ->
                             "SELECT id,nombre,activo,nombre texto FROM mod05_areaverde";
                     default -> throw ApiError.missing("Catálogo inexistente");
@@ -82,6 +90,7 @@ public class ConsultasCampoService {
                     case "partes" -> Map.of("cuadrilla_id", "id", "fecha", "date");
                     case "actividades" ->
                             Map.of("cuadrilla_id", "id", "parte_id", "id", "fecha", "date");
+                    case "unidades-medida" -> Map.of();
                     default -> Map.of("activo", "bool");
                 };
         Set<String> allowed = new HashSet<>(filters.keySet());

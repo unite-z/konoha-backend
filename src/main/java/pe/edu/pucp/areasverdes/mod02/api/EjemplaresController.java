@@ -46,7 +46,8 @@ public class EjemplaresController {
             @Size(max = 200) String ubicacion,
             @DecimalMin("-90.0") @DecimalMax("90.0") BigDecimal latitud,
             @DecimalMin("-180.0") @DecimalMax("180.0") BigDecimal longitud,
-            @Positive Integer cantidad) {}
+            @Positive Integer cantidad,
+            @DecimalMin("0.01") @DecimalMax("9999.99") BigDecimal alturaTotalM) {}
 
     public record CambioEjemplar(
             @Size(max = 80) String codigoPlacaAntigua,
@@ -55,7 +56,8 @@ public class EjemplaresController {
             @Size(max = 200) String ubicacion,
             @DecimalMin("-90.0") @DecimalMax("90.0") BigDecimal latitud,
             @DecimalMin("-180.0") @DecimalMax("180.0") BigDecimal longitud,
-            @Positive Integer cantidad) {}
+            @Positive Integer cantidad,
+            @DecimalMin("0.01") @DecimalMax("9999.99") BigDecimal alturaTotalM) {}
 
     @GetMapping
     @Operation(summary = "Consulta ejemplares por código, referencia o especie")
@@ -63,8 +65,9 @@ public class EjemplaresController {
             @AuthenticationPrincipal Usuario usuario,
             @RequestParam(required = false) String q,
             @RequestParam(required = false) String referencia,
+            @RequestParam(name = "area_verde_id", required = false) @Positive Long areaVerdeId,
             @RequestParam(defaultValue = "1") int page) {
-        return ejemplares.listar(q, referencia, page, usuario);
+        return ejemplares.listar(q, referencia, areaVerdeId, page, usuario);
     }
 
     @PostMapping
@@ -80,7 +83,8 @@ public class EjemplaresController {
                                 entrada.ubicacion(),
                                 entrada.latitud(),
                                 entrada.longitud(),
-                                entrada.cantidad()),
+                                entrada.cantidad(),
+                                entrada.alturaTotalM()),
                         usuario);
         return ResponseEntity.created(URI.create("/api/v1/inventario/ejemplares/" + creado.id()))
                 .body(creado);
@@ -101,8 +105,16 @@ public class EjemplaresController {
                         cambio.ubicacion(),
                         cambio.latitud(),
                         cambio.longitud(),
-                        cambio.cantidad()),
+                        cambio.cantidad(),
+                        cambio.alturaTotalM()),
                 usuario);
+    }
+
+    @GetMapping("/{id}/historial-actividades")
+    @Operation(summary = "Consulta actividades de campo vinculadas al ejemplar")
+    public List<EjemplaresService.Intervencion> historialActividades(
+            @AuthenticationPrincipal Usuario usuario, @PathVariable long id) {
+        return ejemplares.historialActividades(id, usuario);
     }
 
     @DeleteMapping("/{id}/placa-antigua")

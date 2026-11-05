@@ -112,6 +112,7 @@ public class AdjuntosService {
             UsuarioSesion usuario) {
         Destino destino = destino(entidad);
         autorizacion.exigir(usuario, destino.permisoRegistrar());
+        exigirActividadPropia(entidad, registroId, usuario);
         if (uuidCliente == null) {
             throw ErrorCore.invalido(
                     "uuid-cliente-obligatorio",
@@ -213,7 +214,7 @@ public class AdjuntosService {
 
     public List<Adjunto> listar(String entidad, long registroId, UsuarioSesion usuario) {
         Destino destino = destino(entidad);
-        autorizacion.exigir(usuario, destino.permisoConsultar());
+        exigirConsulta(entidad, registroId, destino, usuario);
         return jdbc.query(
                 SELECCION
                         + " WHERE a.entidad = :e AND a.registro_id = :r"
@@ -228,7 +229,7 @@ public class AdjuntosService {
                 jdbc
                         .query(
                                 """
-                                SELECT a.entidad, f.clave, f.nombre_original, f.tipo_mime
+                                SELECT a.entidad, a.registro_id, f.clave, f.nombre_original, f.tipo_mime
                                 FROM core_adjunto a JOIN core_archivo f ON f.id = a.archivo_id
                                 WHERE a.id = :id
                                 """,
@@ -236,6 +237,7 @@ public class AdjuntosService {
                                 (r, n) ->
                                         new String[] {
                                             r.getString("entidad"),
+                                            r.getString("registro_id"),
                                             r.getString("clave"),
                                             r.getString("nombre_original"),
                                             r.getString("tipo_mime")
@@ -243,9 +245,9 @@ public class AdjuntosService {
                         .stream()
                         .findFirst()
                         .orElseThrow(() -> ErrorCore.noEncontrado("El adjunto no existe"));
-        autorizacion.exigir(usuario, destino(fila[0]).permisoConsultar());
+        exigirConsulta(fila[0], Long.parseLong(fila[1]), destino(fila[0]), usuario);
         try {
-            return new Contenido(almacen.leer(fila[1]), fila[2], fila[3]);
+            return new Contenido(almacen.leer(fila[2]), fila[3], fila[4]);
         } catch (ApiError e) {
             throw new ErrorCore(
                     503,
@@ -259,6 +261,37 @@ public class AdjuntosService {
                 .query(SELECCION + " WHERE a.uuid_cliente = :u", Map.of("u", uuid), filas)
                 .stream()
                 .findFirst();
+    }
+
+    private void exigirConsulta(
+            String entidad, long registroId, Destino destino, UsuarioSesion usuario) {
+        if ("actividad".equals(entidad)
+                && usuario != null
+                && UsuarioSesion.CAPATAZ.equals(usuario.rol())) {
+            autorizacion.exigir(usuario, destino.permisoRegistrar());
+            exigirActividadPropia(entidad, registroId, usuario);
+        } else {
+            autorizacion.exigir(usuario, destino.permisoConsultar());
+        }
+    }
+
+    private void exigirActividadPropia(String entidad, long registroId, UsuarioSesion usuario) {
+        if (!"actividad".equals(entidad)
+                || usuario == null
+                || !UsuarioSesion.CAPATAZ.equals(usuario.rol())) return;
+        boolean propia =
+                Boolean.TRUE.equals(
+                        jdbc.queryForObject(
+                                """
+                                SELECT EXISTS (
+                                    SELECT 1 FROM mod04_actividad a
+                                    JOIN mod04_parte_diario p ON p.id=a.parte_id
+                                    JOIN mod04_personal c ON c.id=p.capataz_id
+                                    WHERE a.id=:actividad AND c.usuario_id=:usuario)
+                                """,
+                                Map.of("actividad", registroId, "usuario", usuario.id()),
+                                Boolean.class));
+        if (!propia) throw ErrorCore.sinPermiso();
     }
 
     private void exigirRegistro(Destino destino, String entidad, long registroId) {
