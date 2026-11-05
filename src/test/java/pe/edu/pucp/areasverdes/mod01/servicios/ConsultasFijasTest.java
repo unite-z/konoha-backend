@@ -23,6 +23,7 @@ class ConsultasFijasTest {
                         .toList();
 
         assertEquals(5, AdjuntosService.DESTINOS.size());
+        assertTrue(tablas.contains("mod02_intervencion_arbolado"), tablas.toString());
         assertTrue(tablas.stream().allMatch(t -> t.matches(NOMBRE_DE_TABLA)), tablas.toString());
     }
 
