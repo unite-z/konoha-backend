@@ -447,6 +447,75 @@ class IntervencionesPodaApiTest {
     }
 
     @Test
+    void lasEspeciesDistinguenPlanificadosDeAtendidos() throws Exception {
+        long molle = especie("Bbb molle " + UUID.randomUUID());
+        long ficus = especie("Aaa ficus " + UUID.randomUUID());
+        long ejemplarC = ejemplar("PODA-C");
+        long ejemplarD = ejemplar("PODA-D");
+        lista(campana, ejemplarC, ejemplarD);
+        asignarEspecie(molle, ejemplarA, ejemplarB);
+        asignarEspecie(ficus, ejemplarC);
+        String ruta = CAMPANAS + campana + "/especies/";
+
+        http.perform(get(ruta).cookie(ingeniero))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.planificados").value(4))
+                .andExpect(jsonPath("$.atendidos").value(0))
+                .andExpect(jsonPath("$.incompletos").value(0))
+                .andExpect(jsonPath("$.especies.length()").value(3))
+                .andExpect(jsonPath("$.especies[0].especie_id").value(ficus))
+                .andExpect(jsonPath("$.especies[0].planificados").value(1))
+                .andExpect(jsonPath("$.especies[1].especie_id").value(molle))
+                .andExpect(jsonPath("$.especies[1].planificados").value(2))
+                .andExpect(jsonPath("$.especies[2].especie_id").doesNotExist())
+                .andExpect(jsonPath("$.especies[2].planificados").value(1));
+
+        // Dos podas verificadas del mismo ejemplar cuentan una vez.
+        foto(registrar(ejemplarA));
+        foto(registrar(ejemplarA));
+        long sinFoto = registrar(ejemplarB);
+        foto(registrar(ejemplarD));
+        long anulada = registrar(ejemplarC);
+        foto(anulada);
+        http.perform(delete(RUTA + anulada + "/").cookie(ingeniero).with(csrf()))
+                .andExpect(status().isNoContent());
+
+        http.perform(get(ruta).cookie(ingeniero))
+                .andExpect(jsonPath("$.planificados").value(4))
+                .andExpect(jsonPath("$.atendidos").value(2))
+                .andExpect(jsonPath("$.incompletos").value(1))
+                // Ahora el molle va primero: ordena por atendidos, y sin especie siempre al final.
+                .andExpect(jsonPath("$.especies[0].especie_id").value(molle))
+                .andExpect(jsonPath("$.especies[0].planificados").value(2))
+                .andExpect(jsonPath("$.especies[0].atendidos").value(1))
+                .andExpect(jsonPath("$.especies[0].incompletos").value(1))
+                .andExpect(jsonPath("$.especies[1].atendidos").value(0))
+                .andExpect(jsonPath("$.especies[1].incompletos").value(0))
+                .andExpect(jsonPath("$.especies[2].atendidos").value(1));
+
+        foto(sinFoto);
+        http.perform(get(ruta).cookie(ingeniero))
+                .andExpect(jsonPath("$.especies[0].atendidos").value(2))
+                .andExpect(jsonPath("$.especies[0].incompletos").value(0));
+    }
+
+    @Test
+    void lasEspeciesLasConsultanLosCuatroRolesYExigenCampana() throws Exception {
+        long vacia = campana("Borrador");
+        http.perform(get(CAMPANAS + vacia + "/especies/").cookie(ingeniero))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.planificados").value(0))
+                .andExpect(jsonPath("$.especies.length()").value(0));
+        for (String rol : ROLES) {
+            http.perform(get(CAMPANAS + campana + "/especies/").cookie(sesion(rol)))
+                    .andExpect(status().isOk());
+        }
+        http.perform(get(CAMPANAS + "999999/especies/").cookie(ingeniero))
+                .andExpect(status().isNotFound());
+        http.perform(get(CAMPANAS + campana + "/especies/")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void losCuatroRolesConsultan() throws Exception {
         long id = registrar(ejemplarA);
 
@@ -572,6 +641,22 @@ class IntervencionesPodaApiTest {
                 "INSERT INTO mod02_ejemplar (codigo) VALUES (:codigo) RETURNING id",
                 Map.of("codigo", codigo),
                 Long.class);
+    }
+
+    private long especie(String nombreComun) {
+        return jdbc.queryForObject(
+                "INSERT INTO mod02_especie_vegetal (nombre_comun, forma_biologica)"
+                        + " VALUES (:nombre, 'Árbol') RETURNING id",
+                Map.of("nombre", nombreComun),
+                Long.class);
+    }
+
+    private void asignarEspecie(long especie, long... ejemplares) {
+        for (long ejemplar : ejemplares) {
+            jdbc.update(
+                    "UPDATE mod02_ejemplar SET especie_id = :especie WHERE id = :ejemplar",
+                    Map.of("especie", especie, "ejemplar", ejemplar));
+        }
     }
 
     /** Campaña en el pasado: la fecha de una poda no puede ser futura. */

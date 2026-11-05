@@ -124,6 +124,17 @@ public class CampanasPodaService {
             Long areaVerdeId,
             String estadoIntervencion) {}
 
+    public record EspecieCampana(
+            Long especieId,
+            String nombreComun,
+            String nombreCientifico,
+            long planificados,
+            long atendidos,
+            long incompletos) {}
+
+    public record EspeciesCampana(
+            long planificados, long atendidos, long incompletos, List<EspecieCampana> especies) {}
+
     public record VentanaCierre(
             int anio, LocalDate fechaInicio, LocalDate fechaFin, int duracionMaximaDias) {}
 
@@ -219,6 +230,46 @@ public class CampanasPodaService {
                         Map.of("id", id),
                         new DataClassRowMapper<>(RendimientoCampana.Registro.class));
         return RendimientoCampana.calcular(registros, umbralRendimiento);
+    }
+
+    /**
+     * Ejemplares planificados y atendidos por especie (AV-311, RF-POD-004). Atendido significa con
+     * poda verificada, igual que en el rendimiento; con registro sin fotografía cuenta como
+     * incompleto. Sale una fila con la especie nula para los ejemplares sin especie asignada.
+     */
+    public EspeciesCampana especies(long id, Usuario usuario) {
+        AccesoCoberturas.consultar(usuario);
+        buscar(id, false);
+        List<EspecieCampana> filas =
+                jdbc.query(
+                        """
+                        SELECT s.id especie_id, s.nombre_comun, s.nombre_cientifico,
+                            count(*) planificados,
+                            count(*) FILTER (WHERE r.verificada) atendidos,
+                            count(*) FILTER (WHERE r.con_registro AND NOT r.verificada) incompletos
+                        FROM mod02_campana_ejemplar l
+                        JOIN mod02_ejemplar e ON e.id = l.ejemplar_id
+                        LEFT JOIN mod02_especie_vegetal s ON s.id = e.especie_id
+                        CROSS JOIN LATERAL (
+                            SELECT coalesce(bool_or(%s), false) verificada,
+                                count(i.id) > 0 con_registro
+                            FROM mod02_intervencion_arbolado i
+                            WHERE i.campana_id = l.campana_id AND i.ejemplar_id = l.ejemplar_id
+                                AND i.activo
+                        ) r
+                        WHERE l.campana_id = :id
+                        GROUP BY s.id, s.nombre_comun, s.nombre_cientifico
+                        ORDER BY s.id IS NULL, atendidos DESC,
+                            coalesce(s.nombre_comun, s.nombre_cientifico), s.id
+                        """
+                                .formatted(IntervencionesPodaService.TIENE_FOTO),
+                        Map.of("id", id),
+                        new DataClassRowMapper<>(EspecieCampana.class));
+        return new EspeciesCampana(
+                filas.stream().mapToLong(EspecieCampana::planificados).sum(),
+                filas.stream().mapToLong(EspecieCampana::atendidos).sum(),
+                filas.stream().mapToLong(EspecieCampana::incompletos).sum(),
+                filas);
     }
 
     public Pagina<EjemplarCampana> ejemplares(long id, String q, int page, Usuario usuario) {
