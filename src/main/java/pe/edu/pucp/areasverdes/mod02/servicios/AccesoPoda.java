@@ -8,6 +8,16 @@ public final class AccesoPoda {
 
     private AccesoPoda() {}
 
+    /** Equivale a {@code INV.PODA.REGISTRAR} de {@code V9}: ingeniero de campo y practicante. */
+    public static void registrar(Usuario usuario) {
+        AccesoCoberturas.consultar(usuario);
+        if (!usuario.roles().contains("Ingeniero de campo")
+                && !usuario.roles().contains("Practicante autorizado")) {
+            throw new ErrorCoberturas(
+                    403, "sin-permiso", "Solo el ingeniero de campo puede registrar la poda");
+        }
+    }
+
     public static void planificar(Usuario usuario) {
         AccesoCoberturas.consultar(usuario);
         if (!usuario.roles().contains(Usuario.JEFE)) {

@@ -22,7 +22,7 @@ class ConsultasFijasTest {
                         .flatMap(destino -> destino.tablas().stream())
                         .toList();
 
-        assertEquals(4, AdjuntosService.DESTINOS.size());
+        assertEquals(5, AdjuntosService.DESTINOS.size());
         assertTrue(tablas.stream().allMatch(t -> t.matches(NOMBRE_DE_TABLA)), tablas.toString());
     }
 

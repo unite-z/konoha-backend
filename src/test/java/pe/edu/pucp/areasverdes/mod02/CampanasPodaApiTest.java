@@ -451,10 +451,15 @@ class CampanasPodaApiTest {
                 .getCookie(SeguridadMod01.COOKIE_SESION);
     }
 
+    /** Otras suites insertan ids a mano: alinea el contador sin dejarlo atrasado para ellas. */
     private long ejemplar(String codigo) {
+        jdbc.queryForObject(
+                "SELECT setval(pg_get_serial_sequence('mod02_ejemplar', 'id'),"
+                        + " coalesce(max(id), 0) + 1, false) FROM mod02_ejemplar",
+                Map.of(),
+                Long.class);
         return jdbc.queryForObject(
-                "INSERT INTO mod02_ejemplar (id, codigo) SELECT coalesce(max(id), 0) + 1, :codigo"
-                        + " FROM mod02_ejemplar RETURNING id",
+                "INSERT INTO mod02_ejemplar (codigo) VALUES (:codigo) RETURNING id",
                 Map.of("codigo", codigo),
                 Long.class);
     }

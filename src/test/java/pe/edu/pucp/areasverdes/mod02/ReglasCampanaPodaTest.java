@@ -53,6 +53,18 @@ class ReglasCampanaPodaTest {
     }
 
     @Test
+    void elAvanceEsSobreElTotalDeLaLista() {
+        assertThat(ReglasCampanaPoda.avance(180, 1, 220).porcentaje())
+                .isEqualByComparingTo(new BigDecimal("81.8"));
+    }
+
+    @Test
+    void sinEjemplaresElAvanceEsCero() {
+        assertThat(ReglasCampanaPoda.avance(0, 0, 0).porcentaje())
+                .isEqualByComparingTo(BigDecimal.ZERO);
+    }
+
+    @Test
     void soloBorradorYPlanificadaSonEditables() {
         assertThat(EstadoCampana.Borrador.editable()).isTrue();
         assertThat(EstadoCampana.Planificada.editable()).isTrue();
