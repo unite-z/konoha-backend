@@ -114,14 +114,25 @@ class CampanasPodaApiTest {
     @Test
     void laDuracionMaximaSaleDeLaConfiguracionDeMod03() throws Exception {
         cierre("2026-12-20", "2027-01-19");
+        // Otras suites vacían el catálogo de servicios: esta no depende del orden de ejecución.
         jdbc.update(
                 """
-                INSERT INTO mod03_duracion_servicio (tipo_servicio_id, duracion_maxima_dias,
-                    usuario_creacion_id, usuario_modificacion_id)
-                SELECT t.id, 5, u.id, u.id FROM mod05_tiposervicio t, core_usuario u
-                WHERE t.nombre = 'Poda mayor programada' ORDER BY u.id LIMIT 1
+                INSERT INTO mod05_tiposervicio (nombre, ejecutor, es_riesgo, activo, es_periodico)
+                SELECT 'Poda mayor programada', 'Tercerizado', false, true, true
+                WHERE NOT EXISTS (SELECT 1 FROM mod05_tiposervicio
+                    WHERE nombre = 'Poda mayor programada')
                 """,
                 Map.of());
+        int configuradas =
+                jdbc.update(
+                        """
+                        INSERT INTO mod03_duracion_servicio (tipo_servicio_id, duracion_maxima_dias,
+                            usuario_creacion_id, usuario_modificacion_id)
+                        SELECT t.id, 5, u.id, u.id FROM mod05_tiposervicio t, core_usuario u
+                        WHERE t.nombre = 'Poda mayor programada' ORDER BY t.id, u.id LIMIT 1
+                        """,
+                        Map.of());
+        assertThat(configuradas).isEqualTo(1);
 
         crear(cuerpo("Anual", "2026-12-20", "2026-12-25", "Planificada", ejemplarA))
                 .andExpect(status().isBadRequest())
