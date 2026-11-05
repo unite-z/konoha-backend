@@ -1,10 +1,14 @@
 package pe.edu.pucp.areasverdes.mod04.api;
 
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -50,7 +54,12 @@ public final class Entradas {
             @Size(max = 1000) String observaciones,
             @Positive Long claseActividadId,
             LocalDate fechaSolicitud,
-            @Positive Long incidenciaId) {}
+            @Positive Long incidenciaId,
+            @PositiveOrZero @DecimalMax("9999999999.99") BigDecimal superficieM2,
+            @PositiveOrZero @DecimalMax("9999999999.99") BigDecimal cantidadSolicitada,
+            @PositiveOrZero @DecimalMax("9999999999.99") BigDecimal cantidadEjecutada,
+            @Positive Long unidadMedidaId,
+            @Positive @Max(1440) Integer tiempoMinutos) {}
 
     public record TipoActividad(
             @NotBlank @Size(max = 150) String nombre,

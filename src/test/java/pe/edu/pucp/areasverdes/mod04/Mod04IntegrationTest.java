@@ -551,6 +551,50 @@ class Mod04IntegrationTest {
     }
 
     @Test
+    void medidasDeActividadSeConsultanYDatosInvalidosNoAlteranRegistro() throws Exception {
+        long equipo = cuadrilla(c1, o1);
+        long parte =
+                postJson("/partes/", values("cuadrilla_id", equipo, "fecha", HOY), "capataz1", 201)
+                        .path("id")
+                        .asLong();
+        var entrada =
+                values(
+                        "parte_id",
+                        parte,
+                        "tipo_actividad_id",
+                        tipo,
+                        "area_verde_id",
+                        area,
+                        "fecha_hora_actividad",
+                        "2026-10-22T08:00:00-05:00",
+                        "superficie_m2",
+                        12.5,
+                        "cantidad_solicitada",
+                        10,
+                        "cantidad_ejecutada",
+                        8,
+                        "unidad_medida_id",
+                        1,
+                        "tiempo_minutos",
+                        90);
+        long actividad = postJson("/actividades/", entrada, "capataz1", 201).path("id").asLong();
+        http.perform(get(BASE + "/actividades/" + actividad).with(httpBasic("capataz1", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.superficie_m2").value(12.5))
+                .andExpect(jsonPath("$.cantidad_ejecutada").value(8))
+                .andExpect(jsonPath("$.unidad_medida_id").value(1))
+                .andExpect(jsonPath("$.tiempo_minutos").value(90));
+        entrada.put("tiempo_minutos", 1500);
+        postJson("/actividades/", entrada, "capataz1", 400);
+        entrada.put("tiempo_minutos", 90);
+        entrada.put("unidad_medida_id", null);
+        postJson("/actividades/", entrada, "capataz1", 400);
+        http.perform(get(BASE + "/actividades/").with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(1));
+    }
+
+    @Test
     void precargaInicialIdempotenteNoSobrescribe() {
         repo.jdbc()
                 .getJdbcTemplate()
@@ -718,6 +762,13 @@ class Mod04IntegrationTest {
                                 "catalogo",
                                 "GET",
                                 "/catalogos/clases-actividad",
+                                null,
+                                false,
+                                false),
+                        new Fila(
+                                "catalogo",
+                                "GET",
+                                "/catalogos/unidades-medida",
                                 null,
                                 false,
                                 false),
