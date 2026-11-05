@@ -99,7 +99,8 @@ public class Incidencias {
             String fotoUrl,
             Atencion atencion,
             Cierre cierre,
-            List<Evento> historial) {}
+            List<Evento> historial,
+            DerivacionTercerizada.Requerimiento requerimiento) {}
 
     /**
      * Las fotos de los reportes; todo otro adjunto de la incidencia es evidencia de la atención.
@@ -163,7 +164,8 @@ public class Incidencias {
             """
             SELECT i.id, i.codigo, t.nombre tipo, t.sencilla tipo_sencilla, a.nombre espacio,
                 i.severidad, i.via, i.estado, i.canal, i.fecha_registro, i.fecha_cierre,
-                cp.nombres || ' ' || left(cp.apellidos, 1) || '.' responsable,
+                coalesce(cp.nombres || ' ' || left(cp.apellidos, 1) || '.', pv.razon_social)
+                    responsable,
                 CAST(floor(extract(epoch FROM i.fecha_cierre - i.fecha_registro) / 60) AS bigint)
                     minutos_cierre,
                 CASE WHEN t.sencilla AND coalesce(i.via, 'PersonalPropio') <> 'Tercerizada'
@@ -177,16 +179,27 @@ public class Incidencias {
             JOIN mod03_tipo_incidencia t ON t.id = i.tipo_incidencia_id
             JOIN mod02_area_verde a ON a.id = i.area_verde_id
             LEFT JOIN mod04_personal cp ON cp.id = i.capataz_id
+            LEFT JOIN LATERAL (
+                SELECT v.razon_social FROM mod03_requerimiento_incidencia ri
+                JOIN mod05_proveedor v ON v.id = ri.proveedor_id
+                WHERE ri.incidencia_id = i.id ORDER BY ri.fecha_hora DESC, ri.id DESC LIMIT 1
+            ) pv ON i.via = 'Tercerizada'
             """;
 
     private final NamedParameterJdbcTemplate jdbc;
     private final AdjuntosService adjuntos;
     private final Avisos avisos;
+    private final DerivacionTercerizada derivacion;
 
-    public Incidencias(NamedParameterJdbcTemplate jdbc, AdjuntosService adjuntos, Avisos avisos) {
+    public Incidencias(
+            NamedParameterJdbcTemplate jdbc,
+            AdjuntosService adjuntos,
+            Avisos avisos,
+            DerivacionTercerizada derivacion) {
         this.jdbc = jdbc;
         this.adjuntos = adjuntos;
         this.avisos = avisos;
+        this.derivacion = derivacion;
     }
 
     public Catalogos catalogos(UsuarioPlanificacion usuario) {
@@ -413,6 +426,7 @@ public class Incidencias {
      */
     public List<Resumen> bandeja(String grupo, UsuarioPlanificacion usuario) {
         Acceso.consultarIncidencias(usuario);
+        derivacion.sincronizar();
         if (grupo != null && !GRUPOS.containsKey(grupo)) {
             throw new ErrorPlanificacion(
                     400, "grupo-invalido", "El grupo es abiertas, en_proceso o cerradas");
@@ -430,6 +444,7 @@ public class Incidencias {
     /** Las que reportó el usuario (HU-024). */
     public List<Resumen> mias(UsuarioPlanificacion usuario) {
         Acceso.registrarIncidencia(usuario);
+        derivacion.sincronizar();
         return jdbc.query(
                 RESUMEN
                         + " WHERE i.reportante_usuario_id = :usuario"
@@ -440,6 +455,7 @@ public class Incidencias {
 
     public Detalle detalle(long id, UsuarioPlanificacion usuario) {
         Acceso.consultarIncidencias(usuario);
+        derivacion.sincronizar();
         return ficha(id);
     }
 
@@ -478,7 +494,8 @@ public class Incidencias {
                                         fotoUrl(id),
                                         atencion(id, rs.getString("estado")),
                                         cierre(id, rs.getString("estado"), rs),
-                                        historial(id)));
+                                        historial(id),
+                                        derivacion.requerimiento(id)));
         if (fichas.isEmpty()) {
             throw new ErrorPlanificacion(
                     404, "incidencia-no-encontrada", "No existe esa incidencia");
@@ -489,6 +506,7 @@ public class Incidencias {
     /** El seguimiento de una que reportó el usuario; 404 si no es suya. */
     public Seguimiento seguimiento(long id, UsuarioPlanificacion usuario) {
         Acceso.registrarIncidencia(usuario);
+        derivacion.sincronizar();
         List<Seguimiento> lista =
                 jdbc.query(
                         """
