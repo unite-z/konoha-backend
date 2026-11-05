@@ -349,7 +349,36 @@ public class OperacionCampoService {
                 "area_verde_nombre",
                 repo.get("areaverde", number(result, "area_verde_id"), false).get("nombre"));
         result.put("participantes", repo.participantes(id));
+        Object verificador = result.get("verificado_por_usuario_id");
+        result.put(
+                "verificado_por_nombre",
+                verificador == null
+                        ? null
+                        : repo.one(
+                                        "SELECT nombre FROM core_usuario WHERE id=:id",
+                                        Map.of("id", verificador))
+                                .get("nombre"));
         return result;
+    }
+
+    @Transactional
+    public Map<String, Object> verificarActividad(
+            long id, Entradas.Verificacion body, Usuario user) {
+        exigirJefe(user);
+        var before = repo.get("actividad", id, true);
+        repo.update(
+                "actividad",
+                id,
+                values(
+                        "verificacion_observaciones",
+                        body.observaciones().strip(),
+                        "verificado_por_usuario_id",
+                        user.id(),
+                        "fecha_verificacion",
+                        OffsetDateTime.now(clock)));
+        var after = repo.get("actividad", id, false);
+        repo.audit("Actividad", id, "Verificar", user.id(), before, after);
+        return actividad(id, user);
     }
 
     @Transactional

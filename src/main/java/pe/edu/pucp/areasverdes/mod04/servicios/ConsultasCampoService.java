@@ -54,9 +54,11 @@ public class ConsultasCampoService {
                     case "actividades" ->
                             """
                             SELECT a.*,p.cuadrilla_id,p.capataz_id,p.fecha,p.estado,t.nombre texto,
-                                COALESCE(a.tipo_actividad_nombre,t.nombre) tipo_actividad_nombre,av.nombre area_verde_nombre,c.nombre cuadrilla_nombre FROM mod04_actividad a
+                                COALESCE(a.tipo_actividad_nombre,t.nombre) tipo_actividad_nombre,av.nombre area_verde_nombre,c.nombre cuadrilla_nombre,
+                                u.nombre verificado_por_nombre FROM mod04_actividad a
                             JOIN mod04_parte_diario p ON p.id=a.parte_id JOIN mod04_tipo_actividad t ON t.id=a.tipo_actividad_id
                             JOIN mod05_areaverde av ON av.id=a.area_verde_id JOIN mod04_cuadrilla c ON c.id=p.cuadrilla_id
+                            LEFT JOIN core_usuario u ON u.id=a.verificado_por_usuario_id
                             """;
                     case "tipos-actividad" ->
                             "SELECT id,nombre,activo,clase_id,nombre texto FROM"
