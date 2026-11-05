@@ -16,9 +16,11 @@ import org.springframework.web.bind.annotation.*;
 @SecurityRequirement(name = "basicAuth")
 public class AtencionEspecialController {
     final AtencionEspecialService service;
+    final PlanFitosanitarioService planFitosanitario;
 
-    public AtencionEspecialController(AtencionEspecialService service) {
+    public AtencionEspecialController(AtencionEspecialService service, PlanFitosanitarioService planFitosanitario) {
         this.service = service;
+        this.planFitosanitario = planFitosanitario;
     }
 
     @GetMapping({"/atenciones-especiales/", "/atenciones-especiales"})
@@ -41,6 +43,23 @@ public class AtencionEspecialController {
     public Map<String, Object> detalle(
             @AuthenticationPrincipal Usuario user, @PathVariable long id) {
         return service.detalle(user, id);
+    }
+
+    @PostMapping({"/atenciones-especiales/{id}/aplicaciones/", "/atenciones-especiales/{id}/aplicaciones"})
+    @ResponseStatus(HttpStatus.CREATED)
+    public Map<String, Object> programarAplicacion(
+            @AuthenticationPrincipal Usuario user,
+            @PathVariable long id,
+            @Valid @RequestBody EntradasFitosanitario.AplicacionAdicional body) {
+        return planFitosanitario.programarAplicacionAdicional(id, body, user);
+    }
+
+    @PostMapping({"/atenciones-especiales/{id}/cancelar/", "/atenciones-especiales/{id}/cancelar"})
+    public Map<String, Object> cancelar(
+            @AuthenticationPrincipal Usuario user,
+            @PathVariable long id,
+            @Valid @RequestBody EntradasMaestros.CancelarAtencionEspecial body) {
+        return service.cancelar(id, body, user);
     }
 
     @GetMapping({"/plagas/", "/plagas"})

@@ -58,6 +58,18 @@ public class AtencionService {
             if((a.metrado()==null)!=(a.unidad_medida_id()==null)) throw ApiError.invalid("Metrado y unidad deben registrarse juntos");
             if(a.unidad_medida_id()!=null) repo.get("unidadmedida",a.unidad_medida_id());
         }
+        List<Entradas.ProductoAplicado> productos=input.productos()==null?List.of():input.productos();
+        Set<Long> productosElegidos=new HashSet<>();
+        for(var p:productos) {
+            if(!productosElegidos.add(p.producto_id())) throw ApiError.invalid("No repitas un producto en la misma atención");
+            if(!(boolean)repo.get("producto_agronomico",p.producto_id()).get("activo")) throw ApiError.invalid("El producto está inactivo en el catálogo");
+        }
+        List<Long> plagas=input.plagas_controladas()==null?List.of():input.plagas_controladas();
+        Set<Long> plagasElegidas=new HashSet<>();
+        for(var plagaId:plagas) {
+            if(!plagasElegidas.add(plagaId)) throw ApiError.invalid("No repitas una plaga en la misma atención");
+            if(!(boolean)repo.get("plaga",plagaId).get("activo")) throw ApiError.invalid("La plaga está inactiva en el catálogo");
+        }
         var data=values("codigo","AT-"+UUID.randomUUID().toString().replace("-",""),"clase","ProgramadaContrato",
             "contrato_id",input.contrato_id(),"tipo_servicio_id",number(c,"tipo_servicio_id"),"descripcion",input.descripcion().strip(),
             "origen",input.origen(),"unidad_solicitante_id",unidad,"solicitado_por_id",user.id(),
@@ -69,6 +81,14 @@ public class AtencionService {
             long alcance=repo.insert("alcanceatencion",values("atencion_id",id,"area_verde_id",a.area_verde_id(),
                 "ejemplar_id",a.ejemplar_id(),"metrado",a.metrado(),"unidad_medida_id",a.unidad_medida_id()));
             repo.audit("AlcanceAtencion",alcance,"Alta",user,Map.of(),repo.get("alcanceatencion",alcance),"");
+        }
+        for(var p:productos) {
+            long atencionProducto=repo.insert("atencion_producto",values("atencion_id",id,"producto_id",p.producto_id(),"dosis",text(p.dosis())));
+            repo.audit("AtencionProducto",atencionProducto,"Alta",user,Map.of(),repo.get("atencion_producto",atencionProducto),"");
+        }
+        for(var plagaId:plagas) {
+            long atencionPlaga=repo.insert("atencion_plaga",values("atencion_id",id,"plaga_id",plagaId));
+            repo.audit("AtencionPlaga",atencionPlaga,"Alta",user,Map.of(),repo.get("atencion_plaga",atencionPlaga),"");
         }
         repo.audit("AtencionTercerizada",id,"Alta",user,Map.of(),repo.get("atenciontercerizada",id),"");
         repo.history(id,"",REQUERIMIENTO,user);

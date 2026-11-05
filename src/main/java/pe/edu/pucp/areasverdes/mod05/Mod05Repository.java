@@ -90,6 +90,16 @@ public class Mod05Repository {
             """,Map.of("id",id));
         alcances.forEach(al -> { if(al.get("metrado") instanceof BigDecimal decimal) al.put("metrado",decimal.setScale(2).toPlainString()); });
         a.put("alcances",alcances);
+        a.put("productos",rows("""
+            SELECT ap.id,ap.producto_id,pr.nombre producto_nombre,pr.activo producto_activo,ap.dosis
+            FROM mod05_atencion_producto ap JOIN mod05_producto_agronomico pr ON pr.id=ap.producto_id
+            WHERE ap.atencion_id=:id ORDER BY ap.id
+            """,Map.of("id",id)));
+        a.put("plagas",rows("""
+            SELECT ap.id,ap.plaga_id,pl.nombre plaga_nombre,pl.activo plaga_activo
+            FROM mod05_atencion_plaga ap JOIN mod05_plaga pl ON pl.id=ap.plaga_id
+            WHERE ap.atencion_id=:id ORDER BY ap.id
+            """,Map.of("id",id)));
         a.put("historial",rows("""
             SELECT h.estado_anterior,h.estado_nuevo,h.usuario_id,u.nombre usuario_nombre,h.fecha_hora
             FROM mod05_historialestado h JOIN mod05_usuario u ON u.id=h.usuario_id

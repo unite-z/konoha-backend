@@ -29,7 +29,9 @@ public class MaestrosService {
             List.of("SinVinculo", "Principal", "Subsidiaria", "Vinculada");
     static final String PROVEEDORES =
             """
-            SELECT p.id,p.razon_social,p.ruc,p.activo,COALESCE(d.contacto,'') contacto,COALESCE(d.tipo_vinculo,'SinVinculo') tipo_vinculo,
+            SELECT p.id,p.razon_social,p.ruc,p.activo,COALESCE(d.contacto_nombre,'') contacto_nombre,
+                COALESCE(d.contacto_telefono,'') contacto_telefono,COALESCE(d.contacto_correo,'') contacto_correo,
+                COALESCE(d.tipo_vinculo,'SinVinculo') tipo_vinculo,
                 d.proveedor_relacionado_id,rel.razon_social proveedor_relacionado_nombre,
                 (SELECT count(*) FROM mod05_contrato c WHERE c.proveedor_id=p.id) contratos
             FROM mod05_proveedor p LEFT JOIN mod05_proveedor_detalle d ON d.proveedor_id=p.id
@@ -38,10 +40,21 @@ public class MaestrosService {
     static final String CONTRATOS =
             """
             SELECT c.id,c.numero,c.proveedor_id,p.razon_social proveedor_nombre,c.tipo_servicio_id,t.nombre tipo_servicio_nombre,
-                c.vigencia_inicio,c.vigencia_fin,d.area_metrado_estimado,d.monto_fijo,d.frecuencia_pactada,COALESCE(d.condiciones,'') condiciones
+                c.vigencia_inicio,c.vigencia_fin,d.area_metrado_estimado,d.monto_fijo,d.frecuencia_pactada,
+                d.frecuencia_cantidad,d.frecuencia_unidad,COALESCE(d.condiciones,'') condiciones,
+                (SELECT count(*) FROM mod05_atenciontercerizada a WHERE a.contrato_id=c.id) atenciones
             FROM mod05_contrato c JOIN mod05_proveedor p ON p.id=c.proveedor_id JOIN mod05_tiposervicio t ON t.id=c.tipo_servicio_id
             LEFT JOIN mod05_contrato_detalle d ON d.contrato_id=c.id
             """;
+    static final Map<String, String> PERIODOS_FRECUENCIA =
+            Map.of("Dia", "al día", "Semana", "a la semana", "Mes", "al mes", "Anio", "al año");
+    static final String PRODUCTOS =
+            "SELECT id,nombre,principio_activo,presentacion,activo FROM mod05_producto_agronomico";
+
+    /** Frase de la frecuencia que se guarda también como texto: «4 veces al año», «1 vez al mes». */
+    static String textoFrecuencia(int cantidad, String unidad) {
+        return cantidad + (cantidad == 1 ? " vez " : " veces ") + PERIODOS_FRECUENCIA.get(unidad);
+    }
 
     // --- Consultas
     // ---------------------------------------------------------------------------------------------
@@ -180,14 +193,16 @@ public class MaestrosService {
                                 true));
         var detalle = new HashMap<String, Object>();
         detalle.put("id", id);
-        detalle.put("contacto", AtencionService.text(in.contacto()));
+        detalle.put("contacto_nombre", AtencionService.text(in.contacto_nombre()));
+        detalle.put("contacto_telefono", AtencionService.text(in.contacto_telefono()));
+        detalle.put("contacto_correo", AtencionService.text(in.contacto_correo()));
         detalle.put("tipo", tipo);
         detalle.put("relacionado", in.proveedor_relacionado_id());
         repo.jdbc()
                 .update(
                         "INSERT INTO"
-                            + " mod05_proveedor_detalle(proveedor_id,contacto,tipo_vinculo,proveedor_relacionado_id)"
-                            + " VALUES (:id,:contacto,:tipo,:relacionado)",
+                            + " mod05_proveedor_detalle(proveedor_id,contacto_nombre,contacto_telefono,contacto_correo,tipo_vinculo,proveedor_relacionado_id)"
+                            + " VALUES (:id,:contacto_nombre,:contacto_telefono,:contacto_correo,:tipo,:relacionado)",
                         detalle);
         var creado = repo.one(PROVEEDORES + " WHERE p.id=:id", Map.of("id", id));
         repo.audit("Proveedor", id, "Alta", user, Map.of(), creado, "");
@@ -195,8 +210,83 @@ public class MaestrosService {
     }
 
     @Transactional
-    public Map<String, Object> crearContrato(EntradasMaestros.Contrato in, Usuario user) {
+    public Map<String, Object> editarProveedor(long id, EntradasMaestros.Proveedor in, Usuario user) {
         user.exigir(true);
+        repo.lock("proveedor", id);
+        var antes = repo.one(PROVEEDORES + " WHERE p.id=:id", Map.of("id", id));
+        String tipo = in.tipo_vinculo() == null ? "SinVinculo" : in.tipo_vinculo();
+        boolean conRelacionado = tipo.equals("Subsidiaria") || tipo.equals("Vinculada");
+        if (conRelacionado && in.proveedor_relacionado_id() == null)
+            throw ApiError.invalid("Indica el proveedor relacionado");
+        if (!conRelacionado && in.proveedor_relacionado_id() != null)
+            throw ApiError.invalid(
+                    "Solo una subsidiaria o empresa vinculada indica un proveedor relacionado");
+        if (conRelacionado) {
+            if (in.proveedor_relacionado_id() == id)
+                throw ApiError.invalid("Un proveedor no puede vincularse consigo mismo");
+            if (!(boolean)
+                    existente(
+                                    "proveedor",
+                                    in.proveedor_relacionado_id(),
+                                    "El proveedor relacionado")
+                            .get("activo"))
+                throw ApiError.invalid("El proveedor relacionado está inactivo");
+        }
+        // Serializa registros con el mismo RUC; la restricción UNIQUE de la base es la última defensa.
+        repo.jdbc().getJdbcTemplate().execute("SELECT pg_advisory_xact_lock(505101)");
+        if (!repo.rows(
+                        "SELECT id FROM mod05_proveedor WHERE ruc=:ruc AND id<>:id",
+                        Map.of("ruc", in.ruc(), "id", id))
+                .isEmpty())
+            throw new ApiError(
+                    409,
+                    "ProveedorExistente",
+                    "Ya existe un proveedor registrado con el RUC " + in.ruc());
+        repo.update(
+                "proveedor",
+                id,
+                Map.of("razon_social", in.razon_social().strip(), "ruc", in.ruc()));
+        var detalle = new HashMap<String, Object>();
+        detalle.put("id", id);
+        detalle.put("contacto_nombre", AtencionService.text(in.contacto_nombre()));
+        detalle.put("contacto_telefono", AtencionService.text(in.contacto_telefono()));
+        detalle.put("contacto_correo", AtencionService.text(in.contacto_correo()));
+        detalle.put("tipo", tipo);
+        detalle.put("relacionado", in.proveedor_relacionado_id());
+        repo.jdbc()
+                .update(
+                        """
+                        UPDATE mod05_proveedor_detalle SET contacto_nombre=:contacto_nombre,contacto_telefono=:contacto_telefono,
+                            contacto_correo=:contacto_correo,tipo_vinculo=:tipo,proveedor_relacionado_id=:relacionado
+                        WHERE proveedor_id=:id
+                        """,
+                        detalle);
+        var despues = repo.one(PROVEEDORES + " WHERE p.id=:id", Map.of("id", id));
+        repo.audit("Proveedor", id, "Edición", user, antes, despues, "");
+        return despues;
+    }
+
+    @Transactional
+    public Map<String, Object> cambiarEstadoProveedor(long id, boolean activo, Usuario user) {
+        user.exigir(true);
+        repo.lock("proveedor", id);
+        var antes = repo.one(PROVEEDORES + " WHERE p.id=:id", Map.of("id", id));
+        if ((boolean) antes.get("activo") == activo) return antes;
+        repo.update("proveedor", id, Map.of("activo", activo));
+        var despues = repo.one(PROVEEDORES + " WHERE p.id=:id", Map.of("id", id));
+        repo.audit(
+                "Proveedor",
+                id,
+                activo ? "Habilitación" : "Inhabilitación",
+                user,
+                Map.of("activo", !activo),
+                Map.of("activo", activo),
+                "");
+        return despues;
+    }
+
+    /** Proveedor habilitado y tipo de servicio tercerizado activo, o lanza el error correspondiente. */
+    void validarProveedorYServicio(EntradasMaestros.Contrato in) {
         if (!(boolean) existente("proveedor", in.proveedor_id(), "El proveedor").get("activo"))
             throw ApiError.invalid("El proveedor está inactivo");
         var servicio = existente("tiposervicio", in.tipo_servicio_id(), "El tipo de servicio");
@@ -204,8 +294,31 @@ public class MaestrosService {
             throw ApiError.invalid("El tipo de servicio está inactivo");
         if (!servicio.get("ejecutor").equals("Tercerizado"))
             throw ApiError.invalid("El contrato debe corresponder a un servicio tercerizado");
+    }
+
+    record Frecuencia(Integer cantidad, String unidad, String texto) {}
+
+    /** Cantidad y período, o el texto libre de clientes anteriores (`MaestrosService.crearContrato`). */
+    Frecuencia resolverFrecuencia(EntradasMaestros.Contrato in) {
+        Integer cantidad = in.frecuencia_cantidad();
+        String unidad = in.frecuencia_unidad();
+        if (cantidad != null || unidad != null) {
+            if (cantidad == null || unidad == null)
+                throw ApiError.invalid("Indica la cantidad y el período de la frecuencia");
+            return new Frecuencia(cantidad, unidad, textoFrecuencia(cantidad, unidad));
+        }
+        String texto = AtencionService.text(in.frecuencia_pactada());
+        if (texto.isEmpty()) throw ApiError.invalid("Indica la frecuencia pactada");
+        return new Frecuencia(null, null, texto);
+    }
+
+    @Transactional
+    public Map<String, Object> crearContrato(EntradasMaestros.Contrato in, Usuario user) {
+        user.exigir(true);
+        validarProveedorYServicio(in);
         if (in.vigencia_fin().isBefore(in.vigencia_inicio()))
             throw ApiError.invalid("El fin de la vigencia no puede ser anterior al inicio");
+        var frecuencia = resolverFrecuencia(in);
         String numero = numeroContrato();
         long id =
                 repo.insert(
@@ -225,20 +338,167 @@ public class MaestrosService {
         detalle.put("id", id);
         detalle.put("area", in.area_metrado_estimado().strip());
         detalle.put("monto", in.monto_fijo());
-        detalle.put("frecuencia", in.frecuencia_pactada().strip());
+        detalle.put("frecuencia", frecuencia.texto());
+        detalle.put("cantidad", frecuencia.cantidad());
+        detalle.put("unidad", frecuencia.unidad());
         detalle.put("condiciones", AtencionService.text(in.condiciones()));
         detalle.put("fecha", OffsetDateTime.now(clock));
         detalle.put("usuario", user.id());
         repo.jdbc()
                 .update(
                         """
-                        INSERT INTO mod05_contrato_detalle(contrato_id,area_metrado_estimado,monto_fijo,frecuencia_pactada,condiciones,fecha_creacion,usuario_creacion_id)
-                        VALUES (:id,:area,:monto,:frecuencia,:condiciones,:fecha,:usuario)
+                        INSERT INTO mod05_contrato_detalle(contrato_id,area_metrado_estimado,monto_fijo,frecuencia_pactada,frecuencia_cantidad,frecuencia_unidad,condiciones,fecha_creacion,usuario_creacion_id)
+                        VALUES (:id,:area,:monto,:frecuencia,:cantidad,:unidad,:condiciones,:fecha,:usuario)
                         """,
                         detalle);
         var creado =
                 contratoVisible(repo.one(CONTRATOS + " WHERE c.id=:id", Map.of("id", id)), user);
         repo.audit("Contrato", id, "Alta", user, Map.of(), creado, "");
         return creado;
+    }
+
+    @Transactional
+    public Map<String, Object> editarContrato(long id, EntradasMaestros.Contrato in, Usuario user) {
+        user.exigir(true);
+        repo.lock("contrato", id);
+        var antes = contratoVisible(repo.one(CONTRATOS + " WHERE c.id=:id", Map.of("id", id)), user);
+        validarProveedorYServicio(in);
+        if (in.vigencia_fin().isBefore(in.vigencia_inicio()))
+            throw ApiError.invalid("El fin de la vigencia no puede ser anterior al inicio");
+        var frecuencia = resolverFrecuencia(in);
+        repo.update(
+                "contrato",
+                id,
+                values(
+                        "proveedor_id",
+                        in.proveedor_id(),
+                        "tipo_servicio_id",
+                        in.tipo_servicio_id(),
+                        "vigencia_inicio",
+                        in.vigencia_inicio(),
+                        "vigencia_fin",
+                        in.vigencia_fin()));
+        var detalle = new HashMap<String, Object>();
+        detalle.put("id", id);
+        detalle.put("area", in.area_metrado_estimado().strip());
+        detalle.put("monto", in.monto_fijo());
+        detalle.put("frecuencia", frecuencia.texto());
+        detalle.put("cantidad", frecuencia.cantidad());
+        detalle.put("unidad", frecuencia.unidad());
+        detalle.put("condiciones", AtencionService.text(in.condiciones()));
+        repo.jdbc()
+                .update(
+                        """
+                        UPDATE mod05_contrato_detalle SET area_metrado_estimado=:area,monto_fijo=:monto,
+                            frecuencia_pactada=:frecuencia,frecuencia_cantidad=:cantidad,frecuencia_unidad=:unidad,condiciones=:condiciones
+                        WHERE contrato_id=:id
+                        """,
+                        detalle);
+        var despues =
+                contratoVisible(repo.one(CONTRATOS + " WHERE c.id=:id", Map.of("id", id)), user);
+        repo.audit("Contrato", id, "Edición", user, antes, despues, "");
+        return despues;
+    }
+
+    // --- Catálogo de productos agronómicos (RF-FIT-003)
+    // ----------------------------------------------------
+
+    public ConsultasService.Pagina productosAgronomicos(
+            Usuario user, Map<String, String> params, String url) {
+        user.exigir(false);
+        return queries.list(
+                new ConsultasService.Catalogo(
+                        PRODUCTOS,
+                        "nombre,id",
+                        List.of("nombre", "principio_activo"),
+                        Map.of("activo", "bool")),
+                params,
+                url,
+                UnaryOperator.identity());
+    }
+
+    public Map<String, Object> productoAgronomico(Usuario user, long id) {
+        user.exigir(false);
+        return repo.one(PRODUCTOS + " WHERE id=:id", Map.of("id", id));
+    }
+
+    @Transactional
+    public Map<String, Object> crearProductoAgronomico(
+            EntradasMaestros.ProductoAgronomico in, Usuario user) {
+        user.exigir(true);
+        // Serializa registros con el mismo nombre; la restricción UNIQUE de la base es la última defensa.
+        repo.jdbc().getJdbcTemplate().execute("SELECT pg_advisory_xact_lock(505104)");
+        if (!repo.rows(
+                        "SELECT id FROM mod05_producto_agronomico WHERE nombre=:nombre",
+                        Map.of("nombre", in.nombre().strip()))
+                .isEmpty())
+            throw new ApiError(
+                    409,
+                    "ProductoExistente",
+                    "Ya existe un producto registrado con el nombre " + in.nombre().strip());
+        long id =
+                repo.insert(
+                        "producto_agronomico",
+                        values(
+                                "nombre",
+                                in.nombre().strip(),
+                                "principio_activo",
+                                AtencionService.text(in.principio_activo()),
+                                "presentacion",
+                                AtencionService.text(in.presentacion()),
+                                "activo",
+                                true));
+        var creado = repo.one(PRODUCTOS + " WHERE id=:id", Map.of("id", id));
+        repo.audit("ProductoAgronomico", id, "Alta", user, Map.of(), creado, "");
+        return creado;
+    }
+
+    @Transactional
+    public Map<String, Object> editarProductoAgronomico(
+            long id, EntradasMaestros.ProductoAgronomico in, Usuario user) {
+        user.exigir(true);
+        repo.lock("producto_agronomico", id);
+        var antes = repo.one(PRODUCTOS + " WHERE id=:id", Map.of("id", id));
+        repo.jdbc().getJdbcTemplate().execute("SELECT pg_advisory_xact_lock(505104)");
+        if (!repo.rows(
+                        "SELECT id FROM mod05_producto_agronomico WHERE nombre=:nombre AND id<>:id",
+                        Map.of("nombre", in.nombre().strip(), "id", id))
+                .isEmpty())
+            throw new ApiError(
+                    409,
+                    "ProductoExistente",
+                    "Ya existe un producto registrado con el nombre " + in.nombre().strip());
+        repo.update(
+                "producto_agronomico",
+                id,
+                values(
+                        "nombre",
+                        in.nombre().strip(),
+                        "principio_activo",
+                        AtencionService.text(in.principio_activo()),
+                        "presentacion",
+                        AtencionService.text(in.presentacion())));
+        var despues = repo.one(PRODUCTOS + " WHERE id=:id", Map.of("id", id));
+        repo.audit("ProductoAgronomico", id, "Edición", user, antes, despues, "");
+        return despues;
+    }
+
+    @Transactional
+    public Map<String, Object> cambiarEstadoProductoAgronomico(long id, boolean activo, Usuario user) {
+        user.exigir(true);
+        repo.lock("producto_agronomico", id);
+        var antes = repo.one(PRODUCTOS + " WHERE id=:id", Map.of("id", id));
+        if ((boolean) antes.get("activo") == activo) return antes;
+        repo.update("producto_agronomico", id, Map.of("activo", activo));
+        var despues = repo.one(PRODUCTOS + " WHERE id=:id", Map.of("id", id));
+        repo.audit(
+                "ProductoAgronomico",
+                id,
+                activo ? "Habilitación" : "Inhabilitación",
+                user,
+                Map.of("activo", !activo),
+                Map.of("activo", activo),
+                "");
+        return despues;
     }
 }

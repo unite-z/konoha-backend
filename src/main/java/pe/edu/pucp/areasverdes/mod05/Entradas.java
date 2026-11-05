@@ -13,10 +13,13 @@ public final class Entradas {
     public static final String CATEGORIA = "InformeFinal|Metrado|PlantasAtendidas|FichasDiarias|CharlasTecnicas|PlagasAtendidas|ProductosAplicados|EvidenciaEspacio|RutaRecorrida";
     public record Alcance(@Positive Long area_verde_id, @Positive Long ejemplar_id,
                           @DecimalMin("0") @Digits(integer=10, fraction=2) BigDecimal metrado, @Positive Long unidad_medida_id) {}
+    public record ProductoAplicado(@NotNull @Positive Long producto_id, @Size(max=120) String dosis) {}
     public record Crear(@NotNull @Positive Long contrato_id, @NotBlank String descripcion,
                         @NotBlank @Pattern(regexp=ORIGEN) String origen, @Positive Long unidad_solicitante_id,
                         @Size(max=150) String unidad_provisional, Boolean es_riesgo,
-                        @NotEmpty List<@NotNull @Valid Alcance> alcances) {}
+                        @NotEmpty List<@NotNull @Valid Alcance> alcances,
+                        List<@NotNull @Valid ProductoAplicado> productos,
+                        List<@NotNull @Positive Long> plagas_controladas) {}
     public record Orden(@NotBlank @Size(max=30) String numero_orden_compra, String motivo) {}
     public record Inicio(@NotNull OffsetDateTime fecha_hora_inicio) {}
     public record Fin(@NotNull OffsetDateTime fecha_hora_fin) {}
