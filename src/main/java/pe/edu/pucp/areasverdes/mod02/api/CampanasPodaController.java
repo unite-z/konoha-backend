@@ -21,6 +21,7 @@ import pe.edu.pucp.areasverdes.mod02.servicios.CampanasPodaService;
 import pe.edu.pucp.areasverdes.mod02.servicios.CampanasPodaService.CambioCampana;
 import pe.edu.pucp.areasverdes.mod02.servicios.CampanasPodaService.Campana;
 import pe.edu.pucp.areasverdes.mod02.servicios.CampanasPodaService.EjemplarCampana;
+import pe.edu.pucp.areasverdes.mod02.servicios.CampanasPodaService.EspeciesCampana;
 import pe.edu.pucp.areasverdes.mod02.servicios.CampanasPodaService.NuevaCampana;
 import pe.edu.pucp.areasverdes.mod02.servicios.CampanasPodaService.VentanaCierre;
 import pe.edu.pucp.areasverdes.mod02.servicios.ReglasCampanaPoda.EstadoCampana;
@@ -110,6 +111,18 @@ public class CampanasPodaController {
     public RendimientoCampana.Resultado rendimiento(
             @AuthenticationPrincipal Usuario usuario, @PathVariable long id) {
         return campanas.rendimiento(id, usuario);
+    }
+
+    @GetMapping({"/{id}/especies", "/{id}/especies/"})
+    @Operation(
+            summary = "Especies de la campaña con sus ejemplares planificados y atendidos",
+            description =
+                    "Atendidos son los ejemplares con poda verificada. Incompletos, los que solo"
+                            + " tienen registros sin fotografía. Los ejemplares sin especie salen"
+                            + " en una fila con especie_id nulo.")
+    public EspeciesCampana especies(
+            @AuthenticationPrincipal Usuario usuario, @PathVariable long id) {
+        return campanas.especies(id, usuario);
     }
 
     @PostMapping({"/{id}/planificacion", "/{id}/planificacion/"})
