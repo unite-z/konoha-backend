@@ -172,6 +172,23 @@ class Mod04IntegrationTest {
         return json.readTree(result.getResponse().getContentAsByteArray());
     }
 
+    Cookie sesionCore(String usuario) throws Exception {
+        var result =
+                http.perform(
+                                post("/api/v1/core/auth/login/")
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(
+                                                json.writeValueAsBytes(
+                                                        values(
+                                                                "identificador",
+                                                                usuario,
+                                                                "contrasena",
+                                                                PASSWORD))))
+                        .andExpect(status().isOk())
+                        .andReturn();
+        return result.getResponse().getCookie("av_sesion");
+    }
+
     long cuadrilla(long capataz, Long... people) throws Exception {
         return postJson("/cuadrillas/", squad(capataz, people), "jefe", 201).path("id").asLong();
     }
@@ -436,6 +453,32 @@ class Mod04IntegrationTest {
     }
 
     @Test
+    void oficinaConsultaRegistroRealPorCuadrillaFechaYHoraDeAlta() throws Exception {
+        long equipo = cuadrilla(c1, o1);
+        long otraCuadrilla = cuadrilla(c2, o2);
+        long actividad = actividad(equipo);
+        String consulta = BASE + "/actividades/?cuadrilla_id=" + equipo + "&fecha=" + HOY;
+        Cookie sesion = sesionCore("ingeniero");
+        http.perform(get(consulta).cookie(sesion))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(1))
+                .andExpect(jsonPath("$.results[0].id").value(actividad))
+                .andExpect(jsonPath("$.results[0].tipo_actividad_nombre").value("Mantenimiento"))
+                .andExpect(jsonPath("$.results[0].fecha_hora_actividad").value("2026-10-22T13:00:00Z"))
+                .andExpect(jsonPath("$.results[0].fecha_hora_registro").value("2026-10-22T18:00:00Z"));
+        http.perform(get(BASE + "/actividades/?cuadrilla_id=" + otraCuadrilla).cookie(sesion))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(0));
+        http.perform(get(consulta + "3").cookie(sesion))
+                .andExpect(status().isBadRequest());
+        http.perform(get(BASE + "/actividades/?fecha=" + HOY.plusDays(1)).cookie(sesion))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(0));
+        http.perform(get(consulta).cookie(sesionCore("sinrol")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void opcionesYDetalleDeActividadRespetanPertenenciaYRol() throws Exception {
         long squad = cuadrilla(c1, o1, o2), act = actividad(squad);
         http.perform(get(BASE + "/actividades/" + act).with(httpBasic("capataz1", PASSWORD)))
@@ -465,6 +508,355 @@ class Mod04IntegrationTest {
         http.perform(get(consulta).with(httpBasic("capataz2", PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.count").value(0));
+    }
+
+    @Test
+    void unidadesDeMaterialIncluyenLaUnidadRamaDeAv309() throws Exception {
+        http.perform(
+                        get(BASE + "/catalogos/unidades-medida/")
+                                .with(httpBasic("capataz1", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[?(@.simbolo == 'rama')].nombre").value("Rama"));
+    }
+
+    @Test
+    void jefeVerificaActividadYSeConservanAutorFechaYAuditoria() throws Exception {
+        long equipo = cuadrilla(c1, o1), actividad = actividad(equipo);
+        var verificacion = values("observaciones", "Ejecución conforme; retirar ramas del sendero");
+
+        putJson("/actividades/" + actividad + "/verificacion/", verificacion, "capataz1", 403);
+        putJson("/actividades/" + actividad + "/verificacion/", verificacion, "ingeniero", 403);
+        putJson("/actividades/" + actividad + "/verificacion/", verificacion, "jefe", 200);
+
+        http.perform(get(BASE + "/actividades/" + actividad).with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.observaciones").doesNotExist())
+                .andExpect(
+                        jsonPath("$.verificacion_observaciones")
+                                .value(verificacion.get("observaciones")))
+                .andExpect(jsonPath("$.verificado_por_usuario_id").value(jefe))
+                .andExpect(jsonPath("$.verificado_por_nombre").value("jefe"))
+                .andExpect(jsonPath("$.fecha_verificacion").isNotEmpty());
+        assertEquals(
+                1,
+                repo.jdbc()
+                        .queryForObject(
+                                "SELECT count(*) FROM core_registro_auditoria WHERE"
+                                        + " entidad='Actividad' AND accion='Modificacion' AND"
+                                        + " registro_id=:id AND usuario_id=:u",
+                                Map.of("id", actividad, "u", jefe),
+                                Integer.class));
+    }
+
+    @Test
+    void historialActividadCombinaMayusculasSinMezclarEntidadesRelacionadas() throws Exception {
+        long equipo = cuadrilla(c1, o1), actividad = actividad(equipo);
+        String primera = "Verificada en campo";
+        String actualizada = "Verificada; retirar ramas del sendero";
+
+        // Conserva una entrada histórica con entidad en minúsculas y dos eventos relacionados.
+        repo.jdbc()
+                .update(
+                        """
+                        INSERT INTO core_registro_auditoria (entidad, registro_id, accion, usuario_id,
+                            fecha_hora, valores_anteriores, valores_nuevos)
+                        VALUES ('actividad', :id, 'Modificacion', :usuario, now() - interval '1 day',
+                            '{}', '{"observaciones":"Evento histórico"}')
+                        """,
+                        Map.of("id", actividad, "usuario", jefe));
+        for (String entidadRelacionada : List.of("ParticipacionActividad", "MaterialActividad")) {
+            repo.jdbc()
+                    .update(
+                            """
+                            INSERT INTO core_registro_auditoria (entidad, registro_id, accion, usuario_id,
+                                valores_anteriores, valores_nuevos)
+                            VALUES (:entidad, :id, 'Modificacion', :usuario, '{}', '{}')
+                            """,
+                            Map.of(
+                                    "entidad", entidadRelacionada,
+                                    "id", actividad,
+                                    "usuario", jefe));
+        }
+
+        putJson(
+                "/actividades/" + actividad + "/verificacion/",
+                values("observaciones", primera),
+                "jefe",
+                200);
+        putJson(
+                "/actividades/" + actividad + "/verificacion/",
+                values("observaciones", actualizada),
+                "jefe",
+                200);
+
+        var respuestaHistorial =
+                http.perform(
+                                get("/api/v1/core/historial/")
+                                        .param("entidad", "ACTIVIDAD")
+                                        .param("registro_id", String.valueOf(actividad))
+                                        .cookie(sesionCore("jefe")))
+                        .andExpect(status().isOk())
+                        .andReturn();
+        JsonNode eventos = json.readTree(respuestaHistorial.getResponse().getContentAsByteArray());
+        assertEquals(4, eventos.size());
+        boolean verificacionInicial = false;
+        boolean verificacionActualizada = false;
+        boolean altaCapataz = false;
+        boolean eventoHistorico = false;
+        for (JsonNode evento : eventos) {
+            JsonNode nuevos = evento.path("valores_nuevos");
+            if (primera.equals(nuevos.path("verificacion_observaciones").asText())) {
+                verificacionInicial = true;
+                assertEquals("Modificacion", evento.path("accion").asText());
+                assertEquals("jefe", evento.path("usuario").asText());
+                assertTrue(evento.hasNonNull("fecha_hora"));
+            }
+            if (actualizada.equals(nuevos.path("verificacion_observaciones").asText())) {
+                verificacionActualizada = true;
+                assertEquals(
+                        primera,
+                        evento.path("valores_anteriores")
+                                .path("verificacion_observaciones")
+                                .asText());
+                assertEquals("Modificacion", evento.path("accion").asText());
+                assertEquals("jefe", evento.path("usuario").asText());
+            }
+            if ("Alta".equals(evento.path("accion").asText())) {
+                altaCapataz = "capataz1".equals(evento.path("usuario").asText());
+            }
+            if ("Evento histórico".equals(nuevos.path("observaciones").asText())) {
+                eventoHistorico = true;
+            }
+        }
+        assertTrue(verificacionInicial);
+        assertTrue(verificacionActualizada);
+        assertTrue(altaCapataz);
+        assertTrue(eventoHistorico);
+    }
+
+    @Test
+    void catalogoJerarquicoConservaNombreHistoricoYBloqueaNuevasAltas() throws Exception {
+        http.perform(get(BASE + "/catalogos/clases-actividad/").with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(9));
+        var entrada = values("nombre", "Poda de formación", "clase_id", 4, "activo", true);
+        long nuevo =
+                postJson("/catalogos/tipos-actividad/", entrada, "jefe", 201).path("id").asLong();
+        http.perform(
+                        get(BASE + "/catalogos/tipos-actividad/?activo=true")
+                                .with(httpBasic("capataz1", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[1].clase_id").value(4));
+        postJson("/catalogos/tipos-actividad/", entrada, "jefe", 409);
+        long equipo = cuadrilla(c1, o1);
+        long parte =
+                postJson("/partes/", values("cuadrilla_id", equipo, "fecha", HOY), "capataz1", 201)
+                        .path("id")
+                        .asLong();
+        var actividad =
+                values(
+                        "parte_id",
+                        parte,
+                        "tipo_actividad_id",
+                        nuevo,
+                        "area_verde_id",
+                        area,
+                        "fecha_hora_actividad",
+                        "2026-10-22T08:00:00-05:00");
+        long anterior = postJson("/actividades/", actividad, "capataz1", 201).path("id").asLong();
+        putJson(
+                "/catalogos/tipos-actividad/" + nuevo + "/",
+                values("nombre", "Poda renovada", "clase_id", 4, "activo", false),
+                "jefe",
+                200);
+        http.perform(get(BASE + "/actividades/" + anterior).with(httpBasic("capataz1", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tipo_actividad_nombre").value("Poda de formación"));
+        http.perform(get(BASE + "/actividades/").with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(
+                        jsonPath("$.results[0].tipo_actividad_nombre").value("Poda de formación"));
+        postJson("/actividades/", actividad, "capataz1", 400);
+        http.perform(
+                        get(BASE + "/catalogos/tipos-actividad/?activo=true")
+                                .with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(1));
+    }
+
+    @Test
+    void registroDeActividadValidaClaseSolicitudYOrigenSinDuplicar() throws Exception {
+        long equipo = cuadrilla(c1, o1);
+        long parte =
+                postJson("/partes/", values("cuadrilla_id", equipo, "fecha", HOY), "capataz1", 201)
+                        .path("id")
+                        .asLong();
+        var entrada =
+                values(
+                        "parte_id",
+                        parte,
+                        "tipo_actividad_id",
+                        tipo,
+                        "clase_actividad_id",
+                        3,
+                        "area_verde_id",
+                        area,
+                        "fecha_hora_actividad",
+                        "2026-10-22T08:00:00-05:00",
+                        "fecha_solicitud",
+                        "2026-10-21");
+        long actividad = postJson("/actividades/", entrada, "capataz1", 201).path("id").asLong();
+        http.perform(get(BASE + "/actividades/" + actividad).with(httpBasic("capataz1", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.clase_actividad_id").value(3))
+                .andExpect(jsonPath("$.fecha_solicitud").value("2026-10-21"));
+        entrada.put("clase_actividad_id", 4);
+        postJson("/actividades/", entrada, "capataz1", 400);
+        entrada.put("clase_actividad_id", 3);
+        entrada.put("fecha_solicitud", "2026-10-23");
+        postJson("/actividades/", entrada, "capataz1", 400);
+        entrada.put("fecha_solicitud", "2026-10-21");
+        entrada.put("incidencia_id", 999999L);
+        postJson("/actividades/", entrada, "capataz1", 400);
+        http.perform(get(BASE + "/actividades/").with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(1));
+    }
+
+    @Test
+    void medidasDeActividadSeConsultanYDatosInvalidosNoAlteranRegistro() throws Exception {
+        long equipo = cuadrilla(c1, o1);
+        long parte =
+                postJson("/partes/", values("cuadrilla_id", equipo, "fecha", HOY), "capataz1", 201)
+                        .path("id")
+                        .asLong();
+        var entrada =
+                values(
+                        "parte_id",
+                        parte,
+                        "tipo_actividad_id",
+                        tipo,
+                        "area_verde_id",
+                        area,
+                        "fecha_hora_actividad",
+                        "2026-10-22T08:00:00-05:00",
+                        "superficie_m2",
+                        12.5,
+                        "cantidad_solicitada",
+                        10,
+                        "cantidad_ejecutada",
+                        8,
+                        "unidad_medida_id",
+                        1,
+                        "tiempo_minutos",
+                        90);
+        long actividad = postJson("/actividades/", entrada, "capataz1", 201).path("id").asLong();
+        http.perform(get(BASE + "/actividades/" + actividad).with(httpBasic("capataz1", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.superficie_m2").value(12.5))
+                .andExpect(jsonPath("$.cantidad_ejecutada").value(8))
+                .andExpect(jsonPath("$.unidad_medida_id").value(1))
+                .andExpect(jsonPath("$.tiempo_minutos").value(90));
+        entrada.put("tiempo_minutos", 1500);
+        postJson("/actividades/", entrada, "capataz1", 400);
+        entrada.put("tiempo_minutos", 90);
+        entrada.put("unidad_medida_id", null);
+        postJson("/actividades/", entrada, "capataz1", 400);
+        http.perform(get(BASE + "/actividades/").with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(1));
+    }
+
+    @Test
+    void podaMenorVinculaEjemplarValidaAlturaYPermisos() throws Exception {
+        long equipo = cuadrilla(c1, o1);
+        long parte =
+                postJson("/partes/", values("cuadrilla_id", equipo, "fecha", HOY), "capataz1", 201)
+                        .path("id")
+                        .asLong();
+        long poda =
+                repo.insert(
+                        "tipo_actividad",
+                        values("nombre", "Poda menor", "activo", true, "clase_id", 4));
+        long bajo =
+                repo.jdbc()
+                        .queryForObject(
+                                "INSERT INTO mod02_ejemplar(codigo,area_verde_id,altura_total_m)"
+                                        + " VALUES ('EJ-BAJO',:area,3.25) RETURNING id",
+                                Map.of("area", area),
+                                Long.class);
+        long alto =
+                repo.jdbc()
+                        .queryForObject(
+                                "INSERT INTO mod02_ejemplar(codigo,area_verde_id,altura_total_m)"
+                                        + " VALUES ('EJ-ALTO',:area,5.00) RETURNING id",
+                                Map.of("area", area),
+                                Long.class);
+        var entrada =
+                values(
+                        "parte_id",
+                        parte,
+                        "tipo_actividad_id",
+                        poda,
+                        "area_verde_id",
+                        area,
+                        "fecha_hora_actividad",
+                        "2026-10-22T08:00:00-05:00",
+                        "ejemplar_id",
+                        bajo);
+
+        long actividad = postJson("/actividades/", entrada, "capataz1", 201).path("id").asLong();
+        http.perform(get(BASE + "/actividades/" + actividad).with(httpBasic("capataz1", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ejemplar_codigo").value("EJ-BAJO"))
+                .andExpect(jsonPath("$.ejemplar_altura_m").value(3.25));
+        http.perform(
+                        get("/api/v1/inventario/ejemplares/" + bajo + "/historial-actividades")
+                                .with(httpBasic("capataz1", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].actividad_id").value(actividad))
+                .andExpect(jsonPath("$[0].tipo_actividad").value("Poda menor"));
+
+        entrada.put("ejemplar_id", alto);
+        postJson("/actividades/", entrada, "capataz1", 409);
+        entrada.put("ejemplar_id", null);
+        entrada.put("pendiente_vinculacion", true);
+        postJson("/actividades/", entrada, "capataz1", 201);
+        postJson("/actividades/", entrada, "capataz2", 403);
+    }
+
+    @Test
+    void materialYTrasladoSeAsocianALaActividadConPermisos() throws Exception {
+        long equipo = cuadrilla(c1, o1);
+        long actividad = actividad(equipo);
+        var entrada =
+                values(
+                        "material_id",
+                        1,
+                        "cantidad",
+                        4,
+                        "unidad_medida_id",
+                        1,
+                        "origen",
+                        "Vivero",
+                        "destino",
+                        "Jardín A");
+        postJson("/actividades/" + actividad + "/materiales/", entrada, "capataz1", 201);
+        http.perform(
+                        get(BASE + "/actividades/" + actividad + "/materiales/")
+                                .with(httpBasic("capataz1", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].nombre_material").value("Esquejes"))
+                .andExpect(jsonPath("$[0].origen").value("Vivero"))
+                .andExpect(jsonPath("$[0].destino").value("Jardín A"));
+        entrada.put("destino", null);
+        postJson("/actividades/" + actividad + "/materiales/", entrada, "capataz1", 400);
+        postJson("/actividades/" + actividad + "/materiales/", entrada, "capataz2", 403);
+        http.perform(
+                        get(BASE + "/actividades/" + actividad + "/materiales/")
+                                .with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1));
     }
 
     @Test
@@ -519,23 +911,6 @@ class Mod04IntegrationTest {
                         "SELECT credencial_hash FROM core_usuario WHERE nombre_usuario=:nombre",
                         Map.of("nombre", "mod04_jefe"),
                         String.class);
-    }
-
-    Cookie sesionCore(String nombre) throws Exception {
-        return http.perform(
-                        post("/api/v1/core/auth/login/")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(
-                                        json.writeValueAsBytes(
-                                                Map.of(
-                                                        "identificador",
-                                                        nombre,
-                                                        "contrasena",
-                                                        PASSWORD))))
-                .andExpect(status().isOk())
-                .andReturn()
-                .getResponse()
-                .getCookie("av_sesion");
     }
 
     @Test
@@ -631,10 +1006,53 @@ class Mod04IntegrationTest {
                                 null,
                                 false,
                                 false),
+                        new Fila(
+                                "catalogo",
+                                "GET",
+                                "/catalogos/clases-actividad",
+                                null,
+                                false,
+                                false),
+                        new Fila(
+                                "catalogo",
+                                "GET",
+                                "/catalogos/unidades-medida",
+                                null,
+                                false,
+                                false),
+                        new Fila("catalogo", "GET", "/catalogos/materiales", null, false, false),
+                        new Fila(
+                                "crearTipo",
+                                "POST",
+                                "/catalogos/tipos-actividad",
+                                values("nombre", "Tipo de matriz", "clase_id", 3, "activo", true),
+                                true,
+                                false),
+                        new Fila(
+                                "actualizarTipo",
+                                "PUT",
+                                "/catalogos/tipos-actividad/" + tipo,
+                                values("nombre", "Mantenimiento", "clase_id", 3, "activo", true),
+                                true,
+                                false),
                         new Fila("catalogo", "GET", "/catalogos/areas-verdes", null, false, false),
                         new Fila("cuadrilla", "GET", "/cuadrillas/" + equipo, null, false, false),
                         new Fila("encargo", "GET", "/encargos/" + enc, null, false, false),
                         new Fila("actividad", "GET", "/actividades/" + act, null, false, false),
+                        new Fila(
+                                "materiales",
+                                "GET",
+                                "/actividades/" + act + "/materiales",
+                                null,
+                                false,
+                                false),
+                        new Fila(
+                                "crearMaterial",
+                                "POST",
+                                "/actividades/" + act + "/materiales",
+                                values("material_id", 1, "cantidad", 2, "unidad_medida_id", 1),
+                                false,
+                                true),
                         new Fila(
                                 "participantes",
                                 "GET",
@@ -718,7 +1136,14 @@ class Mod04IntegrationTest {
                                 "/actividades/" + act + "/participantes",
                                 values("operarios", List.of(o1)),
                                 false,
-                                true));
+                                true),
+                        new Fila(
+                                "verificarActividad",
+                                "PUT",
+                                "/actividades/" + act + "/verificacion",
+                                values("observaciones", "Conforme en campo"),
+                                true,
+                                false));
         var registrados = new HashSet<String>();
         rutas.getHandlerMethods()
                 .forEach(

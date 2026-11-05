@@ -188,7 +188,9 @@ public class DerivacionTercerizada {
                                 null,
                                 null,
                                 null,
-                                List.of(alcance)),
+                                List.of(alcance),
+                                null,
+                                null),
                         new Usuario(
                                 usuario.id(),
                                 "",

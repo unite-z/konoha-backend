@@ -21,8 +21,8 @@ public class EjemplaresService {
                     + " especie_forma_biologica, e.tipo_vegetacion, e.ubicacion,"
                     + " ST_Y(e.ubicacion_geografica)::numeric(10, 7) latitud,"
                     + " ST_X(e.ubicacion_geografica)::numeric(10, 7) longitud, e.cantidad,"
-                    + " e.area_verde_id, (e.codigo_placa_antigua IS NOT NULL AND EXISTS"
-                    + " (SELECT 1 FROM mod02_ejemplar otro WHERE otro.id <> e.id AND"
+                    + " e.area_verde_id, e.altura_total_m, (e.codigo_placa_antigua IS NOT NULL AND"
+                    + " EXISTS (SELECT 1 FROM mod02_ejemplar otro WHERE otro.id <> e.id AND"
                     + " lower(otro.codigo_placa_antigua) = lower(e.codigo_placa_antigua)))"
                     + " advertencia_placa_repetida FROM mod02_ejemplar e LEFT JOIN"
                     + " mod02_especie_vegetal s ON s.id = e.especie_id";
@@ -33,7 +33,8 @@ public class EjemplaresService {
         this.jdbc = jdbc;
     }
 
-    public List<Ejemplar> listar(String q, String referencia, int page, Usuario usuario) {
+    public List<Ejemplar> listar(
+            String q, String referencia, Long areaVerdeId, int page, Usuario usuario) {
         AccesoCoberturas.consultar(usuario);
         if (page < 1) {
             throw new ErrorCoberturas(400, "pagina-invalida", "La página debe ser mayor que cero");
@@ -44,6 +45,7 @@ public class EjemplaresService {
                 new MapSqlParameterSource()
                         .addValue("q", termino)
                         .addValue("referencia", ref)
+                        .addValue("area", areaVerdeId)
                         .addValue("limite", 25)
                         .addValue("offset", (page - 1) * 25);
         return jdbc.query(
@@ -54,6 +56,7 @@ public class EjemplaresService {
                         + " s.nombre_comun ILIKE '%' || :q || '%' OR"
                         + " s.nombre_cientifico ILIKE '%' || :q || '%')"
                         + " AND (:referencia = '' OR e.referencia_catastro = :referencia)"
+                        + " AND (CAST(:area AS bigint) IS NULL OR e.area_verde_id = :area)"
                         + " ORDER BY e.id LIMIT :limite OFFSET :offset",
                 parametros,
                 new DataClassRowMapper<>(Ejemplar.class));
@@ -67,12 +70,12 @@ public class EjemplaresService {
         long id =
                 jdbc.queryForObject(
                         "INSERT INTO mod02_ejemplar (codigo_placa_antigua, especie_id,"
-                            + " tipo_vegetacion, ubicacion, ubicacion_geografica, cantidad) VALUES"
-                            + " (:placa, :especie, :vegetacion, :ubicacion, CASE WHEN CAST(:latitud"
-                            + " AS numeric) IS NULL THEN NULL ELSE ST_SetSRID"
-                            + " (ST_MakePoint(CAST(:longitud AS double precision), CAST(:latitud AS"
-                            + " double precision)), 4326)::geometry(Point, 4326) END, :cantidad)"
-                            + " RETURNING id",
+                            + " tipo_vegetacion, ubicacion, ubicacion_geografica, cantidad,"
+                            + " altura_total_m) VALUES (:placa, :especie, :vegetacion, :ubicacion,"
+                            + " CASE WHEN CAST(:latitud AS numeric) IS NULL THEN NULL ELSE"
+                            + " ST_SetSRID (ST_MakePoint(CAST(:longitud AS double precision),"
+                            + " CAST(:latitud AS double precision)), 4326)::geometry(Point, 4326)"
+                            + " END, :cantidad, :altura) RETURNING id",
                         parametros(entrada),
                         Long.class);
         return buscar(id);
@@ -87,6 +90,7 @@ public class EjemplaresService {
                 && cambio.latitud() == null
                 && cambio.longitud() == null
                 && cambio.cantidad() == null
+                && cambio.alturaTotalM() == null
                 && cambio.codigoPlacaAntigua() == null) {
             throw new ErrorCoberturas(
                     400, "cambio-vacio", "Indica algún dato que quieras modificar");
@@ -121,6 +125,7 @@ public class EjemplaresService {
                                 + " ST_X(ubicacion_geografica)), coalesce(:latitud,"
                                 + " ST_Y(ubicacion_geografica))), 4326)::geometry(Point, 4326) END,"
                                 + " cantidad = coalesce(:cantidad, cantidad),"
+                                + " altura_total_m = coalesce(:altura, altura_total_m),"
                                 + " codigo_placa_antigua = coalesce(:placa, codigo_placa_antigua)"
                                 + " WHERE id = :id",
                         parametros(cambio).addValue("id", id));
@@ -141,6 +146,21 @@ public class EjemplaresService {
             throw noExiste();
         }
         return buscar(id);
+    }
+
+    public List<Intervencion> historialActividades(long id, Usuario usuario) {
+        AccesoCoberturas.consultar(usuario);
+        buscar(id);
+        return jdbc.query(
+                """
+                SELECT a.id actividad_id,a.fecha_hora_actividad,coalesce(a.tipo_actividad_nombre,t.nombre) tipo_actividad,
+                    a.observaciones,a.pendiente_vinculacion
+                FROM mod04_actividad a
+                JOIN mod04_tipo_actividad t ON t.id=a.tipo_actividad_id
+                WHERE a.ejemplar_id=:id ORDER BY a.fecha_hora_actividad DESC,a.id DESC
+                """,
+                Map.of("id", id),
+                new DataClassRowMapper<>(Intervencion.class));
     }
 
     private Ejemplar buscar(long id) {
@@ -197,7 +217,8 @@ public class EjemplaresService {
                 .addValue("ubicacion", entrada.ubicacion())
                 .addValue("latitud", entrada.latitud())
                 .addValue("longitud", entrada.longitud())
-                .addValue("cantidad", entrada.cantidad() == null ? 1 : entrada.cantidad());
+                .addValue("cantidad", entrada.cantidad() == null ? 1 : entrada.cantidad())
+                .addValue("altura", entrada.alturaTotalM());
     }
 
     private static MapSqlParameterSource parametros(CambioEjemplar cambio) {
@@ -208,7 +229,8 @@ public class EjemplaresService {
                 .addValue("ubicacion", cambio.ubicacion())
                 .addValue("latitud", cambio.latitud())
                 .addValue("longitud", cambio.longitud())
-                .addValue("cantidad", cambio.cantidad());
+                .addValue("cantidad", cambio.cantidad())
+                .addValue("altura", cambio.alturaTotalM());
     }
 
     private ErrorCoberturas noExiste() {
@@ -231,7 +253,15 @@ public class EjemplaresService {
             BigDecimal longitud,
             int cantidad,
             Long areaVerdeId,
+            BigDecimal alturaTotalM,
             boolean advertenciaPlacaRepetida) {}
+
+    public record Intervencion(
+            long actividadId,
+            java.time.OffsetDateTime fechaHoraActividad,
+            String tipoActividad,
+            String observaciones,
+            boolean pendienteVinculacion) {}
 
     public record NuevoEjemplar(
             String codigoPlacaAntigua,
@@ -240,7 +270,8 @@ public class EjemplaresService {
             String ubicacion,
             BigDecimal latitud,
             BigDecimal longitud,
-            Integer cantidad) {}
+            Integer cantidad,
+            BigDecimal alturaTotalM) {}
 
     public record CambioEjemplar(
             String codigoPlacaAntigua,
@@ -249,5 +280,6 @@ public class EjemplaresService {
             String ubicacion,
             BigDecimal latitud,
             BigDecimal longitud,
-            Integer cantidad) {}
+            Integer cantidad,
+            BigDecimal alturaTotalM) {}
 }

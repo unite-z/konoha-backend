@@ -59,6 +59,8 @@ public class Mod04Repository {
                     "cuadrilla",
                     "asignacion_cuadrilla",
                     "tipo_actividad",
+                    "clase_actividad",
+                    "material_actividad",
                     "encargo",
                     "parte_diario",
                     "actividad",

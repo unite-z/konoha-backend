@@ -93,7 +93,9 @@ class RequerimientoCorte {
                                 null,
                                 null,
                                 null,
-                                alcances),
+                                alcances,
+                                null,
+                                null),
                         new Usuario(
                                 usuario.id(),
                                 "",
