@@ -341,8 +341,10 @@ public class OperacionCampoService {
                 repo.get("cuadrilla", number(part, "cuadrilla_id"), false).get("nombre"));
         result.put(
                 "tipo_actividad_nombre",
-                repo.get("tipo_actividad", number(result, "tipo_actividad_id"), false)
-                        .get("nombre"));
+                result.get("tipo_actividad_nombre") == null
+                        ? repo.get("tipo_actividad", number(result, "tipo_actividad_id"), false)
+                                .get("nombre")
+                        : result.get("tipo_actividad_nombre"));
         result.put(
                 "area_verde_nombre",
                 repo.get("areaverde", number(result, "area_verde_id"), false).get("nombre"));

@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import pe.edu.pucp.areasverdes.mod04.servicios.CatalogoActividadesService;
 import pe.edu.pucp.areasverdes.mod04.servicios.ConsultasCampoService;
 import pe.edu.pucp.areasverdes.mod04.servicios.IdempotenciaCampo;
 import pe.edu.pucp.areasverdes.mod04.servicios.OperacionCampoService;
@@ -52,14 +53,17 @@ public class OperacionCampoController {
     final OperacionCampoService service;
     final ConsultasCampoService consultas;
     final IdempotenciaCampo idempotencia;
+    final CatalogoActividadesService catalogoActividades;
 
     public OperacionCampoController(
             OperacionCampoService service,
             ConsultasCampoService consultas,
-            IdempotenciaCampo idempotencia) {
+            IdempotenciaCampo idempotencia,
+            CatalogoActividadesService catalogoActividades) {
         this.service = service;
         this.consultas = consultas;
         this.idempotencia = idempotencia;
+        this.catalogoActividades = catalogoActividades;
     }
 
     @GetMapping({"/me", "/me/"})
@@ -100,6 +104,24 @@ public class OperacionCampoController {
             HttpServletRequest request,
             @AuthenticationPrincipal Usuario user) {
         return consultas.listar(catalogo, params, request.getRequestURL().toString(), user);
+    }
+
+    @PostMapping({"/catalogos/tipos-actividad", "/catalogos/tipos-actividad/"})
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "RF-ACT-002: crear tipo de actividad")
+    public Map<String, Object> crearTipo(
+            @Valid @RequestBody Entradas.TipoActividad body,
+            @AuthenticationPrincipal Usuario user) {
+        return catalogoActividades.guardar(null, body, user);
+    }
+
+    @PutMapping({"/catalogos/tipos-actividad/{id}", "/catalogos/tipos-actividad/{id}/"})
+    @Operation(summary = "RF-ACT-002: actualizar o desactivar tipo de actividad")
+    public Map<String, Object> actualizarTipo(
+            @PathVariable long id,
+            @Valid @RequestBody Entradas.TipoActividad body,
+            @AuthenticationPrincipal Usuario user) {
+        return catalogoActividades.guardar(id, body, user);
     }
 
     @PostMapping({"/personal", "/personal/"})
