@@ -699,6 +699,14 @@ class Mod05IntegrationTest {
                             + " mod05_usuario,mod05_proveedor,mod05_tiposervicio,mod05_areaverde,mod05_unidadmedida,mod05_unidadinstitucional,mod05_archivo"
                             + " RESTART IDENTITY CASCADE");
         seed.cargar(mocks, PASSWORD);
+        Map<String, Object> ejemplarTrasPrecarga =
+                repo.jdbc()
+                        .getJdbcTemplate()
+                        .queryForMap(
+                                "INSERT INTO mod02_ejemplar (area_verde_id) VALUES (NULL)"
+                                        + " RETURNING id, codigo");
+        assertTrue(((Number) ejemplarTrasPrecarga.get("id")).longValue() > 3);
+        assertEquals("EJ-00734", ejemplarTrasPrecarga.get("codigo"));
         long providers = count("proveedor");
         String hash = repo.usuario("mod05_jefe").orElseThrow().passwordHash();
         seed.cargar(mocks, "otra-clave-no-sobrescribe");

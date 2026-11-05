@@ -50,6 +50,7 @@ public class EjemplaresService {
                 CONSULTA
                         + " WHERE (:q = '' OR e.codigo ILIKE '%' || :q || '%' OR"
                         + " e.referencia_catastro ILIKE '%' || :q || '%' OR"
+                        + " e.codigo_placa_antigua ILIKE '%' || :q || '%' OR"
                         + " s.nombre_comun ILIKE '%' || :q || '%' OR"
                         + " s.nombre_cientifico ILIKE '%' || :q || '%')"
                         + " AND (:referencia = '' OR e.referencia_catastro = :referencia)"
