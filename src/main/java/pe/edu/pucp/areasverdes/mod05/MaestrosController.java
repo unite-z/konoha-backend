@@ -46,6 +46,22 @@ public class MaestrosController {
         return service.proveedor(user, id);
     }
 
+    @PutMapping({"/proveedores/{id}/", "/proveedores/{id}"})
+    public Map<String, Object> editarProveedor(
+            @AuthenticationPrincipal Usuario user,
+            @PathVariable long id,
+            @Valid @RequestBody EntradasMaestros.Proveedor body) {
+        return service.editarProveedor(id, body, user);
+    }
+
+    @PatchMapping({"/proveedores/{id}/estado/", "/proveedores/{id}/estado"})
+    public Map<String, Object> estadoProveedor(
+            @AuthenticationPrincipal Usuario user,
+            @PathVariable long id,
+            @Valid @RequestBody EntradasMaestros.EstadoProveedor body) {
+        return service.cambiarEstadoProveedor(id, body.activo(), user);
+    }
+
     @GetMapping({"/contratos/", "/contratos"})
     public ConsultasService.Pagina contratos(
             @AuthenticationPrincipal Usuario user,
@@ -66,5 +82,51 @@ public class MaestrosController {
     public Map<String, Object> contrato(
             @AuthenticationPrincipal Usuario user, @PathVariable long id) {
         return service.contrato(user, id);
+    }
+
+    @PutMapping({"/contratos/{id}/", "/contratos/{id}"})
+    public Map<String, Object> editarContrato(
+            @AuthenticationPrincipal Usuario user,
+            @PathVariable long id,
+            @Valid @RequestBody EntradasMaestros.Contrato body) {
+        return service.editarContrato(id, body, user);
+    }
+
+    @GetMapping({"/productos-agronomicos/", "/productos-agronomicos"})
+    public ConsultasService.Pagina productosAgronomicos(
+            @AuthenticationPrincipal Usuario user,
+            @RequestParam Map<String, String> params,
+            HttpServletRequest request) {
+        return service.productosAgronomicos(user, params, request.getRequestURL().toString());
+    }
+
+    @PostMapping({"/productos-agronomicos/", "/productos-agronomicos"})
+    @ResponseStatus(HttpStatus.CREATED)
+    public Map<String, Object> crearProductoAgronomico(
+            @AuthenticationPrincipal Usuario user,
+            @Valid @RequestBody EntradasMaestros.ProductoAgronomico body) {
+        return service.crearProductoAgronomico(body, user);
+    }
+
+    @GetMapping({"/productos-agronomicos/{id}/", "/productos-agronomicos/{id}"})
+    public Map<String, Object> productoAgronomico(
+            @AuthenticationPrincipal Usuario user, @PathVariable long id) {
+        return service.productoAgronomico(user, id);
+    }
+
+    @PutMapping({"/productos-agronomicos/{id}/", "/productos-agronomicos/{id}"})
+    public Map<String, Object> editarProductoAgronomico(
+            @AuthenticationPrincipal Usuario user,
+            @PathVariable long id,
+            @Valid @RequestBody EntradasMaestros.ProductoAgronomico body) {
+        return service.editarProductoAgronomico(id, body, user);
+    }
+
+    @PatchMapping({"/productos-agronomicos/{id}/estado/", "/productos-agronomicos/{id}/estado"})
+    public Map<String, Object> estadoProductoAgronomico(
+            @AuthenticationPrincipal Usuario user,
+            @PathVariable long id,
+            @Valid @RequestBody EntradasMaestros.EstadoProductoAgronomico body) {
+        return service.cambiarEstadoProductoAgronomico(id, body.activo(), user);
     }
 }

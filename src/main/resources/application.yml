@@ -53,6 +53,10 @@ core:
     dias-sin-uso: ${CORE_DIAS_SIN_USO:60}
     # false solo en local sin HTTPS.
     cookie-segura: ${CORE_COOKIE_SEGURA:true}
+mod02:
+  poda:
+    # Promedio diario a partir del cual se destaca una campaña (HU-MOD02-023). Pendiente de confirmar.
+    umbral-rendimiento: ${MOD02_UMBRAL_RENDIMIENTO:18}
 mod05:
   archivos: ${MOD05_ARCHIVOS_DIR:./private-media}
   max-archivo-bytes: ${MOD05_MAX_ARCHIVO_BYTES:20971520}

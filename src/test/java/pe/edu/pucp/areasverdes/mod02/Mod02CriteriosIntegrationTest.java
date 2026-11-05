@@ -88,6 +88,14 @@ class Mod02CriteriosIntegrationTest {
                                                 + "\",\"forma_biologica\":\"Árbol\"}"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.codigo").value("especie-duplicada"));
+        http.perform(
+                        post(API + "/especies")
+                                .with(httpBasic("jefe", CLAVE))
+                                .contentType("application/json")
+                                .content(
+                                        "{\"nombre_comun\":\"Sin científico\","
+                                                + "\"forma_biologica\":\"Árbol\"}"))
+                .andExpect(status().isBadRequest());
 
         String ejemplar =
                 "{\"codigo_placa_antigua\":\""
@@ -129,6 +137,20 @@ class Mod02CriteriosIntegrationTest {
                             jsonPath("$[0].codigo_placa_antigua")
                                     .value(org.hamcrest.Matchers.nullValue()));
         }
+        http.perform(
+                        get(API + "/ejemplares")
+                                .queryParam("q", placaAntigua)
+                                .with(httpBasic("jefe", CLAVE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].codigo_placa_antigua").isNotEmpty())
+                .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(2)));
+        http.perform(
+                        get(API + "/ejemplares")
+                                .queryParam("q", "sin-coincidencia-" + UUID.randomUUID())
+                                .with(httpBasic("jefe", CLAVE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(0)));
+        http.perform(get(API + "/ejemplares")).andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -157,6 +179,35 @@ class Mod02CriteriosIntegrationTest {
                 .andExpect(jsonPath("$.results[0].id").value(areaId))
                 .andExpect(jsonPath("$.results[0].tipo_uso_nombre").value("Administrativo"));
         assertThat(JsonPath.<Object>read(area, "$.sector_id")).isNull();
+    }
+
+    @Test
+    void areaSinSectorSigueConsultableYSePuedeCrearSectorDeAtencionADemanda() throws Exception {
+        String sectorDemanda =
+                http.perform(
+                                post(API + "/sectores")
+                                        .with(httpBasic("jefe", CLAVE))
+                                        .contentType("application/json")
+                                        .content(
+                                                "{\"nombre\":\"Atención a demanda\","
+                                                        + "\"atencion_a_demanda\":true}"))
+                        .andExpect(status().isCreated())
+                        .andExpect(jsonPath("$.atencion_demanda").value(true))
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+        assertThat(idJson(sectorDemanda, "$.id")).isPositive();
+
+        long areaId = idJson(crearArea("Bosque húmedo", null, null), "$.id");
+        http.perform(
+                        get(API + "/areas-verdes")
+                                .queryParam("q", "Bosque húmedo")
+                                .with(httpBasic("jefe", CLAVE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[0].id").value(areaId))
+                .andExpect(
+                        jsonPath("$.results[0].sector_id")
+                                .value(org.hamcrest.Matchers.nullValue()));
     }
 
     @Test
@@ -210,10 +261,11 @@ class Mod02CriteriosIntegrationTest {
     }
 
     @Test
-    void reasignarAreaYSectorConservaAmbosHistoriales() throws Exception {
+    void incorporarYReasignarAreasConservaHistorialYSuperficie() throws Exception {
         long sectorUno = crearSector("Sector Norte");
         long sectorDos = crearSector("Sector Sur");
         long areaId = idJson(crearArea("Jardín Central", null, sectorUno), "$.id");
+        crearArea("Jardín Anexo", null, sectorUno);
         String sectores =
                 http.perform(
                                 get(API + "/sectores")
@@ -231,7 +283,7 @@ class Mod02CriteriosIntegrationTest {
                 .satisfies(
                         superficie ->
                                 assertThat(new BigDecimal(superficie.toString()))
-                                        .isEqualByComparingTo("85.50"));
+                                        .isEqualByComparingTo("171.00"));
 
         http.perform(
                         patch(API + "/areas-verdes/" + areaId + "/sector")
@@ -248,20 +300,41 @@ class Mod02CriteriosIntegrationTest {
                 .andExpect(jsonPath("$[0].fecha_fin").value(org.hamcrest.Matchers.nullValue()))
                 .andExpect(jsonPath("$[1].sector_id").value(sectorUno))
                 .andExpect(jsonPath("$[1].fecha_fin").isNotEmpty());
+    }
 
+    @Test
+    void reasignarYQuitarCapatazConservaHistorialYRespetaPermisos() throws Exception {
+        long sector = crearSector("Sector capataces");
         long capatazUno = idCore("capataz-a");
         long capatazDos = idCore("capataz-b");
-        asignarCapataz(sectorDos, capatazUno);
-        asignarCapataz(sectorDos, capatazDos);
+        http.perform(get(API + "/capataces").with(httpBasic("jefe", CLAVE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", org.hamcrest.Matchers.hasSize(2)));
+        asignarCapataz(sector, capatazUno);
+        asignarCapataz(sector, capatazDos);
+        http.perform(
+                        patch(API + "/sectores/" + sector + "/capataz")
+                                .with(httpBasic("ingeniero", CLAVE))
+                                .contentType("application/json")
+                                .content("{\"capataz_id\":null}"))
+                .andExpect(status().isForbidden());
+        http.perform(
+                        patch(API + "/sectores/" + sector + "/capataz")
+                                .with(httpBasic("jefe", CLAVE))
+                                .contentType("application/json")
+                                .content("{\"capataz_id\":null}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.capataz_nombre").value(org.hamcrest.Matchers.nullValue()));
         String historialCapataz =
                 http.perform(
-                                get(API + "/sectores/" + sectorDos + "/historial-capataz")
+                                get(API + "/sectores/" + sector + "/historial-capataz")
                                         .with(httpBasic("jefe", CLAVE)))
                         .andExpect(status().isOk())
                         .andReturn()
                         .getResponse()
                         .getContentAsString();
         List<Map<String, Object>> asignaciones = JsonPath.read(historialCapataz, "$[*]");
+        assertThat(asignaciones).hasSize(2);
         assertThat(asignaciones)
                 .extracting(asignacion -> ((Number) asignacion.get("capataz_id")).longValue())
                 .containsExactlyInAnyOrder(capatazUno, capatazDos);
@@ -270,13 +343,20 @@ class Mod02CriteriosIntegrationTest {
                         asignacion ->
                                 ((Number) asignacion.get("capataz_id")).longValue() == capatazDos)
                 .singleElement()
-                .satisfies(asignacion -> assertThat(asignacion.get("fecha_fin")).isNull());
+                .satisfies(asignacion -> assertThat(asignacion.get("fecha_fin")).isNotNull());
         assertThat(asignaciones)
                 .filteredOn(
                         asignacion ->
                                 ((Number) asignacion.get("capataz_id")).longValue() == capatazUno)
                 .singleElement()
                 .satisfies(asignacion -> assertThat(asignacion.get("fecha_fin")).isNotNull());
+        Integer eventosAuditoria =
+                jdbc.queryForObject(
+                        "SELECT count(*) FROM core_registro_auditoria"
+                                + " WHERE entidad = 'mod02_sector' AND registro_id = :id",
+                        Map.of("id", sector),
+                        Integer.class);
+        assertThat(eventosAuditoria).isGreaterThanOrEqualTo(4);
     }
 
     @Test

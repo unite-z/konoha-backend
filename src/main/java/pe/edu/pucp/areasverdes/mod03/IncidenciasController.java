@@ -41,6 +41,7 @@ public class IncidenciasController {
     private final ClasificacionIncidencias clasificacion;
     private final CierreIncidencias cierre;
     private final PlazosIncidencias plazos;
+    private final DerivacionTercerizada derivacion;
     private final ObjectMapper json;
     private final Validator validador;
 
@@ -49,12 +50,14 @@ public class IncidenciasController {
             ClasificacionIncidencias clasificacion,
             CierreIncidencias cierre,
             PlazosIncidencias plazos,
+            DerivacionTercerizada derivacion,
             ObjectMapper json,
             Validator validador) {
         this.incidencias = incidencias;
         this.clasificacion = clasificacion;
         this.cierre = cierre;
         this.plazos = plazos;
+        this.derivacion = derivacion;
         this.json = json;
         this.validador = validador;
     }
@@ -158,6 +161,23 @@ public class IncidenciasController {
             @PathVariable long id,
             @Valid @RequestBody ClasificacionIncidencias.SolicitudInspeccion cuerpo) {
         clasificacion.solicitarInspeccion(id, cuerpo, usuario);
+    }
+
+    @Operation(summary = "Proveedores activos con sus contratos para derivar (jefe)")
+    @GetMapping({"/{id:\\d+}/proveedores", "/{id:\\d+}/proveedores/"})
+    public List<DerivacionTercerizada.Proveedor> proveedores(
+            UsuarioPlanificacion usuario, @PathVariable long id) {
+        return derivacion.proveedores(usuario);
+    }
+
+    @Operation(summary = "Deriva una incidencia clasificada a un proveedor de MOD-05 (jefe)")
+    @PostMapping({"/{id:\\d+}/requerimiento", "/{id:\\d+}/requerimiento/"})
+    public Detalle requerimiento(
+            UsuarioPlanificacion usuario,
+            @PathVariable long id,
+            @Valid @RequestBody DerivacionTercerizada.NuevoRequerimiento cuerpo) {
+        derivacion.derivar(id, cuerpo, usuario);
+        return incidencias.ficha(id);
     }
 
     @Operation(summary = "Cierra una incidencia atendida con su evidencia (jefe)")
