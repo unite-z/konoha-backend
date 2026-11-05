@@ -624,6 +624,64 @@ class Mod04IntegrationTest {
     }
 
     @Test
+    void podaMenorVinculaEjemplarValidaAlturaYPermisos() throws Exception {
+        long equipo = cuadrilla(c1, o1);
+        long parte =
+                postJson("/partes/", values("cuadrilla_id", equipo, "fecha", HOY), "capataz1", 201)
+                        .path("id")
+                        .asLong();
+        long poda =
+                repo.insert(
+                        "tipo_actividad",
+                        values("nombre", "Poda menor", "activo", true, "clase_id", 4));
+        long bajo =
+                repo.jdbc()
+                        .queryForObject(
+                                "INSERT INTO mod02_ejemplar(codigo,area_verde_id,altura_total_m)"
+                                        + " VALUES ('EJ-BAJO',:area,3.25) RETURNING id",
+                                Map.of("area", area),
+                                Long.class);
+        long alto =
+                repo.jdbc()
+                        .queryForObject(
+                                "INSERT INTO mod02_ejemplar(codigo,area_verde_id,altura_total_m)"
+                                        + " VALUES ('EJ-ALTO',:area,5.00) RETURNING id",
+                                Map.of("area", area),
+                                Long.class);
+        var entrada =
+                values(
+                        "parte_id",
+                        parte,
+                        "tipo_actividad_id",
+                        poda,
+                        "area_verde_id",
+                        area,
+                        "fecha_hora_actividad",
+                        "2026-10-22T08:00:00-05:00",
+                        "ejemplar_id",
+                        bajo);
+
+        long actividad = postJson("/actividades/", entrada, "capataz1", 201).path("id").asLong();
+        http.perform(get(BASE + "/actividades/" + actividad).with(httpBasic("capataz1", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ejemplar_codigo").value("EJ-BAJO"))
+                .andExpect(jsonPath("$.ejemplar_altura_m").value(3.25));
+        http.perform(
+                        get("/api/v1/inventario/ejemplares/" + bajo + "/historial-actividades")
+                                .with(httpBasic("capataz1", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].actividad_id").value(actividad))
+                .andExpect(jsonPath("$[0].tipo_actividad").value("Poda menor"));
+
+        entrada.put("ejemplar_id", alto);
+        postJson("/actividades/", entrada, "capataz1", 409);
+        entrada.put("ejemplar_id", null);
+        entrada.put("pendiente_vinculacion", true);
+        postJson("/actividades/", entrada, "capataz1", 201);
+        postJson("/actividades/", entrada, "capataz2", 403);
+    }
+
+    @Test
     void materialYTrasladoSeAsocianALaActividadConPermisos() throws Exception {
         long equipo = cuadrilla(c1, o1);
         long actividad = actividad(equipo);
