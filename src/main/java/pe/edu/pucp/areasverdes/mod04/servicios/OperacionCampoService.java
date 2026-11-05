@@ -3,6 +3,7 @@ package pe.edu.pucp.areasverdes.mod04.servicios;
 import static pe.edu.pucp.areasverdes.mod04.datos.Mod04Repository.number;
 import static pe.edu.pucp.areasverdes.mod04.datos.Mod04Repository.values;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -349,6 +350,18 @@ public class OperacionCampoService {
                 "area_verde_nombre",
                 repo.get("areaverde", number(result, "area_verde_id"), false).get("nombre"));
         result.put("participantes", repo.participantes(id));
+        Object ejemplarId = result.get("ejemplar_id");
+        if (ejemplarId != null) {
+            var ejemplar =
+                    repo.one(
+                            "SELECT codigo,altura_total_m FROM mod02_ejemplar WHERE id=:id",
+                            Map.of("id", ejemplarId));
+            result.put("ejemplar_codigo", ejemplar.get("codigo"));
+            result.put("ejemplar_altura_m", ejemplar.get("altura_total_m"));
+        } else {
+            result.put("ejemplar_codigo", null);
+            result.put("ejemplar_altura_m", null);
+        }
         Object verificador = result.get("verificado_por_usuario_id");
         result.put(
                 "verificado_por_nombre",
@@ -469,6 +482,15 @@ public class OperacionCampoService {
             throw ApiError.invalid("La solicitud no puede ser posterior a la actividad");
         if (body.incidenciaId() != null && body.encargoId() != null)
             throw ApiError.invalid("Selecciona una incidencia o un encargo de origen");
+        boolean podaMenor =
+                "Poda menor".equalsIgnoreCase(String.valueOf(tipoActividad.get("nombre")).strip());
+        boolean pendienteVinculacion = Boolean.TRUE.equals(body.pendienteVinculacion());
+        if (podaMenor && (body.ejemplarId() == null) == !pendienteVinculacion)
+            throw ApiError.invalid(
+                    "La poda menor debe indicar un ejemplar o quedar pendiente de vinculación");
+        if (!podaMenor && (body.ejemplarId() != null || pendienteVinculacion))
+            throw ApiError.invalid("La referencia de ejemplar solo corresponde a una poda menor");
+        if (body.ejemplarId() != null) validarEjemplarPoda(body.ejemplarId(), body.areaVerdeId());
         boolean hayCantidad = body.cantidadSolicitada() != null || body.cantidadEjecutada() != null;
         if (hayCantidad != (body.unidadMedidaId() != null))
             throw ApiError.invalid("Las cantidades requieren una unidad de medida");
@@ -521,6 +543,10 @@ public class OperacionCampoService {
                                 body.unidadMedidaId(),
                                 "tiempo_minutos",
                                 body.tiempoMinutos(),
+                                "ejemplar_id",
+                                body.ejemplarId(),
+                                "pendiente_vinculacion",
+                                pendienteVinculacion,
                                 "fecha_hora_actividad",
                                 body.fechaHoraActividad(),
                                 "encargo_id",
@@ -532,5 +558,21 @@ public class OperacionCampoService {
         var result = repo.get("actividad", id, false);
         repo.audit("Actividad", id, "Crear", user.id(), Map.of(), result);
         return actividad(id, user);
+    }
+
+    private void validarEjemplarPoda(long ejemplarId, long areaVerdeId) {
+        var ejemplar =
+                repo.one(
+                        "SELECT area_verde_id,altura_total_m FROM mod02_ejemplar WHERE id=:id",
+                        Map.of("id", ejemplarId));
+        if (number(ejemplar, "area_verde_id") != areaVerdeId)
+            throw ApiError.invalid("El ejemplar no pertenece al espacio verde seleccionado");
+        Object altura = ejemplar.get("altura_total_m");
+        if (altura == null)
+            throw ApiError.invalid(
+                    "El ejemplar no tiene altura registrada; actualiza el catastro antes de podar");
+        if (((BigDecimal) altura).compareTo(BigDecimal.valueOf(5)) >= 0)
+            throw ApiError.conflict(
+                    "Los ejemplares de 5 metros o más deben reportarse como incidencia");
     }
 }

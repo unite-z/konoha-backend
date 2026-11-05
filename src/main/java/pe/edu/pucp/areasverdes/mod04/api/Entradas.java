@@ -61,7 +61,9 @@ public final class Entradas {
             @PositiveOrZero @DecimalMax("9999999999.99") BigDecimal cantidadSolicitada,
             @PositiveOrZero @DecimalMax("9999999999.99") BigDecimal cantidadEjecutada,
             @Positive Long unidadMedidaId,
-            @Positive @Max(1440) Integer tiempoMinutos) {}
+            @Positive @Max(1440) Integer tiempoMinutos,
+            @Positive Long ejemplarId,
+            Boolean pendienteVinculacion) {}
 
     public record TipoActividad(
             @NotBlank @Size(max = 150) String nombre,
