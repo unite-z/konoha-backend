@@ -172,6 +172,23 @@ class Mod04IntegrationTest {
         return json.readTree(result.getResponse().getContentAsByteArray());
     }
 
+    Cookie sesionCore(String usuario) throws Exception {
+        var result =
+                http.perform(
+                                post("/api/v1/core/auth/login/")
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(
+                                                json.writeValueAsBytes(
+                                                        values(
+                                                                "identificador",
+                                                                usuario,
+                                                                "contrasena",
+                                                                PASSWORD))))
+                        .andExpect(status().isOk())
+                        .andReturn();
+        return result.getResponse().getCookie("av_sesion");
+    }
+
     long cuadrilla(long capataz, Long... people) throws Exception {
         return postJson("/cuadrillas/", squad(capataz, people), "jefe", 201).path("id").asLong();
     }
@@ -462,6 +479,15 @@ class Mod04IntegrationTest {
     }
 
     @Test
+    void unidadesDeMaterialIncluyenLaUnidadRamaDeAv309() throws Exception {
+        http.perform(
+                        get(BASE + "/catalogos/unidades-medida/")
+                                .with(httpBasic("capataz1", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[?(@.simbolo == 'rama')].nombre").value("Rama"));
+    }
+
+    @Test
     void jefeVerificaActividadYSeConservanAutorFechaYAuditoria() throws Exception {
         long equipo = cuadrilla(c1, o1), actividad = actividad(equipo);
         var verificacion = values("observaciones", "Ejecución conforme; retirar ramas del sendero");
@@ -488,6 +514,92 @@ class Mod04IntegrationTest {
                                         + " registro_id=:id AND usuario_id=:u",
                                 Map.of("id", actividad, "u", jefe),
                                 Integer.class));
+    }
+
+    @Test
+    void historialActividadCombinaMayusculasSinMezclarEntidadesRelacionadas() throws Exception {
+        long equipo = cuadrilla(c1, o1), actividad = actividad(equipo);
+        String primera = "Verificada en campo";
+        String actualizada = "Verificada; retirar ramas del sendero";
+
+        // Conserva una entrada histórica con entidad en minúsculas y dos eventos relacionados.
+        repo.jdbc()
+                .update(
+                        """
+                        INSERT INTO core_registro_auditoria (entidad, registro_id, accion, usuario_id,
+                            fecha_hora, valores_anteriores, valores_nuevos)
+                        VALUES ('actividad', :id, 'Modificacion', :usuario, now() - interval '1 day',
+                            '{}', '{"observaciones":"Evento histórico"}')
+                        """,
+                        Map.of("id", actividad, "usuario", jefe));
+        for (String entidadRelacionada : List.of("ParticipacionActividad", "MaterialActividad")) {
+            repo.jdbc()
+                    .update(
+                            """
+                            INSERT INTO core_registro_auditoria (entidad, registro_id, accion, usuario_id,
+                                valores_anteriores, valores_nuevos)
+                            VALUES (:entidad, :id, 'Modificacion', :usuario, '{}', '{}')
+                            """,
+                            Map.of(
+                                    "entidad", entidadRelacionada,
+                                    "id", actividad,
+                                    "usuario", jefe));
+        }
+
+        putJson(
+                "/actividades/" + actividad + "/verificacion/",
+                values("observaciones", primera),
+                "jefe",
+                200);
+        putJson(
+                "/actividades/" + actividad + "/verificacion/",
+                values("observaciones", actualizada),
+                "jefe",
+                200);
+
+        var respuestaHistorial =
+                http.perform(
+                                get("/api/v1/core/historial/")
+                                        .param("entidad", "ACTIVIDAD")
+                                        .param("registro_id", String.valueOf(actividad))
+                                        .cookie(sesionCore("jefe")))
+                        .andExpect(status().isOk())
+                        .andReturn();
+        JsonNode eventos = json.readTree(respuestaHistorial.getResponse().getContentAsByteArray());
+        assertEquals(4, eventos.size());
+        boolean verificacionInicial = false;
+        boolean verificacionActualizada = false;
+        boolean altaCapataz = false;
+        boolean eventoHistorico = false;
+        for (JsonNode evento : eventos) {
+            JsonNode nuevos = evento.path("valores_nuevos");
+            if (primera.equals(nuevos.path("verificacion_observaciones").asText())) {
+                verificacionInicial = true;
+                assertEquals("Modificacion", evento.path("accion").asText());
+                assertEquals("jefe", evento.path("usuario").asText());
+                assertTrue(evento.hasNonNull("fecha_hora"));
+            }
+            if (actualizada.equals(nuevos.path("verificacion_observaciones").asText())) {
+                verificacionActualizada = true;
+                assertEquals(
+                        primera,
+                        evento.path("valores_anteriores")
+                                .path("verificacion_observaciones")
+                                .asText());
+                assertEquals("Modificacion", evento.path("accion").asText());
+                assertEquals("jefe", evento.path("usuario").asText());
+            }
+            if ("Alta".equals(evento.path("accion").asText())) {
+                altaCapataz = "capataz1".equals(evento.path("usuario").asText());
+            }
+            if ("Evento histórico".equals(nuevos.path("observaciones").asText())) {
+                eventoHistorico = true;
+            }
+        }
+        assertTrue(verificacionInicial);
+        assertTrue(verificacionActualizada);
+        assertTrue(altaCapataz);
+        assertTrue(eventoHistorico);
     }
 
     @Test
@@ -767,23 +879,6 @@ class Mod04IntegrationTest {
                         "SELECT credencial_hash FROM core_usuario WHERE nombre_usuario=:nombre",
                         Map.of("nombre", "mod04_jefe"),
                         String.class);
-    }
-
-    Cookie sesionCore(String nombre) throws Exception {
-        return http.perform(
-                        post("/api/v1/core/auth/login/")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(
-                                        json.writeValueAsBytes(
-                                                Map.of(
-                                                        "identificador",
-                                                        nombre,
-                                                        "contrasena",
-                                                        PASSWORD))))
-                .andExpect(status().isOk())
-                .andReturn()
-                .getResponse()
-                .getCookie("av_sesion");
     }
 
     @Test
