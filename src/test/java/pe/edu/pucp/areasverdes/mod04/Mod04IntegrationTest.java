@@ -456,9 +456,15 @@ class Mod04IntegrationTest {
                                 .with(httpBasic("jefe", PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results[0].cuadrilla_id").value(squad));
-        http.perform(get(BASE + "/actividades/").with(httpBasic("jefe", PASSWORD)))
+        String consulta = BASE + "/actividades/?cuadrilla_id=" + squad;
+        http.perform(get(consulta).with(httpBasic("jefe", PASSWORD)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.results[0].area_verde_nombre").value("Jardín A"));
+                .andExpect(jsonPath("$.count").value(1))
+                .andExpect(jsonPath("$.results[0].area_verde_nombre").value("Jardín A"))
+                .andExpect(jsonPath("$.results[0].fecha_hora_registro").isNotEmpty());
+        http.perform(get(consulta).with(httpBasic("capataz2", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(0));
     }
 
     @Test

@@ -83,7 +83,11 @@ public class OperacionCampoController {
         "/{recurso:personal|cuadrillas|encargos|partes|actividades}",
         "/{recurso:personal|cuadrillas|encargos|partes|actividades}/"
     })
-    @Operation(summary = "Listar personal, cuadrillas, encargos, partes o actividades")
+    @Operation(
+            summary = "Listar personal, cuadrillas, encargos, partes o actividades",
+            description =
+                    "El listado de actividades admite cuadrilla_id y fecha del parte. Devuelve"
+                        + " fecha_hora_registro desde la auditoría de alta, o null si no consta.")
     public ConsultasCampoService.Pagina listar(
             @PathVariable String recurso,
             @RequestParam Map<String, String> params,

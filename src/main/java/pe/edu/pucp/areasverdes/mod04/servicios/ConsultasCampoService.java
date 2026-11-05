@@ -54,7 +54,11 @@ public class ConsultasCampoService {
                     case "actividades" ->
                             """
                             SELECT a.*,p.cuadrilla_id,p.capataz_id,p.fecha,p.estado,t.nombre texto,
-                                t.nombre tipo_actividad_nombre,av.nombre area_verde_nombre,c.nombre cuadrilla_nombre FROM mod04_actividad a
+                                t.nombre tipo_actividad_nombre,av.nombre area_verde_nombre,c.nombre cuadrilla_nombre,
+                                (SELECT min(r.fecha_hora) FROM core_registro_auditoria r
+                                 WHERE r.entidad='Actividad' AND r.registro_id=a.id AND r.accion='Alta'
+                                   AND r.usuario_id=a.usuario_creacion_id) fecha_hora_registro
+                            FROM mod04_actividad a
                             JOIN mod04_parte_diario p ON p.id=a.parte_id JOIN mod04_tipo_actividad t ON t.id=a.tipo_actividad_id
                             JOIN mod05_areaverde av ON av.id=a.area_verde_id JOIN mod04_cuadrilla c ON c.id=p.cuadrilla_id
                             """;
