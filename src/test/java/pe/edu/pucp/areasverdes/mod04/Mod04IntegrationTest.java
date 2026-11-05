@@ -565,8 +565,7 @@ class Mod04IntegrationTest {
                                         .cookie(sesionCore("jefe")))
                         .andExpect(status().isOk())
                         .andReturn();
-        JsonNode eventos =
-                json.readTree(respuestaHistorial.getResponse().getContentAsByteArray());
+        JsonNode eventos = json.readTree(respuestaHistorial.getResponse().getContentAsByteArray());
         assertEquals(4, eventos.size());
         boolean verificacionInicial = false;
         boolean verificacionActualizada = false;
@@ -601,7 +600,6 @@ class Mod04IntegrationTest {
         assertTrue(verificacionActualizada);
         assertTrue(altaCapataz);
         assertTrue(eventoHistorico);
-
     }
 
     @Test
@@ -881,23 +879,6 @@ class Mod04IntegrationTest {
                         "SELECT credencial_hash FROM core_usuario WHERE nombre_usuario=:nombre",
                         Map.of("nombre", "mod04_jefe"),
                         String.class);
-    }
-
-    Cookie sesionCore(String nombre) throws Exception {
-        return http.perform(
-                        post("/api/v1/core/auth/login/")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(
-                                        json.writeValueAsBytes(
-                                                Map.of(
-                                                        "identificador",
-                                                        nombre,
-                                                        "contrasena",
-                                                        PASSWORD))))
-                .andExpect(status().isOk())
-                .andReturn()
-                .getResponse()
-                .getCookie("av_sesion");
     }
 
     @Test
