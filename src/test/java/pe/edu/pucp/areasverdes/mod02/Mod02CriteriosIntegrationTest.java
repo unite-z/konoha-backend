@@ -414,6 +414,115 @@ class Mod02CriteriosIntegrationTest {
         assertThat(areasVinculadas.stream().map(Number::longValue)).containsExactly(areaId);
     }
 
+    @Test
+    void mapaUsaTipoYSuperficieVigentesDeCadaAreaVinculada() throws Exception {
+        String sufijo = UUID.randomUUID().toString();
+        long tipoUno = crearTipoUso("Tipo mapa uno " + sufijo);
+        long tipoDos = crearTipoUso("Tipo mapa dos " + sufijo);
+        long tipoNuevo = crearTipoUso("Tipo mapa actualizado " + sufijo);
+        long areaUno = idJson(crearArea("Área mapa uno " + sufijo, tipoUno, null), "$.id");
+        long areaDos = idJson(crearArea("Área mapa dos " + sufijo, tipoDos, null), "$.id");
+        UUID poligonoUno = UUID.randomUUID();
+        UUID poligonoDos = UUID.randomUUID();
+
+        http.perform(
+                        put(API + "/mapa/usos-fuente")
+                                .with(httpBasic("jefe", CLAVE))
+                                .contentType("application/json")
+                                .content(
+                                        "{\"uso_fuente\":\"Misma categoría GeoJSON "
+                                                + sufijo
+                                                + "\",\"tipo_uso_id\":"
+                                                + tipoUno
+                                                + "}"))
+                .andExpect(status().isOk());
+        vincularPoligono(poligonoUno, areaUno);
+        vincularPoligono(poligonoDos, areaDos);
+
+        String antes = listarPoligonos();
+        assertThat(poligonoEn(antes, poligonoUno).get("area_verde_tipo_uso_nombre"))
+                .isEqualTo("Tipo mapa uno " + sufijo);
+        assertThat(poligonoEn(antes, poligonoDos).get("area_verde_tipo_uso_nombre"))
+                .isEqualTo("Tipo mapa dos " + sufijo);
+        assertThat(poligonoEn(antes, poligonoUno).get("area_verde_superficie_m2"))
+                .isEqualTo("85.50");
+
+        http.perform(
+                        patch(API + "/areas-verdes/" + areaUno)
+                                .with(httpBasic("jefe", CLAVE))
+                                .contentType("application/json")
+                                .content("{\"tipo_uso_id\":" + tipoNuevo + "}"))
+                .andExpect(status().isOk());
+
+        String despues = listarPoligonos();
+        assertThat(poligonoEn(despues, poligonoUno).get("area_verde_tipo_uso_nombre"))
+                .isEqualTo("Tipo mapa actualizado " + sufijo);
+        assertThat(poligonoEn(despues, poligonoDos).get("area_verde_tipo_uso_nombre"))
+                .isEqualTo("Tipo mapa dos " + sufijo);
+        http.perform(
+                        get(API + "/areas-verdes?tipo_uso_id=" + tipoNuevo)
+                                .with(httpBasic("jefe", CLAVE)))
+                .andExpect(status().isOk())
+                .andExpect(
+                        jsonPath(
+                                "$.results[?(@.id == " + areaUno + ")]",
+                                org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(
+                        jsonPath(
+                                "$.results[?(@.id == " + areaDos + ")]",
+                                org.hamcrest.Matchers.hasSize(0)));
+        http.perform(
+                        get(API + "/areas-verdes?tipo_uso_id=" + tipoDos)
+                                .with(httpBasic("jefe", CLAVE)))
+                .andExpect(status().isOk())
+                .andExpect(
+                        jsonPath(
+                                "$.results[?(@.id == " + areaDos + ")]",
+                                org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(
+                        jsonPath(
+                                "$.results[?(@.id == " + areaUno + ")]",
+                                org.hamcrest.Matchers.hasSize(0)));
+    }
+
+    private long crearTipoUso(String nombre) throws Exception {
+        String respuesta =
+                http.perform(
+                                post(API + "/tipos-uso")
+                                        .with(httpBasic("jefe", CLAVE))
+                                        .contentType("application/json")
+                                        .content("{\"nombre\":\"" + nombre + "\"}"))
+                        .andExpect(status().isCreated())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+        return idJson(respuesta, "$.id");
+    }
+
+    private void vincularPoligono(UUID poligono, long area) throws Exception {
+        http.perform(
+                        put(API + "/mapa/poligonos/" + poligono)
+                                .with(httpBasic("jefe", CLAVE))
+                                .contentType("application/json")
+                                .content("{\"area_verde_id\":" + area + "}"))
+                .andExpect(status().isOk());
+    }
+
+    private String listarPoligonos() throws Exception {
+        return http.perform(get(API + "/mapa/poligonos").with(httpBasic("jefe", CLAVE)))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+    }
+
+    private Map<String, Object> poligonoEn(String json, UUID idFuente) {
+        List<Map<String, Object>> coincidencias =
+                JsonPath.read(json, "$[?(@.id_fuente == '" + idFuente + "')]");
+        assertThat(coincidencias).hasSize(1);
+        return coincidencias.get(0);
+    }
+
     private String crearEjemplar(String cuerpo) throws Exception {
         MvcResult resultado =
                 http.perform(

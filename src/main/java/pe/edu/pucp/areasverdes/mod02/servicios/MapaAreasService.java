@@ -57,9 +57,12 @@ public class MapaAreasService {
 
     public List<PoligonoAsignado> poligonos() {
         return jdbc.query(
-                "SELECT p.id_fuente, p.area_verde_id, a.nombre area_verde_nombre"
+                "SELECT p.id_fuente, p.area_verde_id, a.nombre area_verde_nombre,"
+                        + " a.superficie_m2::text area_verde_superficie_m2, a.tipo_uso_id"
+                        + " area_verde_tipo_uso_id, t.nombre area_verde_tipo_uso_nombre"
                         + " FROM mod02_mapa_poligono p LEFT JOIN mod02_area_verde a"
-                        + " ON a.id = p.area_verde_id ORDER BY p.id_fuente",
+                        + " ON a.id = p.area_verde_id LEFT JOIN mod02_tipo_uso t"
+                        + " ON t.id = a.tipo_uso_id ORDER BY p.id_fuente",
                 new DataClassRowMapper<>(PoligonoAsignado.class));
     }
 
@@ -78,9 +81,12 @@ public class MapaAreasService {
                         .addValue("area", cambio.areaVerdeId())
                         .addValue("usuario", usuario.id()));
         return jdbc.queryForObject(
-                "SELECT p.id_fuente, p.area_verde_id, a.nombre area_verde_nombre"
+                "SELECT p.id_fuente, p.area_verde_id, a.nombre area_verde_nombre,"
+                        + " a.superficie_m2::text area_verde_superficie_m2, a.tipo_uso_id"
+                        + " area_verde_tipo_uso_id, t.nombre area_verde_tipo_uso_nombre"
                         + " FROM mod02_mapa_poligono p LEFT JOIN mod02_area_verde a"
-                        + " ON a.id = p.area_verde_id WHERE p.id_fuente = :fuente",
+                        + " ON a.id = p.area_verde_id LEFT JOIN mod02_tipo_uso t"
+                        + " ON t.id = a.tipo_uso_id WHERE p.id_fuente = :fuente",
                 Map.of("fuente", idFuente),
                 new DataClassRowMapper<>(PoligonoAsignado.class));
     }

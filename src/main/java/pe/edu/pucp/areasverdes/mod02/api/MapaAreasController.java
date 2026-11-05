@@ -34,7 +34,13 @@ public class MapaAreasController {
 
     public record UsoFuente(String usoFuente, Long tipoUsoId, String tipoUsoNombre) {}
 
-    public record PoligonoAsignado(UUID idFuente, Long areaVerdeId, String areaVerdeNombre) {}
+    public record PoligonoAsignado(
+            UUID idFuente,
+            Long areaVerdeId,
+            String areaVerdeNombre,
+            String areaVerdeSuperficieM2,
+            Long areaVerdeTipoUsoId,
+            String areaVerdeTipoUsoNombre) {}
 
     public record CambioUsoFuente(@NotBlank @Size(max = 180) String usoFuente, Long tipoUsoId) {}
 
