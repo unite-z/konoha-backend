@@ -389,6 +389,64 @@ class IntervencionesPodaApiTest {
     }
 
     @Test
+    void elRendimientoSoloCuentaPodasVerificadasYSinRepetir() throws Exception {
+        String ruta = CAMPANAS + campana + "/rendimiento/";
+        http.perform(get(ruta).cookie(ingeniero))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.verificados").value(0))
+                .andExpect(jsonPath("$.dias_con_ejecucion").value(0))
+                .andExpect(jsonPath("$.promedio").doesNotExist())
+                .andExpect(jsonPath("$.tramos.length()").value(0));
+
+        long sinFoto = registrar(ejemplarB);
+        http.perform(get(ruta).cookie(ingeniero)).andExpect(jsonPath("$.verificados").value(0));
+
+        long primera = registrar(ejemplarA);
+        foto(primera);
+        long repetida = registrar(ejemplarA);
+        foto(repetida);
+        http.perform(get(ruta).cookie(ingeniero))
+                .andExpect(jsonPath("$.verificados").value(1))
+                .andExpect(jsonPath("$.dias_con_ejecucion").value(1))
+                .andExpect(jsonPath("$.promedio").value("1.00"));
+
+        foto(sinFoto);
+        http.perform(get(ruta).cookie(ingeniero))
+                .andExpect(jsonPath("$.verificados").value(2))
+                .andExpect(jsonPath("$.promedio").value("2.00"))
+                .andExpect(jsonPath("$.destacado").value(false))
+                .andExpect(jsonPath("$.umbral_alerta").value(18))
+                .andExpect(jsonPath("$.tramos[0].atendidos").value(2));
+
+        http.perform(
+                        patch(RUTA + sinFoto + "/")
+                                .cookie(ingeniero)
+                                .with(csrf())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"fecha_ejecucion\": \"2025-12-22\"}"))
+                .andExpect(status().isOk());
+        http.perform(get(ruta).cookie(ingeniero))
+                .andExpect(jsonPath("$.dias_con_ejecucion").value(2))
+                .andExpect(jsonPath("$.promedio").value("1.00"));
+
+        http.perform(delete(RUTA + sinFoto + "/").cookie(ingeniero).with(csrf()))
+                .andExpect(status().isNoContent());
+        http.perform(get(ruta).cookie(ingeniero))
+                .andExpect(jsonPath("$.verificados").value(1))
+                .andExpect(jsonPath("$.dias_con_ejecucion").value(1));
+    }
+
+    @Test
+    void elRendimientoLoConsultanLosCuatroRolesYExigeCampana() throws Exception {
+        for (String rol : ROLES) {
+            http.perform(get(CAMPANAS + campana + "/rendimiento/").cookie(sesion(rol)))
+                    .andExpect(status().isOk());
+        }
+        http.perform(get(CAMPANAS + "999999/rendimiento/").cookie(ingeniero))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     void losCuatroRolesConsultan() throws Exception {
         long id = registrar(ejemplarA);
 
@@ -435,6 +493,21 @@ class IntervencionesPodaApiTest {
     @Test
     void sinSesionNoHayAcceso() throws Exception {
         http.perform(get(RUTA)).andExpect(status().isUnauthorized());
+    }
+
+    /** Adjunta la imagen de prueba a la intervención. */
+    private void foto(long intervencion) throws Exception {
+        http.perform(
+                        multipart("/api/v1/core/adjuntos/")
+                                .file(
+                                        new MockMultipartFile(
+                                                "archivo", "poda.png", "image/png", PNG))
+                                .param("entidad", "intervencion")
+                                .param("registro_id", String.valueOf(intervencion))
+                                .header("Idempotency-Key", UUID.randomUUID().toString())
+                                .cookie(ingeniero)
+                                .with(csrf()))
+                .andExpect(status().isCreated());
     }
 
     private void avance(int verificables, int incompletos, String porcentaje) throws Exception {
