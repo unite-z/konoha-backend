@@ -18,6 +18,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import pe.edu.pucp.areasverdes.comun.BaseDePruebas;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -28,24 +29,7 @@ class CoberturasApiTest {
 
     @DynamicPropertySource
     static void baseDePruebas(DynamicPropertyRegistry propiedades) {
-        String url =
-                System.getenv()
-                        .getOrDefault(
-                                "MOD05_TEST_DB_URL",
-                                "jdbc:postgresql://127.0.0.1:55432/mod05_spring_test");
-        if (!url.endsWith("_test")) {
-            throw new IllegalStateException("Las pruebas requieren una base terminada en _test");
-        }
-        propiedades.add("spring.datasource.url", () -> url);
-        propiedades.add(
-                "spring.datasource.username",
-                () ->
-                        System.getenv()
-                                .getOrDefault(
-                                        "MOD05_TEST_DB_USER", System.getProperty("user.name")));
-        propiedades.add(
-                "spring.datasource.password",
-                () -> System.getenv().getOrDefault("MOD05_TEST_DB_PASSWORD", ""));
+        BaseDePruebas.registrar(propiedades);
     }
 
     @Autowired MockMvc http;

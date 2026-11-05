@@ -20,6 +20,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import pe.edu.pucp.areasverdes.mod01.servicios.RegistradorAuditoria;
 
 /** Alta y baja de restricciones del calendario (HU-MOD03-003), sueltas o en serie semanal. */
 @Service
@@ -45,18 +46,34 @@ public class CalendarioRestricciones {
 
     static final int MAXIMO_REPETICIONES = 200;
 
-    private static final String AUDITAR =
-            """
-            INSERT INTO mod05_registroauditoria(entidad, registro_id, accion, fecha_hora,
-                valores_anteriores, valores_nuevos, motivo, usuario_id)
-            SELECT 'mod03_restriccion_calendario', r.id, :accion, now(), '{}', to_jsonb(r), '',
-                :usuario FROM mod03_restriccion_calendario r WHERE r.id IN (:ids)
-            """;
+    /** Entidad en la auditoría común de MOD-01 (AV-287: ya no en la de MOD-05). */
+    static final String ENTIDAD = "mod03_restriccion_calendario";
 
     private final NamedParameterJdbcTemplate jdbc;
+    private final RegistradorAuditoria auditoria;
 
-    public CalendarioRestricciones(NamedParameterJdbcTemplate jdbc) {
+    public CalendarioRestricciones(
+            NamedParameterJdbcTemplate jdbc, RegistradorAuditoria auditoria) {
         this.jdbc = jdbc;
+        this.auditoria = auditoria;
+    }
+
+    /** Deja en la auditoría común el alta o la baja lógica de cada restricción, con su fila. */
+    private void auditar(List<Long> ids, boolean alta, UsuarioPlanificacion usuario) {
+        for (Long id : ids) {
+            Map<String, Object> fila =
+                    jdbc.queryForMap(
+                            "SELECT to_jsonb(r)::text fila FROM mod03_restriccion_calendario r"
+                                    + " WHERE r.id = :id",
+                            Map.of("id", id));
+            Map<String, Object> valores = Map.of("restriccion", fila.get("fila"));
+            if (alta) {
+                auditoria.registrarAlta(ENTIDAD, id, valores, usuario.id());
+            } else {
+                auditoria.registrarCambio(
+                        ENTIDAD, id, "BajaLogica", Map.of(), valores, null, usuario.id());
+            }
+        }
     }
 
     /** Crea la restricción, o una por cada repetición con la misma serie, y devuelve sus ids. */
@@ -109,7 +126,7 @@ public class CalendarioRestricciones {
                             datos,
                             Long.class));
         }
-        jdbc.update(AUDITAR, Map.of("ids", ids, "accion", "crear", "usuario", usuario.id()));
+        auditar(ids, true, usuario);
         return ids;
     }
 
@@ -162,7 +179,7 @@ public class CalendarioRestricciones {
             throw new ErrorPlanificacion(
                     404, "restriccion-no-encontrada", "No existe esa restricción");
         }
-        jdbc.update(AUDITAR, Map.of("ids", ids, "accion", "baja", "usuario", usuario.id()));
+        auditar(ids, false, usuario);
         return ids.size();
     }
 

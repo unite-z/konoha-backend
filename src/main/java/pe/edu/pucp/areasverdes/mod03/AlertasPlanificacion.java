@@ -163,8 +163,11 @@ public class AlertasPlanificacion {
         }
         return jdbc.queryForObject(
                 """
-                SELECT a.id, a.estado, a.motivo, u.nombre atendida_por, a.fecha_atencion
-                FROM mod03_alerta a JOIN mod05_usuario u ON u.id = a.atendida_por_id
+                SELECT a.id, a.estado, a.motivo, coalesce(u.nombre, m.nombre) atendida_por,
+                    a.fecha_atencion
+                FROM mod03_alerta a
+                LEFT JOIN core_usuario u ON u.id = a.atendida_por_id
+                LEFT JOIN mod05_usuario m ON m.id = a.atendida_por_id
                 WHERE a.id = :id
                 """,
                 Map.of("id", id),

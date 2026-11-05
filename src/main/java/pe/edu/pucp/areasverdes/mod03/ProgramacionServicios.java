@@ -50,16 +50,19 @@ public class ProgramacionServicios {
     private final AlertasPlanificacion alertas;
     private final CorteCesped corte;
     private final Avisos avisos;
+    private final RequerimientoCorte requerimiento;
 
     public ProgramacionServicios(
             NamedParameterJdbcTemplate jdbc,
             AlertasPlanificacion alertas,
             CorteCesped corte,
-            Avisos avisos) {
+            Avisos avisos,
+            RequerimientoCorte requerimiento) {
         this.jdbc = jdbc;
         this.alertas = alertas;
         this.corte = corte;
         this.avisos = avisos;
+        this.requerimiento = requerimiento;
     }
 
     @Transactional
@@ -104,6 +107,10 @@ public class ProgramacionServicios {
         // Corte de césped: la ruta de las zonas elegidas se copia en el ciclo (AV-259).
         if (nueva.zonas() != null) {
             corte.copiarRuta(id, nueva.zonas());
+            // Con proveedor, su requerimiento en MOD-05 (AV-263, CU-010 paso 7).
+            if (nueva.proveedorId() != null) {
+                requerimiento.generar(id, usuario);
+            }
         }
         alertas.atenderFrecuencia(nueva.tipoServicioId(), usuario);
         guardarConstancias(id, conflictos, nueva.justificacion(), usuario);
