@@ -124,10 +124,30 @@ class RequerimientoCorte {
 
     /**
      * MOD-05 aún guarda quién registra la atención en su copia de usuarios ({@code mod05_usuario},
-     * AV-287). Una cuenta creada solo en MOD-01 no está ahí, y crear la atención fallaría al
-     * confirmar la transacción y desharía también lo de MOD-03.
+     * AV-287). Si la cuenta solo existe en MOD-01, se da de alta ahí con el mismo id, su nombre de
+     * usuario y una contraseña inutilizable (no entra por HTTP Basic): es lo inverso de lo que hace
+     * {@code PrecargaDevMod01}. Sin esa fila, crear la atención fallaría al confirmar la
+     * transacción y desharía también lo de MOD-03. {@code false} si no se pudo (por ejemplo, otro
+     * usuario de MOD-05 ya usa ese nombre).
      */
     static boolean cuentaEnMod05(NamedParameterJdbcTemplate jdbc, UsuarioPlanificacion usuario) {
+        int creadas =
+                jdbc.update(
+                        """
+                        INSERT INTO mod05_usuario (id, usuario, nombre, password_hash, activo)
+                        SELECT u.id, u.nombre_usuario, u.nombre, '!', true FROM core_usuario u
+                        WHERE u.id = :id AND u.activo
+                        ON CONFLICT DO NOTHING
+                        """,
+                        Map.of("id", usuario.id()));
+        if (creadas > 0) {
+            // El id va explícito: que la secuencia de MOD-05 no lo vuelva a repartir.
+            jdbc.queryForList(
+                    "SELECT setval(pg_get_serial_sequence('mod05_usuario', 'id'),"
+                            + " (SELECT max(id) FROM mod05_usuario))",
+                    Map.of(),
+                    Long.class);
+        }
         return !jdbc.queryForList(
                         "SELECT 1 FROM mod05_usuario WHERE id = :id AND activo",
                         Map.of("id", usuario.id()),
