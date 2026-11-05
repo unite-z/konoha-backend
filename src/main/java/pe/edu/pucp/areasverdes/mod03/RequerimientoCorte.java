@@ -35,6 +35,8 @@ class RequerimientoCorte {
     static final String SIN_CONTRATO = "El proveedor no tiene contrato vigente para este servicio";
     static final String SIN_JARDINES = "Ningún jardín de la ruta está en el catálogo de MOD-05";
     static final String SIN_PERMISO = "Tu usuario no puede registrar requerimientos en MOD-05";
+    static final String SIN_CUENTA =
+            "Tu cuenta aún no está dada de alta en Servicios tercerizados (MOD-05)";
 
     private static final DateTimeFormatter FECHA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
@@ -108,6 +110,9 @@ class RequerimientoCorte {
         if (!usuario.tiene(REGISTRAR_ATENCION)) {
             return SIN_PERMISO;
         }
+        if (!cuentaEnMod05(jdbc, usuario)) {
+            return SIN_CUENTA;
+        }
         if (contrato(c).isEmpty()) {
             return SIN_CONTRATO;
         }
@@ -115,6 +120,19 @@ class RequerimientoCorte {
             return SIN_JARDINES;
         }
         return null;
+    }
+
+    /**
+     * MOD-05 aún guarda quién registra la atención en su copia de usuarios ({@code mod05_usuario},
+     * AV-287). Una cuenta creada solo en MOD-01 no está ahí, y crear la atención fallaría al
+     * confirmar la transacción y desharía también lo de MOD-03.
+     */
+    static boolean cuentaEnMod05(NamedParameterJdbcTemplate jdbc, UsuarioPlanificacion usuario) {
+        return !jdbc.queryForList(
+                        "SELECT 1 FROM mod05_usuario WHERE id = :id AND activo",
+                        Map.of("id", usuario.id()),
+                        Integer.class)
+                .isEmpty();
     }
 
     /** El contrato vigente hoy del proveedor para el servicio, como lo exige MOD-05. */

@@ -22,13 +22,17 @@ import pe.edu.pucp.areasverdes.mod03.ServicioPeriodico.Frecuencia;
 public class ServiciosRepository {
 
     private static final String FRECUENCIAS =
-            "SELECT f.*, u.nombre modificado_por FROM mod03_frecuencia_servicio f JOIN"
-                    + " mod05_usuario u ON u.id = f.usuario_modificacion_id ORDER BY"
+            "SELECT f.*, coalesce(u.nombre, m.nombre) modificado_por FROM"
+                    + " mod03_frecuencia_servicio f LEFT JOIN core_usuario u ON u.id ="
+                    + " f.usuario_modificacion_id LEFT JOIN mod05_usuario m ON m.id ="
+                    + " f.usuario_modificacion_id ORDER BY"
                     + " array_position(ARRAY['Verano','Otoño','Invierno','Primavera']::varchar[],"
                     + " f.estacion)";
     private static final String DURACIONES =
-            "SELECT d.*, u.nombre modificado_por FROM mod03_duracion_servicio d"
-                    + " JOIN mod05_usuario u ON u.id = d.usuario_modificacion_id";
+            "SELECT d.*, coalesce(u.nombre, m.nombre) modificado_por FROM"
+                    + " mod03_duracion_servicio d LEFT JOIN core_usuario u ON u.id ="
+                    + " d.usuario_modificacion_id LEFT JOIN mod05_usuario m ON m.id ="
+                    + " d.usuario_modificacion_id";
     private static final String SERVICIOS =
             """
             SELECT t.id, t.nombre, t.es_ruidoso, t.ejecutor via,

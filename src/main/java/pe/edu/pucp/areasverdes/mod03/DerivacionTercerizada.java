@@ -123,6 +123,9 @@ public class DerivacionTercerizada {
             throw new ErrorPlanificacion(
                     403, "sin-permiso", "Tu usuario no puede registrar requerimientos en MOD-05");
         }
+        if (!RequerimientoCorte.cuentaEnMod05(jdbc, usuario)) {
+            throw new ErrorPlanificacion(409, "sin-cuenta-mod05", RequerimientoCorte.SIN_CUENTA);
+        }
         List<Map<String, Object>> filas =
                 jdbc.queryForList(
                         """

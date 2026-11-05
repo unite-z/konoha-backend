@@ -38,9 +38,6 @@ class FiltrosCalendarioApiTest extends ApiPlanificacion {
         sql.execute(
                 "TRUNCATE core_sesion, core_registro_acceso, core_registro_auditoria,"
                         + " core_usuario RESTART IDENTITY CASCADE");
-        sql.execute(
-                new ClassPathResource("mod03/escenario-programacion.sql")
-                        .getContentAsString(StandardCharsets.UTF_8));
         for (String rol : new String[] {"jefe-seccion", "capataz"}) {
             jdbc.update(
                     """
@@ -49,6 +46,11 @@ class FiltrosCalendarioApiTest extends ApiPlanificacion {
                     """,
                     Map.of("correo", rol + DOMINIO, "rol", rol, "hash", claves.encode(CLAVE)));
         }
+        // El escenario firma con el usuario 1: con las FK de MOD-03 en core_usuario (AV-287),
+        // tiene que existir antes.
+        sql.execute(
+                new ClassPathResource("mod03/escenario-programacion.sql")
+                        .getContentAsString(StandardCharsets.UTF_8));
         long sectorSociales = sector("Sociales");
         sectorCiencias = sector("Ciencias");
         sociales = area("Jardín de Sociales", sectorSociales);

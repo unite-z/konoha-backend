@@ -339,8 +339,11 @@ public class ProgramacionController {
         Map<Long, List<Transicion>> historial = new HashMap<>();
         jdbc.query(
                 """
-                SELECT h.programacion_id, h.estado, h.fecha_hora, u.nombre autor, h.motivo
-                FROM mod03_historial_programacion h JOIN mod05_usuario u ON u.id = h.usuario_id
+                SELECT h.programacion_id, h.estado, h.fecha_hora,
+                    coalesce(u.nombre, m.nombre) autor, h.motivo
+                FROM mod03_historial_programacion h
+                LEFT JOIN core_usuario u ON u.id = h.usuario_id
+                LEFT JOIN mod05_usuario m ON m.id = h.usuario_id
                 WHERE h.programacion_id IN (:ids) ORDER BY h.fecha_hora, h.id
                 """,
                 Map.of("ids", filas.stream().map(Fila::id).toList()),

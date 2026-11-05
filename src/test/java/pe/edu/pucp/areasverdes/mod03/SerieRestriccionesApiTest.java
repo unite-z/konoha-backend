@@ -39,7 +39,8 @@ class SerieRestriccionesApiTest extends ApiPlanificacion {
     int auditorias(String accion) {
         return jdbc.getJdbcTemplate()
                 .queryForObject(
-                        "SELECT count(*) FROM mod05_registroauditoria WHERE accion = ?",
+                        "SELECT count(*) FROM core_registro_auditoria WHERE entidad ="
+                                + " 'mod03_restriccion_calendario' AND accion = ?",
                         Integer.class,
                         accion);
     }
@@ -61,8 +62,8 @@ class SerieRestriccionesApiTest extends ApiPlanificacion {
                                 .param("serie", "true")
                                 .with(httpBasic("jefe", CLAVE)))
                 .andExpect(status().isNoContent());
-        assertEquals(4, auditorias("crear"));
-        assertEquals(4, auditorias("baja"));
+        assertEquals(4, auditorias("Alta"));
+        assertEquals(4, auditorias("BajaLogica"));
     }
 
     @Test
