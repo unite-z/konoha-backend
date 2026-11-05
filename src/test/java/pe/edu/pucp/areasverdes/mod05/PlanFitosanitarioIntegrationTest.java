@@ -86,13 +86,19 @@ class PlanFitosanitarioIntegrationTest {
                 .update(
                         "INSERT INTO mod03_duracion_servicio(tipo_servicio_id,"
                             + " duracion_maxima_dias, hora_inicio, hora_fin, usuario_creacion_id,"
-                            + " usuario_modificacion_id) VALUES (:tipo, 1, '06:00', '18:00',"
-                            + " :jefe, :jefe)",
+                            + " usuario_modificacion_id) VALUES (:tipo, 1, '06:00', '18:00', :jefe,"
+                            + " :jefe)",
                         Map.of("tipo", tipo, "jefe", jefeId));
         proveedor =
                 repo.insert(
                         "proveedor",
-                        values("razon_social", "Fumigaciones del Campus S.A.", "ruc", null, "activo", true));
+                        values(
+                                "razon_social",
+                                "Fumigaciones del Campus S.A.",
+                                "ruc",
+                                null,
+                                "activo",
+                                true));
         contrato =
                 repo.insert(
                         "contrato",
@@ -112,7 +118,11 @@ class PlanFitosanitarioIntegrationTest {
     }
 
     long plaga(String nombre) {
-        return repo.jdbc().queryForObject("SELECT id FROM mod05_plaga WHERE nombre=:n", Map.of("n", nombre), Long.class);
+        return repo.jdbc()
+                .queryForObject(
+                        "SELECT id FROM mod05_plaga WHERE nombre=:n",
+                        Map.of("n", nombre),
+                        Long.class);
     }
 
     JsonNode send(String path, Object body, String user, int expected) throws Exception {
@@ -177,7 +187,9 @@ class PlanFitosanitarioIntegrationTest {
     @Test
     void sinLasCuatroEstacionesExigeMotivo() throws Exception {
         var incompleto =
-                List.of(aplicacion("Verano", LocalDate.of(anio, 1, 15)), aplicacion("Otoño", LocalDate.of(anio, 4, 15)));
+                List.of(
+                        aplicacion("Verano", LocalDate.of(anio, 1, 15)),
+                        aplicacion("Otoño", LocalDate.of(anio, 4, 15)));
         var sinMotivo = values("contrato_id", contrato, "aplicaciones", incompleto);
         send("plan-fitosanitario/", sinMotivo, "jefe", 400);
         var conMotivo =
@@ -254,7 +266,13 @@ class PlanFitosanitarioIntegrationTest {
     }
 
     Map<String, Object> aplicacionAdicional(LocalDate fecha) {
-        return values("contrato_id", contrato, "fecha_inicio", fecha.toString(), "fecha_fin", fecha.toString());
+        return values(
+                "contrato_id",
+                contrato,
+                "fecha_inicio",
+                fecha.toString(),
+                "fecha_fin",
+                fecha.toString());
     }
 
     @Test
@@ -272,7 +290,9 @@ class PlanFitosanitarioIntegrationTest {
         var detalle = sendGet("atenciones-especiales/" + especial + "/", "jefe", 200);
         assertEquals(1, detalle.get("aplicaciones").size());
         long atencionId = detalle.get("aplicaciones").get(0).get("id").asLong();
-        assertEquals("Requerimiento registrado", detalle.get("aplicaciones").get(0).get("estado").asText());
+        assertEquals(
+                "Requerimiento registrado",
+                detalle.get("aplicaciones").get(0).get("estado").asText());
 
         var atencion = sendGet("atenciones/" + atencionId + "/", "jefe", 200);
         assertEquals(especial, atencion.get("atencion_especial_id").asLong());
@@ -290,15 +310,31 @@ class PlanFitosanitarioIntegrationTest {
     @Test
     void noSeProgramaMasAplicacionesAdicionalesQueLasFijadasAlMarcar() throws Exception {
         long especial = marcarEspecial(1);
-        send("atenciones-especiales/" + especial + "/aplicaciones/", aplicacionAdicional(LocalDate.of(anio, 3, 1)), "jefe", 201);
-        send("atenciones-especiales/" + especial + "/aplicaciones/", aplicacionAdicional(LocalDate.of(anio, 6, 1)), "jefe", 400);
+        send(
+                "atenciones-especiales/" + especial + "/aplicaciones/",
+                aplicacionAdicional(LocalDate.of(anio, 3, 1)),
+                "jefe",
+                201);
+        send(
+                "atenciones-especiales/" + especial + "/aplicaciones/",
+                aplicacionAdicional(LocalDate.of(anio, 6, 1)),
+                "jefe",
+                400);
     }
 
     @Test
     void soloElJefeProgramaAplicacionesAdicionales() throws Exception {
         long especial = marcarEspecial(2);
-        send("atenciones-especiales/" + especial + "/aplicaciones/", aplicacionAdicional(LocalDate.of(anio, 3, 1)), "ingeniero", 403);
-        send("atenciones-especiales/" + especial + "/aplicaciones/", aplicacionAdicional(LocalDate.of(anio, 3, 1)), null, 401);
+        send(
+                "atenciones-especiales/" + especial + "/aplicaciones/",
+                aplicacionAdicional(LocalDate.of(anio, 3, 1)),
+                "ingeniero",
+                403);
+        send(
+                "atenciones-especiales/" + especial + "/aplicaciones/",
+                aplicacionAdicional(LocalDate.of(anio, 3, 1)),
+                null,
+                401);
     }
 
     @Test
@@ -307,7 +343,15 @@ class PlanFitosanitarioIntegrationTest {
         long otroTipo =
                 repo.insert(
                         "tiposervicio",
-                        values("nombre", "Poda de altura a demanda", "ejecutor", "Tercerizado", "es_riesgo", true, "activo", true));
+                        values(
+                                "nombre",
+                                "Poda de altura a demanda",
+                                "ejecutor",
+                                "Tercerizado",
+                                "es_riesgo",
+                                true,
+                                "activo",
+                                true));
         long otroContrato =
                 repo.insert(
                         "contrato",
@@ -322,17 +366,29 @@ class PlanFitosanitarioIntegrationTest {
                                 LocalDate.of(anio - 1, 1, 1),
                                 "vigencia_fin",
                                 LocalDate.of(anio, 12, 31)));
-        var data = values("contrato_id", otroContrato, "fecha_inicio", LocalDate.of(anio, 3, 1).toString(), "fecha_fin", LocalDate.of(anio, 3, 1).toString());
+        var data =
+                values(
+                        "contrato_id",
+                        otroContrato,
+                        "fecha_inicio",
+                        LocalDate.of(anio, 3, 1).toString(),
+                        "fecha_fin",
+                        LocalDate.of(anio, 3, 1).toString());
         send("atenciones-especiales/" + especial + "/aplicaciones/", data, "jefe", 400);
     }
 
-    // --- RF-INV-011: cancelar el seguimiento ------------------------------------------------------
+    // --- RF-INV-011: cancelar el seguimiento
+    // ------------------------------------------------------
 
     @Test
     void cualquierRolDelModuloCancelaElSeguimientoYQuedaComoHistorico() throws Exception {
         long especial = marcarEspecial(2);
         var cancelado =
-                send("atenciones-especiales/" + especial + "/cancelar/", values("motivo", "Marcado por error"), "ingeniero", 200);
+                send(
+                        "atenciones-especiales/" + especial + "/cancelar/",
+                        values("motivo", "Marcado por error"),
+                        "ingeniero",
+                        200);
         assertTrue(cancelado.get("cancelado").asBoolean());
         assertEquals("Cancelado", cancelado.get("estado").asText());
         assertEquals("Marcado por error", cancelado.get("motivo_cancelacion").asText());
@@ -346,7 +402,12 @@ class PlanFitosanitarioIntegrationTest {
     @Test
     void elMotivoDeCancelacionEsOpcional() throws Exception {
         long especial = marcarEspecial(1);
-        var cancelado = send("atenciones-especiales/" + especial + "/cancelar/", values("motivo", ""), "jefe", 200);
+        var cancelado =
+                send(
+                        "atenciones-especiales/" + especial + "/cancelar/",
+                        values("motivo", ""),
+                        "jefe",
+                        200);
         assertTrue(cancelado.get("cancelado").asBoolean());
         assertTrue(cancelado.get("motivo_cancelacion").isNull());
     }
@@ -362,7 +423,11 @@ class PlanFitosanitarioIntegrationTest {
     void noSeProgramaUnaAplicacionAdicionalParaUnSeguimientoCancelado() throws Exception {
         long especial = marcarEspecial(2);
         send("atenciones-especiales/" + especial + "/cancelar/", values("motivo", ""), "jefe", 200);
-        send("atenciones-especiales/" + especial + "/aplicaciones/", aplicacionAdicional(LocalDate.of(anio, 3, 1)), "jefe", 400);
+        send(
+                "atenciones-especiales/" + especial + "/aplicaciones/",
+                aplicacionAdicional(LocalDate.of(anio, 3, 1)),
+                "jefe",
+                400);
     }
 
     @Test

@@ -18,7 +18,8 @@ public class AtencionEspecialController {
     final AtencionEspecialService service;
     final PlanFitosanitarioService planFitosanitario;
 
-    public AtencionEspecialController(AtencionEspecialService service, PlanFitosanitarioService planFitosanitario) {
+    public AtencionEspecialController(
+            AtencionEspecialService service, PlanFitosanitarioService planFitosanitario) {
         this.service = service;
         this.planFitosanitario = planFitosanitario;
     }
@@ -45,7 +46,10 @@ public class AtencionEspecialController {
         return service.detalle(user, id);
     }
 
-    @PostMapping({"/atenciones-especiales/{id}/aplicaciones/", "/atenciones-especiales/{id}/aplicaciones"})
+    @PostMapping({
+        "/atenciones-especiales/{id}/aplicaciones/",
+        "/atenciones-especiales/{id}/aplicaciones"
+    })
     @ResponseStatus(HttpStatus.CREATED)
     public Map<String, Object> programarAplicacion(
             @AuthenticationPrincipal Usuario user,

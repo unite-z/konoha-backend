@@ -31,9 +31,9 @@ public class AtencionEspecialService {
             CANCELADO = "Cancelado";
     static final List<String> ESTADOS = List.of(EN_SEGUIMIENTO, COMPLETAS, CANCELADO);
     static final String CASE_ESTADO =
-            "CASE WHEN ae.cancelado THEN 'Cancelado'"
-                    + " WHEN ae.aplicaciones_realizadas>=ae.aplicaciones_adicionales THEN 'Aplicaciones completas'"
-                    + " ELSE 'En seguimiento' END";
+            "CASE WHEN ae.cancelado THEN 'Cancelado' WHEN"
+                    + " ae.aplicaciones_realizadas>=ae.aplicaciones_adicionales THEN 'Aplicaciones"
+                    + " completas' ELSE 'En seguimiento' END";
     static final String ESPECIALES =
             """
             SELECT ae.id,ae.ejemplar_id,e.codigo ejemplar_codigo,e.area_verde_id,av.nombre area_verde_nombre,ae.plaga_id,pl.nombre plaga_nombre,
@@ -41,13 +41,13 @@ public class AtencionEspecialService {
             """
                     + CASE_ESTADO
                     + """
-             estado,
-                ae.fecha_creacion,ae.usuario_creacion_id,
-                ae.cancelado,ae.motivo_cancelacion,ae.fecha_cancelacion,ae.usuario_cancelacion_id,uc.nombre usuario_cancelacion_nombre
-            FROM mod05_atencion_especial ae JOIN mod05_ejemplar e ON e.id=ae.ejemplar_id JOIN mod05_plaga pl ON pl.id=ae.plaga_id
-            LEFT JOIN mod05_areaverde av ON av.id=e.area_verde_id
-            LEFT JOIN mod05_usuario uc ON uc.id=ae.usuario_cancelacion_id
-            """;
+                     estado,
+                        ae.fecha_creacion,ae.usuario_creacion_id,
+                        ae.cancelado,ae.motivo_cancelacion,ae.fecha_cancelacion,ae.usuario_cancelacion_id,uc.nombre usuario_cancelacion_nombre
+                    FROM mod05_atencion_especial ae JOIN mod05_ejemplar e ON e.id=ae.ejemplar_id JOIN mod05_plaga pl ON pl.id=ae.plaga_id
+                    LEFT JOIN mod05_areaverde av ON av.id=e.area_verde_id
+                    LEFT JOIN mod05_usuario uc ON uc.id=ae.usuario_cancelacion_id
+                    """;
 
     public ConsultasService.Pagina listar(Usuario user, Map<String, String> params, String url) {
         user.exigir(false);
@@ -56,7 +56,11 @@ public class AtencionEspecialService {
         String where =
                 estado.isEmpty()
                         ? ""
-                        : " WHERE (" + CASE_ESTADO + ")='" + ConsultasService.option(estado, ESTADOS) + "'";
+                        : " WHERE ("
+                                + CASE_ESTADO
+                                + ")='"
+                                + ConsultasService.option(estado, ESTADOS)
+                                + "'";
         return queries.list(
                 new ConsultasService.Catalogo(
                         ESPECIALES + where,
@@ -140,12 +144,14 @@ public class AtencionEspecialService {
     }
 
     /**
-     * Cancela el seguimiento de un ejemplar marcado (error al marcar, o el riesgo ya no corresponde).
-     * No se borra: queda como histórico, con quién y cuándo lo canceló. Las aplicaciones adicionales
-     * ya programadas no se ven afectadas; simplemente no se podrán programar más.
+     * Cancela el seguimiento de un ejemplar marcado (error al marcar, o el riesgo ya no
+     * corresponde). No se borra: queda como histórico, con quién y cuándo lo canceló. Las
+     * aplicaciones adicionales ya programadas no se ven afectadas; simplemente no se podrán
+     * programar más.
      */
     @Transactional
-    public Map<String, Object> cancelar(long id, EntradasMaestros.CancelarAtencionEspecial in, Usuario user) {
+    public Map<String, Object> cancelar(
+            long id, EntradasMaestros.CancelarAtencionEspecial in, Usuario user) {
         user.exigir(false);
         var antes = repo.get("atencion_especial", id);
         if ((boolean) antes.get("cancelado"))

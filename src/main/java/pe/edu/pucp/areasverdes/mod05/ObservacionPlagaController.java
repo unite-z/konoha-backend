@@ -39,7 +39,8 @@ public class ObservacionPlagaController {
     }
 
     @GetMapping({"/observaciones-plagas/{id}/", "/observaciones-plagas/{id}"})
-    public Map<String, Object> detalle(@AuthenticationPrincipal Usuario user, @PathVariable long id) {
+    public Map<String, Object> detalle(
+            @AuthenticationPrincipal Usuario user, @PathVariable long id) {
         return service.detalle(user, id);
     }
 

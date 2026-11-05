@@ -303,7 +303,10 @@ class MaestrosIntegrationTest {
                         "jefe",
                         201);
         // Un proveedor creado por la API (con su fila de detalle), no el precargado del setup.
-        long id = send("POST", "proveedores/", proveedorNuevo("20000000004"), "jefe", 201).get("id").asLong();
+        long id =
+                send("POST", "proveedores/", proveedorNuevo("20000000004"), "jefe", 201)
+                        .get("id")
+                        .asLong();
         var editado =
                 send(
                         "PUT",
@@ -330,11 +333,15 @@ class MaestrosIntegrationTest {
         assertEquals("Nueva Rosa", editado.get("contacto_nombre").asText());
         assertEquals("Subsidiaria", editado.get("tipo_vinculo").asText());
         assertEquals(
-                "Servicios Verdes Demo S.A.C.", editado.get("proveedor_relacionado_nombre").asText());
+                "Servicios Verdes Demo S.A.C.",
+                editado.get("proveedor_relacionado_nombre").asText());
         assertEquals(
                 "Proveedor Demo Editado",
-                send("GET", "proveedores/" + id + "/", null, "jefe", 200).get("razon_social").asText());
-        assertEquals(2, count("proveedor_detalle")); // la edición actualiza el detalle, no lo duplica
+                send("GET", "proveedores/" + id + "/", null, "jefe", 200)
+                        .get("razon_social")
+                        .asText());
+        assertEquals(
+                2, count("proveedor_detalle")); // la edición actualiza el detalle, no lo duplica
         assertTrue(
                 repo.jdbc()
                                 .queryForObject(
@@ -826,12 +833,23 @@ class MaestrosIntegrationTest {
 
     Map<String, Object> productoNuevo(String nombre) {
         return values(
-                "nombre", nombre, "principio_activo", "Imidacloprid", "presentacion", "Frasco 250 ml");
+                "nombre",
+                nombre,
+                "principio_activo",
+                "Imidacloprid",
+                "presentacion",
+                "Frasco 250 ml");
     }
 
     @Test
     void elJefeRegistraYEditaUnProductoAgronomico() throws Exception {
-        var creado = send("POST", "productos-agronomicos/", productoNuevo("Insecticida Demo"), "jefe", 201);
+        var creado =
+                send(
+                        "POST",
+                        "productos-agronomicos/",
+                        productoNuevo("Insecticida Demo"),
+                        "jefe",
+                        201);
         assertEquals("Insecticida Demo", creado.get("nombre").asText());
         assertEquals("Imidacloprid", creado.get("principio_activo").asText());
         assertTrue(creado.get("activo").asBoolean());
@@ -841,14 +859,22 @@ class MaestrosIntegrationTest {
                 send(
                         "PUT",
                         "productos-agronomicos/" + id + "/",
-                        values("nombre", "Insecticida Editado", "principio_activo", "Abamectina", "presentacion", "Bidón 1 L"),
+                        values(
+                                "nombre",
+                                "Insecticida Editado",
+                                "principio_activo",
+                                "Abamectina",
+                                "presentacion",
+                                "Bidón 1 L"),
                         "jefe",
                         200);
         assertEquals("Insecticida Editado", editado.get("nombre").asText());
         assertEquals("Abamectina", editado.get("principio_activo").asText());
         assertEquals(
                 "Insecticida Editado",
-                send("GET", "productos-agronomicos/" + id + "/", null, "practicante", 200).get("nombre").asText());
+                send("GET", "productos-agronomicos/" + id + "/", null, "practicante", 200)
+                        .get("nombre")
+                        .asText());
 
         var lista = send("GET", "productos-agronomicos/", null, "ingeniero", 200);
         assertEquals(1, lista.get("count").asInt());
@@ -870,7 +896,12 @@ class MaestrosIntegrationTest {
                         .asLong();
         for (String user : List.of("ingeniero", "practicante", "sinrol")) {
             send("POST", "productos-agronomicos/", productoNuevo("Otro " + user), user, 403);
-            send("PUT", "productos-agronomicos/" + id + "/", productoNuevo("Otro " + user), user, 403);
+            send(
+                    "PUT",
+                    "productos-agronomicos/" + id + "/",
+                    productoNuevo("Otro " + user),
+                    user,
+                    403);
         }
         assertEquals(1, count("producto_agronomico"));
     }
@@ -878,7 +909,13 @@ class MaestrosIntegrationTest {
     @Test
     void nombreRepetidoInformaLaCoincidenciaSinCrearNada() throws Exception {
         send("POST", "productos-agronomicos/", productoNuevo("Insecticida Demo"), "jefe", 201);
-        var error = send("POST", "productos-agronomicos/", productoNuevo("Insecticida Demo"), "jefe", 409);
+        var error =
+                send(
+                        "POST",
+                        "productos-agronomicos/",
+                        productoNuevo("Insecticida Demo"),
+                        "jefe",
+                        409);
         assertEquals("ProductoExistente", error.get("codigo").asText());
         assertEquals(1, count("producto_agronomico"));
     }
@@ -890,10 +927,20 @@ class MaestrosIntegrationTest {
                         .get("id")
                         .asLong();
         var inhabilitado =
-                send("PATCH", "productos-agronomicos/" + id + "/estado/", values("activo", false), "jefe", 200);
+                send(
+                        "PATCH",
+                        "productos-agronomicos/" + id + "/estado/",
+                        values("activo", false),
+                        "jefe",
+                        200);
         assertFalse(inhabilitado.get("activo").asBoolean());
         var habilitado =
-                send("PATCH", "productos-agronomicos/" + id + "/estado/", values("activo", true), "jefe", 200);
+                send(
+                        "PATCH",
+                        "productos-agronomicos/" + id + "/estado/",
+                        values("activo", true),
+                        "jefe",
+                        200);
         assertTrue(habilitado.get("activo").asBoolean());
     }
 
@@ -901,7 +948,12 @@ class MaestrosIntegrationTest {
     void laAtencionRegistraLosProductosAplicadosConDosisYLosConservaSiElProductoSeDesactiva()
             throws Exception {
         long producto =
-                send("POST", "productos-agronomicos/", productoNuevo("Insecticida Demo"), "jefe", 201)
+                send(
+                                "POST",
+                                "productos-agronomicos/",
+                                productoNuevo("Insecticida Demo"),
+                                "jefe",
+                                201)
                         .get("id")
                         .asLong();
         var atencion =
@@ -918,22 +970,41 @@ class MaestrosIntegrationTest {
                         List.of(values("producto_id", producto, "dosis", "5 ml por litro")));
         var creada = send("POST", "atenciones/", atencion, "jefe", 201);
         assertEquals(1, creada.get("productos").size());
-        assertEquals("Insecticida Demo", creada.get("productos").get(0).get("producto_nombre").asText());
+        assertEquals(
+                "Insecticida Demo", creada.get("productos").get(0).get("producto_nombre").asText());
         assertEquals("5 ml por litro", creada.get("productos").get(0).get("dosis").asText());
 
-        send("PATCH", "productos-agronomicos/" + producto + "/estado/", values("activo", false), "jefe", 200);
-        var detalle = send("GET", "atenciones/" + creada.get("id").asLong() + "/", null, "jefe", 200);
-        assertEquals("Insecticida Demo", detalle.get("productos").get(0).get("producto_nombre").asText());
+        send(
+                "PATCH",
+                "productos-agronomicos/" + producto + "/estado/",
+                values("activo", false),
+                "jefe",
+                200);
+        var detalle =
+                send("GET", "atenciones/" + creada.get("id").asLong() + "/", null, "jefe", 200);
+        assertEquals(
+                "Insecticida Demo",
+                detalle.get("productos").get(0).get("producto_nombre").asText());
         assertFalse(detalle.get("productos").get(0).get("producto_activo").asBoolean());
     }
 
     @Test
     void noSePuedeAplicarUnProductoInactivoNiRepetirloEnLaMismaAtencion() throws Exception {
         long producto =
-                send("POST", "productos-agronomicos/", productoNuevo("Insecticida Demo"), "jefe", 201)
+                send(
+                                "POST",
+                                "productos-agronomicos/",
+                                productoNuevo("Insecticida Demo"),
+                                "jefe",
+                                201)
                         .get("id")
                         .asLong();
-        send("PATCH", "productos-agronomicos/" + producto + "/estado/", values("activo", false), "jefe", 200);
+        send(
+                "PATCH",
+                "productos-agronomicos/" + producto + "/estado/",
+                values("activo", false),
+                "jefe",
+                200);
         var conProductoInactivo =
                 values(
                         "contrato_id",
@@ -948,7 +1019,12 @@ class MaestrosIntegrationTest {
                         List.of(values("producto_id", producto, "dosis", "")));
         send("POST", "atenciones/", conProductoInactivo, "jefe", 400);
 
-        send("PATCH", "productos-agronomicos/" + producto + "/estado/", values("activo", true), "jefe", 200);
+        send(
+                "PATCH",
+                "productos-agronomicos/" + producto + "/estado/",
+                values("activo", true),
+                "jefe",
+                200);
         var conProductoRepetido =
                 values(
                         "contrato_id",
@@ -988,16 +1064,19 @@ class MaestrosIntegrationTest {
         var creada = send("POST", "atenciones/", atencion, "jefe", 201);
         assertEquals(2, creada.get("plagas").size());
 
-        repo.jdbc().update("UPDATE mod05_plaga SET activo=false WHERE id=:id", Map.of("id", pulgon));
+        repo.jdbc()
+                .update("UPDATE mod05_plaga SET activo=false WHERE id=:id", Map.of("id", pulgon));
         try {
-            var detalle = send("GET", "atenciones/" + creada.get("id").asLong() + "/", null, "jefe", 200);
+            var detalle =
+                    send("GET", "atenciones/" + creada.get("id").asLong() + "/", null, "jefe", 200);
             var nombres =
                     List.of(
                             detalle.get("plagas").get(0).get("plaga_nombre").asText(),
                             detalle.get("plagas").get(1).get("plaga_nombre").asText());
             assertTrue(nombres.containsAll(List.of("Pulgón", "Cochinilla")));
             boolean algunaInactiva = false;
-            for (var p : detalle.get("plagas")) if (!p.get("plaga_activo").asBoolean()) algunaInactiva = true;
+            for (var p : detalle.get("plagas"))
+                if (!p.get("plaga_activo").asBoolean()) algunaInactiva = true;
             assertTrue(algunaInactiva);
         } finally {
             repo.jdbc().update("UPDATE mod05_plaga SET activo=true", Map.of());
@@ -1007,7 +1086,8 @@ class MaestrosIntegrationTest {
     @Test
     void noSePuedeControlarUnaPlagaInactivaNiRepetirlaEnLaMismaAtencion() throws Exception {
         long pulgon = plaga("Pulgón");
-        repo.jdbc().update("UPDATE mod05_plaga SET activo=false WHERE id=:id", Map.of("id", pulgon));
+        repo.jdbc()
+                .update("UPDATE mod05_plaga SET activo=false WHERE id=:id", Map.of("id", pulgon));
         var conPlagaInactiva =
                 values(
                         "contrato_id",
@@ -1100,7 +1180,12 @@ class MaestrosIntegrationTest {
                         .asInt());
         assertEquals(
                 "Pulgón",
-                send("GET", "observaciones-plagas/" + enEspacio.get("id").asLong() + "/", null, "practicante", 200)
+                send(
+                                "GET",
+                                "observaciones-plagas/" + enEspacio.get("id").asLong() + "/",
+                                null,
+                                "practicante",
+                                200)
                         .get("plaga_nombre")
                         .asText());
         assertTrue(
@@ -1117,26 +1202,43 @@ class MaestrosIntegrationTest {
     void elAvisoDelAsistenteConsultaObservacionesPorEspacioOEjemplar() throws Exception {
         long pulgon = plaga("Pulgón");
         send("POST", "observaciones-plagas/", observacionNueva(area, null, pulgon), "jefe", 201);
-        send("POST", "observaciones-plagas/", observacionNueva(null, ejemplar2, pulgon), "jefe", 201);
+        send(
+                "POST",
+                "observaciones-plagas/",
+                observacionNueva(null, ejemplar2, pulgon),
+                "jefe",
+                201);
 
         var porAreaYEjemplar =
                 send(
                         "GET",
-                        "observaciones-plagas/por-alcance/?area_verde_id=" + area + "&ejemplar_id=" + ejemplar2,
+                        "observaciones-plagas/por-alcance/?area_verde_id="
+                                + area
+                                + "&ejemplar_id="
+                                + ejemplar2,
                         null,
                         "practicante",
                         200); // un solo id en cada filtro: la coma se prueba abajo
         assertEquals(2, porAreaYEjemplar.size());
 
         var soloElOtroEjemplar =
-                send("GET", "observaciones-plagas/por-alcance/?ejemplar_id=" + ejemplar, null, "practicante", 200);
+                send(
+                        "GET",
+                        "observaciones-plagas/por-alcance/?ejemplar_id=" + ejemplar,
+                        null,
+                        "practicante",
+                        200);
         assertEquals(0, soloElOtroEjemplar.size());
 
-        // Varios destinos del mismo tipo, separados por comas (varios espacios/ejemplares elegidos a la vez).
+        // Varios destinos del mismo tipo, separados por comas (varios espacios/ejemplares elegidos
+        // a la vez).
         var porDosEjemplares =
                 send(
                         "GET",
-                        "observaciones-plagas/por-alcance/?ejemplar_id=" + ejemplar + "," + ejemplar2,
+                        "observaciones-plagas/por-alcance/?ejemplar_id="
+                                + ejemplar
+                                + ","
+                                + ejemplar2,
                         null,
                         "practicante",
                         200);

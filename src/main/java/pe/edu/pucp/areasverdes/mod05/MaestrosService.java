@@ -51,7 +51,9 @@ public class MaestrosService {
     static final String PRODUCTOS =
             "SELECT id,nombre,principio_activo,presentacion,activo FROM mod05_producto_agronomico";
 
-    /** Frase de la frecuencia que se guarda también como texto: «4 veces al año», «1 vez al mes». */
+    /**
+     * Frase de la frecuencia que se guarda también como texto: «4 veces al año», «1 vez al mes».
+     */
     static String textoFrecuencia(int cantidad, String unidad) {
         return cantidad + (cantidad == 1 ? " vez " : " veces ") + PERIODOS_FRECUENCIA.get(unidad);
     }
@@ -202,7 +204,8 @@ public class MaestrosService {
                 .update(
                         "INSERT INTO"
                             + " mod05_proveedor_detalle(proveedor_id,contacto_nombre,contacto_telefono,contacto_correo,tipo_vinculo,proveedor_relacionado_id)"
-                            + " VALUES (:id,:contacto_nombre,:contacto_telefono,:contacto_correo,:tipo,:relacionado)",
+                            + " VALUES"
+                            + " (:id,:contacto_nombre,:contacto_telefono,:contacto_correo,:tipo,:relacionado)",
                         detalle);
         var creado = repo.one(PROVEEDORES + " WHERE p.id=:id", Map.of("id", id));
         repo.audit("Proveedor", id, "Alta", user, Map.of(), creado, "");
@@ -210,7 +213,8 @@ public class MaestrosService {
     }
 
     @Transactional
-    public Map<String, Object> editarProveedor(long id, EntradasMaestros.Proveedor in, Usuario user) {
+    public Map<String, Object> editarProveedor(
+            long id, EntradasMaestros.Proveedor in, Usuario user) {
         user.exigir(true);
         repo.lock("proveedor", id);
         var antes = repo.one(PROVEEDORES + " WHERE p.id=:id", Map.of("id", id));
@@ -232,7 +236,8 @@ public class MaestrosService {
                             .get("activo"))
                 throw ApiError.invalid("El proveedor relacionado está inactivo");
         }
-        // Serializa registros con el mismo RUC; la restricción UNIQUE de la base es la última defensa.
+        // Serializa registros con el mismo RUC; la restricción UNIQUE de la base es la última
+        // defensa.
         repo.jdbc().getJdbcTemplate().execute("SELECT pg_advisory_xact_lock(505101)");
         if (!repo.rows(
                         "SELECT id FROM mod05_proveedor WHERE ruc=:ruc AND id<>:id",
@@ -285,7 +290,9 @@ public class MaestrosService {
         return despues;
     }
 
-    /** Proveedor habilitado y tipo de servicio tercerizado activo, o lanza el error correspondiente. */
+    /**
+     * Proveedor habilitado y tipo de servicio tercerizado activo, o lanza el error correspondiente.
+     */
     void validarProveedorYServicio(EntradasMaestros.Contrato in) {
         if (!(boolean) existente("proveedor", in.proveedor_id(), "El proveedor").get("activo"))
             throw ApiError.invalid("El proveedor está inactivo");
@@ -298,7 +305,10 @@ public class MaestrosService {
 
     record Frecuencia(Integer cantidad, String unidad, String texto) {}
 
-    /** Cantidad y período, o el texto libre de clientes anteriores (`MaestrosService.crearContrato`). */
+    /**
+     * Cantidad y período, o el texto libre de clientes anteriores
+     * (`MaestrosService.crearContrato`).
+     */
     Frecuencia resolverFrecuencia(EntradasMaestros.Contrato in) {
         Integer cantidad = in.frecuencia_cantidad();
         String unidad = in.frecuencia_unidad();
@@ -361,7 +371,8 @@ public class MaestrosService {
     public Map<String, Object> editarContrato(long id, EntradasMaestros.Contrato in, Usuario user) {
         user.exigir(true);
         repo.lock("contrato", id);
-        var antes = contratoVisible(repo.one(CONTRATOS + " WHERE c.id=:id", Map.of("id", id)), user);
+        var antes =
+                contratoVisible(repo.one(CONTRATOS + " WHERE c.id=:id", Map.of("id", id)), user);
         validarProveedorYServicio(in);
         if (in.vigencia_fin().isBefore(in.vigencia_inicio()))
             throw ApiError.invalid("El fin de la vigencia no puede ser anterior al inicio");
@@ -426,7 +437,8 @@ public class MaestrosService {
     public Map<String, Object> crearProductoAgronomico(
             EntradasMaestros.ProductoAgronomico in, Usuario user) {
         user.exigir(true);
-        // Serializa registros con el mismo nombre; la restricción UNIQUE de la base es la última defensa.
+        // Serializa registros con el mismo nombre; la restricción UNIQUE de la base es la última
+        // defensa.
         repo.jdbc().getJdbcTemplate().execute("SELECT pg_advisory_xact_lock(505104)");
         if (!repo.rows(
                         "SELECT id FROM mod05_producto_agronomico WHERE nombre=:nombre",
@@ -484,7 +496,8 @@ public class MaestrosService {
     }
 
     @Transactional
-    public Map<String, Object> cambiarEstadoProductoAgronomico(long id, boolean activo, Usuario user) {
+    public Map<String, Object> cambiarEstadoProductoAgronomico(
+            long id, boolean activo, Usuario user) {
         user.exigir(true);
         repo.lock("producto_agronomico", id);
         var antes = repo.one(PRODUCTOS + " WHERE id=:id", Map.of("id", id));

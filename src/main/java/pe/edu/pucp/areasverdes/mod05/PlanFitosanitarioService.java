@@ -75,7 +75,9 @@ public class PlanFitosanitarioService {
             throw ApiError.invalid(
                     "Indica el motivo: el plan no cubre las cuatro estaciones (RN-010). Estaciones"
                             + " sin programar: "
-                            + ESTACIONES.stream().filter(e -> !estaciones.contains(e)).collect(Collectors.joining(", ")));
+                            + ESTACIONES.stream()
+                                    .filter(e -> !estaciones.contains(e))
+                                    .collect(Collectors.joining(", ")));
 
         var usuarioPlanificacion = usuarioPlanificacion(user);
         List<Map<String, Object>> creadas = new ArrayList<>();
@@ -118,9 +120,10 @@ public class PlanFitosanitarioService {
     }
 
     /**
-     * RF-FIT-006: una aplicación adicional del ejemplar marcado con atención especial. RN-010: no se
-     * programan más de las {@code aplicaciones_adicionales} fijadas al marcarlo (una o dos al año);
-     * cada una queda enlazada al ejemplar, a su programación en MOD-03 y a la atención que crea.
+     * RF-FIT-006: una aplicación adicional del ejemplar marcado con atención especial. RN-010: no
+     * se programan más de las {@code aplicaciones_adicionales} fijadas al marcarlo (una o dos al
+     * año); cada una queda enlazada al ejemplar, a su programación en MOD-03 y a la atención que
+     * crea.
      */
     @Transactional
     public Map<String, Object> programarAplicacionAdicional(
@@ -128,12 +131,15 @@ public class PlanFitosanitarioService {
         user.exigir(true);
         var especial = repo.lock("atencion_especial", especialId);
         if ((boolean) especial.get("cancelado"))
-            throw ApiError.invalid("Este seguimiento está cancelado: no se pueden programar más aplicaciones");
+            throw ApiError.invalid(
+                    "Este seguimiento está cancelado: no se pueden programar más aplicaciones");
         long realizadas = number(especial, "aplicaciones_realizadas");
         long adicionales = number(especial, "aplicaciones_adicionales");
         if (realizadas >= adicionales)
             throw ApiError.invalid(
-                    "Ya se programaron las " + adicionales + " aplicaciones adicionales de este ejemplar");
+                    "Ya se programaron las "
+                            + adicionales
+                            + " aplicaciones adicionales de este ejemplar");
         var contrato = repo.lock("contrato", in.contrato_id());
         var servicio = repo.get("tiposervicio", number(contrato, "tipo_servicio_id"));
         if (!CONTROL_FITOSANITARIO.equals(servicio.get("nombre")))
@@ -173,14 +179,30 @@ public class PlanFitosanitarioService {
                                 null,
                                 null,
                                 null,
-                                List.of(new Entradas.Alcance(null, number(especial, "ejemplar_id"), null, null)),
+                                List.of(
+                                        new Entradas.Alcance(
+                                                null, number(especial, "ejemplar_id"), null, null)),
                                 null,
                                 null),
                         user);
-        repo.update("atenciontercerizada", number(atencion, "id"), Map.of("atencion_especial_id", especialId));
-        repo.update("atencion_especial", especialId, Map.of("aplicaciones_realizadas", realizadas + 1));
-        var actualizado = repo.one(AtencionEspecialService.ESPECIALES + " WHERE ae.id=:id", Map.of("id", especialId));
-        repo.audit("AtencionEspecial", especialId, "AplicacionProgramada", user, especial, actualizado, "");
+        repo.update(
+                "atenciontercerizada",
+                number(atencion, "id"),
+                Map.of("atencion_especial_id", especialId));
+        repo.update(
+                "atencion_especial", especialId, Map.of("aplicaciones_realizadas", realizadas + 1));
+        var actualizado =
+                repo.one(
+                        AtencionEspecialService.ESPECIALES + " WHERE ae.id=:id",
+                        Map.of("id", especialId));
+        repo.audit(
+                "AtencionEspecial",
+                especialId,
+                "AplicacionProgramada",
+                user,
+                especial,
+                actualizado,
+                "");
         return actualizado;
     }
 

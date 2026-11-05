@@ -24,7 +24,8 @@ public class PlanFitosanitarioController {
     @PostMapping({"/plan-fitosanitario/", "/plan-fitosanitario"})
     @ResponseStatus(HttpStatus.CREATED)
     public List<Map<String, Object>> crear(
-            @AuthenticationPrincipal Usuario user, @Valid @RequestBody EntradasFitosanitario.Plan body) {
+            @AuthenticationPrincipal Usuario user,
+            @Valid @RequestBody EntradasFitosanitario.Plan body) {
         return service.crear(body, user);
     }
 }

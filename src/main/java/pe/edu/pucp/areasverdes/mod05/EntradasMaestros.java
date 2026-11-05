@@ -49,7 +49,8 @@ public final class EntradasMaestros {
                             fraction = 2,
                             message = "El monto admite hasta dos decimales")
                     BigDecimal monto_fijo,
-            // Frecuencia: cantidad y período (4 veces al año) o, para clientes anteriores, el texto libre.
+            // Frecuencia: cantidad y período (4 veces al año) o, para clientes anteriores, el texto
+            // libre.
             // El servicio exige una de las dos formas (`MaestrosService.crearContrato`).
             @Size(max = 120, message = "Admite hasta 120 caracteres") String frecuencia_pactada,
             @Min(value = 1, message = "La frecuencia es de al menos una vez")

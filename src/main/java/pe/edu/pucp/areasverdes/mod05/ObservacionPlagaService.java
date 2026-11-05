@@ -43,7 +43,11 @@ public class ObservacionPlagaService {
                 new ConsultasService.Catalogo(
                         OBSERVACIONES,
                         "fecha_observacion DESC,id DESC",
-                        List.of("plaga_nombre", "area_verde_nombre", "ejemplar_codigo", "descripcion"),
+                        List.of(
+                                "plaga_nombre",
+                                "area_verde_nombre",
+                                "ejemplar_codigo",
+                                "descripcion"),
                         Map.of("area_verde_id", "id", "ejemplar_id", "id", "plaga_id", "id")),
                 params,
                 url,
@@ -82,7 +86,8 @@ public class ObservacionPlagaService {
                 throw ApiError.invalid("El área verde está inactiva");
         } else repo.get("ejemplar", in.ejemplar_id());
         var plaga = repo.get("plaga", in.plaga_id());
-        if (!(boolean) plaga.get("activo")) throw ApiError.invalid("La plaga está inactiva en el catálogo");
+        if (!(boolean) plaga.get("activo"))
+            throw ApiError.invalid("La plaga está inactiva en el catálogo");
         if (in.fecha_observacion().isAfter(LocalDate.now(clock)))
             throw ApiError.invalid("La fecha de la observación no puede ser futura");
         long id =
