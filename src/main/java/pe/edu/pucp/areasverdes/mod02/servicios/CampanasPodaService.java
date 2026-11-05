@@ -11,6 +11,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.DataClassRowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -59,10 +60,15 @@ public class CampanasPodaService {
 
     private final NamedParameterJdbcTemplate jdbc;
     private final RegistradorAuditoria auditoria;
+    private final int umbralRendimiento;
 
-    public CampanasPodaService(NamedParameterJdbcTemplate jdbc, RegistradorAuditoria auditoria) {
+    public CampanasPodaService(
+            NamedParameterJdbcTemplate jdbc,
+            RegistradorAuditoria auditoria,
+            @Value("${mod02.poda.umbral-rendimiento:18}") int umbralRendimiento) {
         this.jdbc = jdbc;
         this.auditoria = auditoria;
+        this.umbralRendimiento = umbralRendimiento;
     }
 
     public record NuevaCampana(
@@ -195,6 +201,24 @@ public class CampanasPodaService {
     public Campana detalle(long id, Usuario usuario) {
         AccesoCoberturas.consultar(usuario);
         return buscar(id, false).comoCampana();
+    }
+
+    /** Rendimiento con las podas verificadas: ver {@link RendimientoCampana}. */
+    public RendimientoCampana.Resultado rendimiento(long id, Usuario usuario) {
+        AccesoCoberturas.consultar(usuario);
+        buscar(id, false);
+        List<RendimientoCampana.Registro> registros =
+                jdbc.query(
+                        """
+                        SELECT i.ejemplar_id, i.fecha_ejecucion fecha
+                        FROM mod02_intervencion_arbolado i
+                        WHERE i.campana_id = :id AND i.activo AND i.fecha_ejecucion IS NOT NULL
+                            AND %s
+                        """
+                                .formatted(IntervencionesPodaService.TIENE_FOTO),
+                        Map.of("id", id),
+                        new DataClassRowMapper<>(RendimientoCampana.Registro.class));
+        return RendimientoCampana.calcular(registros, umbralRendimiento);
     }
 
     public Pagina<EjemplarCampana> ejemplares(long id, String q, int page, Usuario usuario) {
