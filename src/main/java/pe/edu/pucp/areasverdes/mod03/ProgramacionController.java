@@ -45,7 +45,9 @@ public class ProgramacionController {
      * propio). {@code historial}: sus transiciones con autor y hora, de la más antigua a la más
      * reciente (AV-253). {@code cuadrilla}: la de MOD-04 con personal propio; {@code areas}: las
      * áreas verdes de MOD-02 con su sector vigente (AV-254). {@code codigo}: el legible del ciclo,
-     * como CC-2026-11 (AV-364; {@code null} en los creados fuera de la api).
+     * como CC-2026-11 (AV-364; {@code null} en los creados fuera de la api). {@code requerimiento}:
+     * la atención de MOD-05 de un corte con proveedor (AV-263); si no se pudo crear, {@code
+     * motivo_sin_requerimiento} dice por qué.
      */
     public record Programacion(
             long id,
@@ -65,7 +67,12 @@ public class ProgramacionController {
             Long cuadrillaId,
             String cuadrilla,
             List<Area> areas,
-            List<Transicion> historial) {}
+            List<Transicion> historial,
+            Requerimiento requerimiento,
+            String motivoSinRequerimiento) {}
+
+    /** Atención tercerizada de MOD-05 creada al programar el ciclo, con su estado actual. */
+    public record Requerimiento(long id, String codigo, String estado) {}
 
     /** Detalle de un ciclo (AV-364): la programación y las restricciones que le afectan. */
     public record Detalle(
@@ -104,15 +111,21 @@ public class ProgramacionController {
             String ventanaMes,
             String motivoCancelacion,
             Long cuadrillaId,
-            String cuadrilla) {}
+            String cuadrilla,
+            Long atencionId,
+            String requerimientoCodigo,
+            String requerimientoEstado,
+            String motivoSinRequerimiento) {}
 
     static final String CONSULTA =
             """
-            SELECT p.*, t.nombre servicio, v.razon_social proveedor, c.nombre cuadrilla
+            SELECT p.*, t.nombre servicio, v.razon_social proveedor, c.nombre cuadrilla,
+                req.codigo requerimiento_codigo, req.estado requerimiento_estado
             FROM mod03_programacion_servicio p
             JOIN mod05_tiposervicio t ON t.id = p.tipo_servicio_id
             LEFT JOIN mod05_proveedor v ON v.id = p.proveedor_id
             LEFT JOIN mod04_cuadrilla c ON c.id = p.cuadrilla_id
+            LEFT JOIN mod05_atenciontercerizada req ON req.id = p.atencion_id
             WHERE %s ORDER BY p.fecha_inicio_prevista, p.id
             """;
 
@@ -364,7 +377,14 @@ public class ProgramacionController {
                                         f.cuadrillaId(),
                                         f.cuadrilla(),
                                         areas.getOrDefault(f.id(), List.of()),
-                                        historial.getOrDefault(f.id(), List.of())))
+                                        historial.getOrDefault(f.id(), List.of()),
+                                        f.atencionId() == null
+                                                ? null
+                                                : new Requerimiento(
+                                                        f.atencionId(),
+                                                        f.requerimientoCodigo(),
+                                                        f.requerimientoEstado()),
+                                        f.motivoSinRequerimiento()))
                 .toList();
     }
 }
