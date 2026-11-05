@@ -37,7 +37,7 @@ public class EspeciesController {
 
     public record NuevaEspecie(
             @NotBlank @Size(max = 150) String nombreComun,
-            @Size(max = 200) String nombreCientifico,
+            @NotBlank @Size(max = 200) String nombreCientifico,
             @NotBlank @Size(max = 80) String formaBiologica) {}
 
     public record CambioEspecie(

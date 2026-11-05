@@ -62,8 +62,9 @@ public class ValoresIniciales {
     }
 
     /**
-     * Precarga del perfil dev: los valores de la sección para los servicios de demostración, por
-     * nombre. No toca los que ya existen.
+     * Los valores de la sección para los servicios, por nombre: los mismos que carga la migración
+     * V44 en todos los entornos. Lo usan la precarga dev y las pruebas, que vacían los servicios.
+     * No toca los que ya existen.
      */
     @Transactional
     public void precargar() {

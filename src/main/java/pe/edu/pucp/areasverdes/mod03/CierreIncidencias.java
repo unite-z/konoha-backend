@@ -22,19 +22,26 @@ public class CierreIncidencias {
     private final NamedParameterJdbcTemplate jdbc;
     private final Incidencias incidencias;
     private final Avisos avisos;
+    private final DerivacionTercerizada derivacion;
 
     public CierreIncidencias(
-            NamedParameterJdbcTemplate jdbc, Incidencias incidencias, Avisos avisos) {
+            NamedParameterJdbcTemplate jdbc,
+            Incidencias incidencias,
+            Avisos avisos,
+            DerivacionTercerizada derivacion) {
         this.jdbc = jdbc;
         this.incidencias = incidencias;
         this.avisos = avisos;
+        this.derivacion = derivacion;
     }
 
     @Transactional
     public void cerrar(long id, Revision r, UsuarioPlanificacion usuario) {
         Acceso.gestionarIncidencias(usuario);
+        derivacion.sincronizar();
         exigirAtendida(id, "cerrar");
-        if (incidencias.evidencias(id).isEmpty()) {
+        // Derivada a un proveedor, el informe adjunto en MOD-05 es la evidencia (AV-278).
+        if (incidencias.evidencias(id).isEmpty() && !derivacion.conInforme(id)) {
             throw new ErrorPlanificacion(
                     409, "sin-evidencia", "No se puede cerrar sin evidencia de la atención");
         }
