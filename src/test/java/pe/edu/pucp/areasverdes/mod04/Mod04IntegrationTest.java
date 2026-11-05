@@ -462,6 +462,35 @@ class Mod04IntegrationTest {
     }
 
     @Test
+    void jefeVerificaActividadYSeConservanAutorFechaYAuditoria() throws Exception {
+        long equipo = cuadrilla(c1, o1), actividad = actividad(equipo);
+        var verificacion = values("observaciones", "Ejecución conforme; retirar ramas del sendero");
+
+        putJson("/actividades/" + actividad + "/verificacion/", verificacion, "capataz1", 403);
+        putJson("/actividades/" + actividad + "/verificacion/", verificacion, "ingeniero", 403);
+        putJson("/actividades/" + actividad + "/verificacion/", verificacion, "jefe", 200);
+
+        http.perform(get(BASE + "/actividades/" + actividad).with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.observaciones").doesNotExist())
+                .andExpect(
+                        jsonPath("$.verificacion_observaciones")
+                                .value(verificacion.get("observaciones")))
+                .andExpect(jsonPath("$.verificado_por_usuario_id").value(jefe))
+                .andExpect(jsonPath("$.verificado_por_nombre").value("jefe"))
+                .andExpect(jsonPath("$.fecha_verificacion").isNotEmpty());
+        assertEquals(
+                1,
+                repo.jdbc()
+                        .queryForObject(
+                                "SELECT count(*) FROM core_registro_auditoria WHERE"
+                                        + " entidad='Actividad' AND accion='Modificacion' AND"
+                                        + " registro_id=:id AND usuario_id=:u",
+                                Map.of("id", actividad, "u", jefe),
+                                Integer.class));
+    }
+
+    @Test
     void catalogoJerarquicoConservaNombreHistoricoYBloqueaNuevasAltas() throws Exception {
         http.perform(get(BASE + "/catalogos/clases-actividad/").with(httpBasic("jefe", PASSWORD)))
                 .andExpect(status().isOk())
@@ -922,7 +951,14 @@ class Mod04IntegrationTest {
                                 "/actividades/" + act + "/participantes",
                                 values("operarios", List.of(o1)),
                                 false,
-                                true));
+                                true),
+                        new Fila(
+                                "verificarActividad",
+                                "PUT",
+                                "/actividades/" + act + "/verificacion",
+                                values("observaciones", "Conforme en campo"),
+                                true,
+                                false));
         var registrados = new HashSet<String>();
         rutas.getHandlerMethods()
                 .forEach(

@@ -220,6 +220,15 @@ public class OperacionCampoController {
         return service.actividad(id, user);
     }
 
+    @PutMapping({"/actividades/{id}/verificacion", "/actividades/{id}/verificacion/"})
+    @Operation(summary = "RF-ACT-011: registrar la verificación en campo del jefe de sección")
+    public Map<String, Object> verificarActividad(
+            @PathVariable long id,
+            @Valid @RequestBody Entradas.Verificacion body,
+            @AuthenticationPrincipal Usuario user) {
+        return service.verificarActividad(id, body, user);
+    }
+
     @GetMapping({"/actividades/{id}/materiales", "/actividades/{id}/materiales/"})
     @Operation(summary = "RF-ACT-005: consultar insumos y material vegetal de la actividad")
     public List<Map<String, Object>> materiales(

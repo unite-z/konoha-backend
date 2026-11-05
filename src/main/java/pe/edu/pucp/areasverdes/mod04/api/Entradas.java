@@ -43,6 +43,8 @@ public final class Entradas {
     public record Participantes(
             @NotNull @Size(max = 200) List<@NotNull @Positive Long> operarios) {}
 
+    public record Verificacion(@NotBlank @Size(max = 1000) String observaciones) {}
+
     public record Parte(@NotNull @Positive Long cuadrillaId, @NotNull LocalDate fecha) {}
 
     public record Actividad(
