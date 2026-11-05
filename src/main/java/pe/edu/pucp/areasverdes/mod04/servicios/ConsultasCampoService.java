@@ -65,6 +65,8 @@ public class ConsultasCampoService {
                             "SELECT id,nombre,activo,nombre texto FROM mod04_clase_actividad";
                     case "unidades-medida" ->
                             "SELECT id,nombre,simbolo,nombre texto FROM mod04_unidad_medida";
+                    case "materiales" ->
+                            "SELECT id,nombre,activo,nombre texto FROM mod04_material_catalogo";
                     case "areas-verdes" ->
                             "SELECT id,nombre,activo,nombre texto FROM mod05_areaverde";
                     default -> throw ApiError.missing("Catálogo inexistente");

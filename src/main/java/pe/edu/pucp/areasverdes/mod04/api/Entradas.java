@@ -65,4 +65,12 @@ public final class Entradas {
             @NotBlank @Size(max = 150) String nombre,
             @NotNull @Positive Long claseId,
             @NotNull Boolean activo) {}
+
+    public record MaterialActividad(
+            @Positive Long materialId,
+            @Size(max = 150) String descripcionOtro,
+            @NotNull @Positive @DecimalMax("9999999999.99") BigDecimal cantidad,
+            @NotNull @Positive Long unidadMedidaId,
+            @Size(max = 150) String origen,
+            @Size(max = 150) String destino) {}
 }
