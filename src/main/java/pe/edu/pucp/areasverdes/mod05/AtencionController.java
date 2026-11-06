@@ -137,8 +137,7 @@ public class AtencionController {
     @PostMapping(
             value = {"/atenciones/{id}/reportes/", "/atenciones/{id}/reportes"},
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @ResponseStatus(HttpStatus.CREATED)
-    public Map<String, Object> upload(
+    public ResponseEntity<Map<String, Object>> upload(
             @AuthenticationPrincipal Usuario user,
             @PathVariable long id,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha_recepcion,
@@ -160,7 +159,13 @@ public class AtencionController {
                 || docs.isEmpty()
                 || docs.stream().anyMatch(d -> d == null || !validator.validate(d).isEmpty()))
             throw ApiError.invalid("Metadatos de documentos incompletos o inválidos");
-        return reports.adjuntar(id, fecha_recepcion, resumen, docs, archivos, user);
+        // 201 si crea una revisión; 200 si el envío repite la última (idempotencia por SHA-256).
+        var reporte = reports.adjuntar(id, fecha_recepcion, resumen, docs, archivos, user);
+        return ResponseEntity.status(
+                        Boolean.TRUE.equals(reporte.get("repetido"))
+                                ? HttpStatus.OK
+                                : HttpStatus.CREATED)
+                .body(reporte);
     }
 
     @GetMapping({"/atenciones/{id}/reportes/{reporte}/", "/atenciones/{id}/reportes/{reporte}"})
