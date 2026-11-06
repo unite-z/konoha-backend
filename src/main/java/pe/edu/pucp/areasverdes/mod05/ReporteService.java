@@ -13,6 +13,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.*;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class ReporteService {
@@ -58,6 +59,15 @@ public class ReporteService {
             if (doc.categoria().equals("EvidenciaEspacio") && doc.alcance_id() == null)
                 throw ApiError.invalid("La evidencia por espacio requiere indicar su alcance");
         }
+        // Idempotencia: reenviar lo mismo que la última revisión (misma recepción, mismo
+        // resumen y documentos con el mismo SHA-256) devuelve esa revisión y no crea nada.
+        // Se evalúa bajo el bloqueo de la atención: dos envíos idénticos simultáneos
+        // tampoco duplican.
+        var ultima = ultimaRevision(id);
+        if (ultima != null && huella(ultima).equals(huella(fecha, resumen, docs, validated))) {
+            ultima.put("repetido", true);
+            return ultima;
+        }
         List<String> paths = new ArrayList<>();
         // Incluye fallos en el COMMIT, después de retornar de este método.
         TransactionSynchronizationManager.registerSynchronization(
@@ -82,7 +92,7 @@ public class ReporteService {
                 repo.jdbc()
                         .queryForObject(
                                 "SELECT coalesce(max(revision),0)+1 FROM mod05_reporteproveedor"
-                                    + " WHERE atencion_id=:id",
+                                        + " WHERE atencion_id=:id",
                                 Map.of("id", id),
                                 Integer.class);
         OffsetDateTime now = OffsetDateTime.now(clock);
@@ -158,6 +168,70 @@ public class ReporteService {
                 repo.get("reporteproveedor", reporte),
                 "");
         atenciones.guardar(id, values("estado", Atencion.REPORTE), antes, user, "");
-        return repo.reporte(id, reporte);
+        var creado = repo.reporte(id, reporte);
+        creado.put("repetido", false);
+        return creado;
+    }
+
+    /** Última revisión de la atención con sus documentos, o `null` si aún no tiene. */
+    Map<String, Object> ultimaRevision(long id) {
+        var filas =
+                repo.rows(
+                        Mod05Repository.REPORTES
+                                + " WHERE r.atencion_id=:id ORDER BY r.revision DESC LIMIT 1",
+                        Map.of("id", id));
+        return filas.isEmpty() ? null : repo.enrichReport(filas.get(0));
+    }
+
+    static String texto(Object valor) {
+        return valor == null ? "" : valor.toString().strip();
+    }
+
+    static String linea(String categoria, String alcance, String descripcion, String hash) {
+        return String.join("\u001f", categoria, alcance, descripcion, hash);
+    }
+
+    /** Huella de una revisión ya guardada. */
+    @SuppressWarnings("unchecked")
+    static String huella(Map<String, Object> revision) {
+        var lineas = new ArrayList<String>();
+        for (var doc : (List<Map<String, Object>>) revision.get("documentos")) {
+            var archivo = (Map<String, Object>) doc.get("archivo");
+            lineas.add(
+                    linea(
+                            texto(doc.get("categoria")),
+                            texto(doc.get("alcance_id")),
+                            texto(doc.get("descripcion")),
+                            texto(archivo.get("hash_contenido"))));
+        }
+        return huella(
+                texto(revision.get("fecha_recepcion")), texto(revision.get("resumen")), lineas);
+    }
+
+    /** Huella de un envío: no depende del orden de los documentos ni de los nombres de archivo. */
+    static String huella(
+            LocalDate fecha,
+            String resumen,
+            List<Entradas.Documento> docs,
+            List<ArchivoStorage.Validado> files) {
+        var lineas = new ArrayList<String>();
+        for (int i = 0; i < docs.size(); i++) {
+            var d = docs.get(i);
+            lineas.add(
+                    linea(
+                            d.categoria(),
+                            texto(d.alcance_id()),
+                            texto(d.descripcion()),
+                            files.get(i).hash()));
+        }
+        return huella(fecha.toString(), texto(resumen), lineas);
+    }
+
+    static String huella(String fecha, String resumen, List<String> lineas) {
+        return fecha
+                + "\u001e"
+                + resumen
+                + "\u001e"
+                + lineas.stream().sorted().collect(Collectors.joining("\u001e"));
     }
 }
