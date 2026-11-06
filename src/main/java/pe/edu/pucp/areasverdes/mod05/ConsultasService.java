@@ -101,7 +101,15 @@ public class ConsultasService {
                                 "proveedor_nombre",
                                 "tipo_servicio_nombre",
                                 "unidad_solicitante_nombre"),
-                        Map.of("estado", "estado", "origen", "origen", "contrato_id", "id")),
+                        Map.of(
+                                "estado",
+                                "estado",
+                                "origen",
+                                "origen",
+                                "clase",
+                                "clase",
+                                "contrato_id",
+                                "id")),
                 params,
                 url,
                 repo::enrich);
@@ -186,6 +194,12 @@ public class ConsultasService {
                                                                     "Demanda",
                                                                     "ProgramacionEstacional",
                                                                     "SolicitudUnidad"));
+                                            case "clase" ->
+                                                    option(
+                                                            text,
+                                                            List.of(
+                                                                    Entradas.CLASE_PROGRAMADA,
+                                                                    Entradas.CLASE_EXTRAORDINARIA));
                                             case "ejecutor" ->
                                                     option(
                                                             text,
