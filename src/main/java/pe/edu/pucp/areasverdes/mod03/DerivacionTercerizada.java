@@ -352,14 +352,14 @@ public class DerivacionTercerizada {
         String[] nombres = {
             "Requerimiento", "Orden de compra", "Informe del proveedor", "Conformidad"
         };
-        Object estado = a.get("estado");
+        Object estadoAtencion = a.get("estado");
         boolean conInforme =
-                REPORTE.equals(estado) || OBSERVADO.equals(estado) || CONFORME.equals(estado);
+                REPORTE.equals(estadoAtencion) || OBSERVADO.equals(estadoAtencion) || CONFORME.equals(estadoAtencion);
         LocalDate[] fechas = {
             dia(a.get("fecha_creacion")),
             dia(a.get("fecha_orden_compra")),
             conInforme ? dia(a.get("fecha_informe")) : null,
-            CONFORME.equals(estado) ? dia(a.get("fecha_conformidad")) : null
+            CONFORME.equals(estadoAtencion) ? dia(a.get("fecha_conformidad")) : null
         };
         List<Paso> pasos = new ArrayList<>();
         boolean enCurso = false;
