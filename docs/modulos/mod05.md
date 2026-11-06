@@ -144,6 +144,8 @@ curl --user mod05_jefe \
 
 PDF, JPEG, PNG, DOCX y XLSX, 20 MB por archivo y 100 MB por petición por defecto; límites configurables. Se valida cabecera/estructura básica y se calcula SHA-256. Validación de formato no equivale a análisis antimalware. Documentos Office con expansión superior a 100 MB o más de 10.000 entradas se rechazan.
 
+**Idempotencia (SHA-256).** Reenviar lo mismo que la última revisión no crea otra: mismo `fecha_recepcion`, mismo `resumen` y mismos documentos (categoría, `alcance_id`, descripción y SHA-256 del contenido, sin importar el orden ni los nombres de archivo). En ese caso la API responde `200` con esa revisión y `"repetido": true`, sin guardar archivos ni auditar. Una revisión nueva responde `201` con `"repetido": false`. Solo se compara con la última revisión: volver a un contenido anterior (A, B, A) crea la revisión 3. La comparación ocurre bajo el bloqueo de la atención, así que dos envíos idénticos simultáneos tampoco duplican.
+
 Archivos fuera de la BD con nombres UUID. El directorio no se publica como recurso estático; descargas autenticadas como adjuntos sin caché pública. Revisiones previas permanecen disponibles. Bloqueo de la atención serializa cambios de estado y numeración de reportes. Si falla la escritura o el commit, se limpian archivos nuevos; fallos de limpieza se registran en logs. Una terminación abrupta puede dejar huérfanos y necesita reconciliación operativa.
 
 ## Pruebas
@@ -158,7 +160,7 @@ export TEST_DB_PASSWORD=tu_clave
 ./mvnw test
 ```
 
-**La suite vacía las tablas de esa base** entre casos. El guard de configuración exige el sufijo `_test`. Por defecto utiliza `127.0.0.1:55432/mod05_spring_test`, el usuario del sistema y contraseña vacía. Flyway comprueba/aplica el esquema. Incluye autenticación, contrato frontend, filtros, alcances, estados, documentación, rollback durante commit, triggers, precarga y concurrencia real.
+**La suite vacía las tablas de esa base** entre casos. El guard de configuración exige el sufijo `_test`. Por defecto utiliza `127.0.0.1:55432/mod05_spring_test`, el usuario del sistema y contraseña vacía. Flyway comprueba/aplica el esquema. Incluye autenticación, contrato frontend, filtros, alcances, estados, documentación, rollback durante commit, triggers, precarga, concurrencia real, permisos y descarga de reportes e idempotencia por SHA-256.
 
 Las pruebas del MOD-06 corren en el mismo `./mvnw test` y usan la misma base `_test`. Frontend desde `../frontend/`: `npm test`, `npm run build`, `npm run lint`.
 
@@ -166,6 +168,7 @@ Las pruebas del MOD-06 corren en el mismo `./mvnw test` y usan la misma base `_t
 
 - Registro/mantenimiento de proveedores y contratos; hoy precarga y consulta.
 - Formularios estructurados y completitud documental por servicio, previa validación con el usuario.
+- Tarifario por tipo de intervención en los contratos (mejora futura, RF-SER-002): hoy el contrato solo tiene `monto_fijo`, obligatorio. Los contratos son únicamente de servicios tercerizados.
 - Integrar catálogos, usuarios, incidencias y programación con los módulos propietarios sin duplicar IDs.
 - Integrar almacenamiento de objetos y seguridad para atenciones de riesgo.
 - Fuera de esta entrega: extraordinarias, órdenes de servicio, conformidad, subsanación, IA y nuevas pantallas frontend.
