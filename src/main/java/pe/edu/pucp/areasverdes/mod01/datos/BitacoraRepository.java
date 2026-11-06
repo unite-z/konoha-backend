@@ -3,6 +3,7 @@ package pe.edu.pucp.areasverdes.mod01.datos;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.List;
@@ -127,21 +128,61 @@ public class BitacoraRepository {
     }
 
     /** Accesos más recientes primero, con filtros opcionales (CU-MOD01-007). */
-    public List<Acceso> accesos(Long usuarioId, String resultado, int limite, int desplazamiento) {
-        var p = new HashMap<String, Object>();
-        p.put("usuario", usuarioId);
-        p.put("resultado", resultado);
+    /**
+     * Filtros del registro de accesos; un valor nulo no filtra.
+     *
+     * @param usuario texto en el nombre, la cuenta o el identificador escrito al intentar entrar
+     * @param desde primer día, en hora de Lima
+     * @param hasta último día, incluido, en hora de Lima
+     */
+    public record FiltroAccesos(
+            Long usuarioId,
+            String usuario,
+            String resultado,
+            String canal,
+            LocalDate desde,
+            LocalDate hasta) {
+
+        private Map<String, Object> parametros() {
+            var p = new HashMap<String, Object>();
+            p.put("usuario", usuarioId);
+            p.put("texto", usuario == null ? null : "%" + escaparLike(usuario) + "%");
+            p.put("resultado", resultado);
+            p.put("canal", canal);
+            p.put("desde", desde);
+            p.put("hasta", hasta);
+            return p;
+        }
+
+        private static String escaparLike(String texto) {
+            return texto.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
+        }
+    }
+
+    /** Solo lleva parámetros. Un intento sin cuenta se busca por lo que escribió la persona. */
+    private static final String DESDE_ACCESOS =
+            """
+            FROM core_registro_acceso a
+            LEFT JOIN core_usuario u ON u.id = a.usuario_id
+            WHERE (CAST(:usuario AS bigint) IS NULL OR a.usuario_id = :usuario)
+                AND (CAST(:resultado AS varchar) IS NULL OR a.resultado = :resultado)
+                AND (CAST(:canal AS varchar) IS NULL OR a.canal = :canal)
+                AND (CAST(:texto AS varchar) IS NULL OR u.nombre ILIKE :texto
+                    OR u.nombre_usuario ILIKE :texto OR a.identificador ILIKE :texto)
+                AND (CAST(:desde AS date) IS NULL
+                    OR a.fecha_hora >= CAST(:desde AS date) AT TIME ZONE 'America/Lima')
+                AND (CAST(:hasta AS date) IS NULL
+                    OR a.fecha_hora < (CAST(:hasta AS date) + 1) AT TIME ZONE 'America/Lima')
+            """;
+
+    public List<Acceso> accesos(FiltroAccesos filtro, int limite, int desplazamiento) {
+        var p = filtro.parametros();
         p.put("limite", limite);
-        p.put("desde", desplazamiento);
+        p.put("desde_fila", desplazamiento);
         return jdbc.query(
-                """
-                SELECT a.*, u.nombre usuario_nombre FROM core_registro_acceso a
-                LEFT JOIN core_usuario u ON u.id = a.usuario_id
-                WHERE (CAST(:usuario AS bigint) IS NULL OR a.usuario_id = :usuario)
-                    AND (CAST(:resultado AS varchar) IS NULL OR a.resultado = :resultado)
-                ORDER BY a.fecha_hora DESC, a.id DESC
-                LIMIT :limite OFFSET :desde
-                """,
+                "SELECT a.*, u.nombre usuario_nombre "
+                        + DESDE_ACCESOS
+                        + " ORDER BY a.fecha_hora DESC, a.id DESC LIMIT :limite OFFSET :desde_fila",
                 p,
                 (fila, n) ->
                         new Acceso(
@@ -156,19 +197,10 @@ public class BitacoraRepository {
                                 fila.getString("ruta")));
     }
 
-    public long contarAccesos(Long usuarioId, String resultado) {
-        var p = new HashMap<String, Object>();
-        p.put("usuario", usuarioId);
-        p.put("resultado", resultado);
+    public long contarAccesos(FiltroAccesos filtro) {
         Long n =
                 jdbc.queryForObject(
-                        """
-                        SELECT count(*) FROM core_registro_acceso a
-                        WHERE (CAST(:usuario AS bigint) IS NULL OR a.usuario_id = :usuario)
-                            AND (CAST(:resultado AS varchar) IS NULL OR a.resultado = :resultado)
-                        """,
-                        p,
-                        Long.class);
+                        "SELECT count(*) " + DESDE_ACCESOS, filtro.parametros(), Long.class);
         return n == null ? 0 : n;
     }
 
