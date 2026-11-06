@@ -51,6 +51,13 @@ public final class Entradas {
             LocalDate fecha_acuerdo_unidad,
             String comentarios_acuerdo_unidad) {}
 
+    public static final String RESULTADO_CONFORMIDAD = "Conforme|Observada";
+
+    public record Conformidad(
+            @NotBlank @Pattern(regexp = RESULTADO_CONFORMIDAD) String resultado,
+            @NotNull LocalDate fecha_conformidad,
+            String comentarios) {}
+
     public record Documento(
             @NotBlank @Pattern(regexp = CATEGORIA) String categoria,
             @Positive Long alcance_id,

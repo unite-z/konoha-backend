@@ -41,7 +41,9 @@ public class ReporteService {
         user.exigir(false);
         var antes = repo.lock("atenciontercerizada", id);
         var a = Atencion.from(antes);
-        a.exigir(Atencion.EJECUTADO, Atencion.REPORTE);
+        // «Observado»: la nueva revisión es la subsanación y devuelve la atención a «Reporte
+        // adjunto».
+        a.exigir(Atencion.EJECUTADO, Atencion.REPORTE, Atencion.OBSERVADO);
         if (fecha.isBefore(a.fin().atZoneSameInstant(Mod05Application.LIMA).toLocalDate()))
             throw ApiError.invalid(
                     "La recepción del informe no puede preceder al fin del servicio");

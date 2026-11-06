@@ -233,4 +233,58 @@ class DerivacionTercerizadaApiTest extends ApiPlanificacion {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.estado").value("Cerrada"));
     }
+
+    private long atencionDerivada(long incidencia) throws Exception {
+        derivar(incidencia, proveedor, contrato).andExpect(status().isOk());
+        return jdbc.queryForObject(
+                "SELECT atencion_id FROM mod03_requerimiento_incidencia"
+                        + " WHERE incidencia_id = :id",
+                Map.of("id", incidencia),
+                Long.class);
+    }
+
+    private void llegaA(long atencion, String estado, String... recorrido) {
+        jdbc.update(
+                "UPDATE mod05_atenciontercerizada SET estado = :estado,"
+                        + " fecha_orden_compra = now() WHERE id = :a",
+                Map.of("a", atencion, "estado", estado));
+        String anterior = "Ejecutado pendiente de reporte";
+        for (String nuevo : recorrido) {
+            jdbc.update(
+                    "INSERT INTO mod05_historialestado (atencion_id, estado_anterior,"
+                            + " estado_nuevo, usuario_id, fecha_hora)"
+                            + " VALUES (:a, :antes, :nuevo, 1, now())",
+                    Map.of("a", atencion, "antes", anterior, "nuevo", nuevo));
+            anterior = nuevo;
+        }
+    }
+
+    @Test
+    void conLaConformidadLaAtencionSigueContandoConInformeYCompletaElPasoDeConformidad()
+            throws Exception {
+        long id = clasificada();
+        long atencion = atencionDerivada(id);
+        llegaA(atencion, "Conforme / cerrado", "Reporte adjunto", "Conforme / cerrado");
+        http.perform(get(RUTA + id + "/").with(httpBasic("ingeniero", CLAVE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estado").value("Atendida"))
+                .andExpect(jsonPath("$.requerimiento.pasos[2].estado").value("Hecho"))
+                .andExpect(jsonPath("$.requerimiento.pasos[3].estado").value("Hecho"));
+        accion(id, "cerrar", "{}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estado").value("Cerrada"));
+    }
+
+    @Test
+    void unaAtencionObservadaNoDejaAtendidaLaIncidenciaPeroConservaLaFechaDelInforme()
+            throws Exception {
+        long id = clasificada();
+        long atencion = atencionDerivada(id);
+        llegaA(atencion, "Observado", "Reporte adjunto", "Observado");
+        http.perform(get(RUTA + id + "/").with(httpBasic("ingeniero", CLAVE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estado").value("DerivadaTercerizada"))
+                .andExpect(jsonPath("$.requerimiento.pasos[2].estado").value("Hecho"))
+                .andExpect(jsonPath("$.requerimiento.pasos[3].estado").value("EnCurso"));
+    }
 }

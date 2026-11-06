@@ -68,6 +68,7 @@ El frontend conserva `VITE_API_TERCERIZADOS_URL=/api/tercerizados`. Su proxy Vit
 | `atenciones/{id}/fin/` | POST | Los tres roles |
 | `atenciones/{id}/origen/` | PATCH | Jefe |
 | `atenciones/{id}/acuerdo-unidad/` | PATCH | Jefe |
+| `atenciones/{id}/conformidad/` | POST | Jefe |
 | `atenciones/{id}/reportes/` | GET, POST multipart | Los tres roles |
 | `atenciones/{id}/reportes/{reporte}/` | GET | No aplica |
 | `atenciones/{id}/reportes/{reporte}/documentos/{documento}/descarga/` | GET | No aplica |
@@ -92,7 +93,7 @@ Ejemplo de registro:
 
 Contrato vigente, proveedor y servicio activos, ejecutor tercerizado. El servicio se deriva del contrato. Cada alcance indica un área o ejemplar existente, sin duplicados, con metrado no negativo y unidad juntos o ninguno. Código UUID generado por el servidor. Crear atención, alcances e historial es atómico.
 
-Estados: `Requerimiento registrado` → `OC referenciada` → `En ejecución` → `Ejecutado pendiente de reporte` → `Reporte adjunto`.
+Estados: `Requerimiento registrado` → `OC referenciada` → `En ejecución` → `Ejecutado pendiente de reporte` → `Reporte adjunto`. Tras el informe, el jefe decide: `Conforme / cerrado` o `Observado` (espera otra revisión del informe, que devuelve la atención a `Reporte adjunto`).
 
 ```text
 PATCH orden-compra/  {"numero_orden_compra":"OC-2026-001"}
@@ -110,7 +111,7 @@ Después de finalizar una solicitud de unidad:
 {"acuerdo_unidad": false, "fecha_acuerdo_unidad": "2026-10-21", "comentarios_acuerdo_unidad": "Solicita revisión"}
 ```
 
-`null` con fecha `null` significa pendiente. El acuerdo comunicado necesita fecha no anterior al fin. No cambia el estado ni concede conformidad. Cada cambio deja auditoría; la base impide actualizar/eliminar auditoría e historial.
+`null` con fecha `null` significa pendiente. El acuerdo comunicado necesita fecha no anterior al fin. No cambia el estado ni concede conformidad, y puede registrarse también después de ella. Cada cambio deja auditoría; la base impide actualizar/eliminar auditoría e historial.
 
 ### Búsqueda y catálogos
 
@@ -148,6 +149,18 @@ PDF, JPEG, PNG, DOCX y XLSX, 20 MB por archivo y 100 MB por petición por defect
 
 Archivos fuera de la BD con nombres UUID. El directorio no se publica como recurso estático; descargas autenticadas como adjuntos sin caché pública. Revisiones previas permanecen disponibles. Bloqueo de la atención serializa cambios de estado y numeración de reportes. Si falla la escritura o el commit, se limpian archivos nuevos; fallos de limpieza se registran en logs. Una terminación abrupta puede dejar huérfanos y necesita reconciliación operativa.
 
+### Conformidad
+
+El jefe de sección decide sobre la última revisión del informe (RF-SER-007), solo con la atención en `Reporte adjunto`. Sin informe responde 409 (RN-007).
+
+```json
+{"resultado": "Observada", "fecha_conformidad": "2026-10-22", "comentarios": "Falta el metrado del sector B"}
+```
+
+`resultado` es `Conforme` u `Observada`. La fecha no puede ser anterior a la recepción del informe. Al observar, los comentarios son obligatorios. `Conforme` deja la atención en `Conforme / cerrado`, y ya no admite más revisiones. `Observada` la deja en `Observado`: el proveedor sube una nueva revisión (que la devuelve a `Reporte adjunto`) y el jefe vuelve a decidir. Cada revisión admite una sola decisión; no se pueden modificar ni borrar. La ficha de la atención las devuelve en `conformidades`, de la más antigua a la más reciente, con la `revision` que evaluaron. No sustituye el acuerdo de la unidad, que se registra aparte.
+
+Reenviar un informe idéntico a la última revisión sigue sin crear nada, también estando `Observado`: la subsanación exige una revisión distinta.
+
 ## Pruebas
 
 Se ejecutan contra PostgreSQL real, nunca H2. Crear una base exclusiva terminada en `_test`:
@@ -160,7 +173,7 @@ export TEST_DB_PASSWORD=tu_clave
 ./mvnw test
 ```
 
-**La suite vacía las tablas de esa base** entre casos. El guard de configuración exige el sufijo `_test`. Por defecto utiliza `127.0.0.1:55432/mod05_spring_test`, el usuario del sistema y contraseña vacía. Flyway comprueba/aplica el esquema. Incluye autenticación, contrato frontend, filtros, alcances, estados, documentación, rollback durante commit, triggers, precarga, concurrencia real, permisos y descarga de reportes e idempotencia por SHA-256.
+**La suite vacía las tablas de esa base** entre casos. El guard de configuración exige el sufijo `_test`. Por defecto utiliza `127.0.0.1:55432/mod05_spring_test`, el usuario del sistema y contraseña vacía. Flyway comprueba/aplica el esquema. Incluye autenticación, contrato frontend, filtros, alcances, estados, documentación, rollback durante commit, triggers, precarga, concurrencia real, permisos y descarga de reportes, idempotencia por SHA-256 y conformidad.
 
 Las pruebas del MOD-06 corren en el mismo `./mvnw test` y usan la misma base `_test`. Frontend desde `../frontend/`: `npm test`, `npm run build`, `npm run lint`.
 
@@ -171,4 +184,4 @@ Las pruebas del MOD-06 corren en el mismo `./mvnw test` y usan la misma base `_t
 - Tarifario por tipo de intervención en los contratos (mejora futura, RF-SER-002): hoy el contrato solo tiene `monto_fijo`, obligatorio. Los contratos son únicamente de servicios tercerizados.
 - Integrar catálogos, usuarios, incidencias y programación con los módulos propietarios sin duplicar IDs.
 - Integrar almacenamiento de objetos y seguridad para atenciones de riesgo.
-- Fuera de esta entrega: extraordinarias, órdenes de servicio, conformidad, subsanación, IA y nuevas pantallas frontend.
+- Fuera de esta entrega: extraordinarias, órdenes de servicio, subsanación completa (RF-SER-012; hoy basta una nueva revisión del informe), IA y nuevas pantallas frontend.
