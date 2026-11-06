@@ -1106,4 +1106,179 @@ class Mod05IntegrationTest {
                                 Map.of("estado", Atencion.REPORTE),
                                 Integer.class));
     }
+
+    // --- Conformidad u observación del informe (RF-SER-007) ---
+
+    String informes() {
+        return "[" + INFORME + "]";
+    }
+
+    Map<String, Object> decision(String resultado, String comentarios) {
+        return values(
+                "resultado", resultado, "fecha_conformidad", hoy(), "comentarios", comentarios);
+    }
+
+    JsonNode decidir(long id, String user, Object body, int esperado) throws Exception {
+        return cuerpo(
+                http.perform(
+                                post(BASE + id + "/conformidad/")
+                                        .with(httpBasic(user, PASSWORD))
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(json.writeValueAsBytes(body)))
+                        .andExpect(status().is(esperado)));
+    }
+
+    /** Atención ejecutada y con la revisión 1 del informe: lista para decidir. */
+    long conInforme() throws Exception {
+        long id = create().get("id").asLong();
+        execute(id);
+        enviar("jefe", id, informes(), "Resumen", hoy(), pdf("informe.pdf", "A"))
+                .andExpect(status().isCreated());
+        return id;
+    }
+
+    @Test
+    void laConformidadExigeElInformeYSoloLaDaElJefe() throws Exception {
+        long id = create().get("id").asLong();
+        decidir(id, "jefe", decision("Conforme", ""), 409);
+        execute(id);
+        // RN-007: ejecutada pero sin informe adjunto.
+        decidir(id, "jefe", decision("Conforme", ""), 409);
+        enviar("jefe", id, informes(), "Resumen", hoy(), pdf("informe.pdf", "A"))
+                .andExpect(status().isCreated());
+        http.perform(get(BASE + id + "/").with(httpBasic("jefe", PASSWORD)))
+                .andExpect(jsonPath("$.conformidades").isArray())
+                .andExpect(jsonPath("$.conformidades.length()").value(0));
+        decidir(id, "ingeniero", decision("Conforme", ""), 403);
+        decidir(id, "practicante", decision("Conforme", ""), 403);
+        decidir(id, "sinrol", decision("Conforme", ""), 403);
+        assertEquals(0, count("conformidad"));
+
+        var cerrada = decidir(id, "jefe", decision("Conforme", ""), 200);
+        assertEquals(Atencion.CONFORME, cerrada.get("estado").asText());
+        assertEquals(1, cerrada.get("conformidades").size());
+        assertEquals("Conforme", cerrada.at("/conformidades/0/resultado").asText());
+        assertEquals(1, cerrada.at("/conformidades/0/revision").asInt());
+        assertEquals("Nombre jefe", cerrada.at("/conformidades/0/usuario_nombre").asText());
+        var historial = cerrada.get("historial");
+        assertEquals(
+                Atencion.CONFORME,
+                historial.get(historial.size() - 1).get("estado_nuevo").asText());
+        // Cerrada: ni otra decisión ni más revisiones.
+        decidir(id, "jefe", decision("Conforme", ""), 409);
+        enviar("jefe", id, informes(), "Resumen", hoy(), pdf("informe.pdf", "B"))
+                .andExpect(status().isConflict());
+        assertEquals(1, count("reporteproveedor"));
+    }
+
+    @Test
+    void laDecisionSeValidaAntesDeRegistrarse() throws Exception {
+        long id = conInforme();
+        decidir(id, "jefe", decision("Observada", "   "), 400);
+        decidir(id, "jefe", decision("Quizá", ""), 400);
+        decidir(id, "jefe", values("resultado", "Conforme", "comentarios", ""), 400);
+        decidir(
+                id,
+                "jefe",
+                values(
+                        "resultado",
+                        "Conforme",
+                        "fecha_conformidad",
+                        LocalDate.now(Mod05Application.LIMA).minusDays(1).toString()),
+                400);
+        assertEquals(0, count("conformidad"));
+        assertEquals(Atencion.REPORTE, repo.atencion(id).get("estado"));
+    }
+
+    @Test
+    void observarDejaLaAtencionObservadaYUnaNuevaRevisionPermiteDecidirDeNuevo() throws Exception {
+        long id = conInforme();
+        var observada = decidir(id, "jefe", decision("Observada", " Falta el metrado "), 200);
+        assertEquals(Atencion.OBSERVADO, observada.get("estado").asText());
+        assertEquals("Observada", observada.at("/conformidades/0/resultado").asText());
+        assertEquals("Falta el metrado", observada.at("/conformidades/0/comentarios").asText());
+        // Observada: espera otra revisión, no se puede decidir sobre la misma.
+        decidir(id, "jefe", decision("Conforme", ""), 409);
+        // El mismo informe no subsana: se reconoce como repetido y la atención sigue observada.
+        enviar("jefe", id, informes(), "Resumen", hoy(), pdf("informe.pdf", "A"))
+                .andExpect(status().isOk());
+        assertEquals(Atencion.OBSERVADO, repo.atencion(id).get("estado"));
+        // Una revisión distinta es la subsanación y devuelve la atención a «Reporte adjunto».
+        var segunda =
+                cuerpo(
+                        enviar("jefe", id, informes(), "Resumen", hoy(), pdf("informe.pdf", "B"))
+                                .andExpect(status().isCreated()));
+        assertEquals(2, segunda.get("revision").asInt());
+        assertEquals(Atencion.REPORTE, repo.atencion(id).get("estado"));
+
+        var conforme = decidir(id, "jefe", decision("Conforme", ""), 200);
+        assertEquals(Atencion.CONFORME, conforme.get("estado").asText());
+        assertEquals(2, conforme.get("conformidades").size());
+        assertEquals("Observada", conforme.at("/conformidades/0/resultado").asText());
+        assertEquals(1, conforme.at("/conformidades/0/revision").asInt());
+        assertEquals("Conforme", conforme.at("/conformidades/1/resultado").asText());
+        assertEquals(2, conforme.at("/conformidades/1/revision").asInt());
+    }
+
+    @Test
+    void lasDecisionesDeConformidadSoloAdmitenInserciones() throws Exception {
+        long id = conInforme();
+        decidir(id, "jefe", decision("Conforme", ""), 200);
+        assertThrows(
+                DataAccessException.class,
+                () ->
+                        repo.jdbc()
+                                .getJdbcTemplate()
+                                .update("UPDATE mod05_conformidad SET comentarios='alterado'"));
+        assertThrows(
+                DataAccessException.class,
+                () -> repo.jdbc().getJdbcTemplate().update("DELETE FROM mod05_conformidad"));
+        assertEquals(1, count("conformidad"));
+        // Cada decisión deja auditoría.
+        assertEquals(
+                1,
+                repo.jdbc()
+                        .queryForObject(
+                                "SELECT count(*) FROM mod05_registroauditoria"
+                                        + " WHERE entidad='Conformidad'",
+                                Map.of(),
+                                Integer.class));
+    }
+
+    @Test
+    void elAcuerdoDeLaUnidadSigueSiendoPosibleTrasLaConformidad() throws Exception {
+        long id = create().get("id").asLong();
+        patchAction(
+                id,
+                "origen",
+                Map.of(
+                        "origen",
+                        "SolicitudUnidad",
+                        "unidad_provisional",
+                        "Facultad X",
+                        "motivo",
+                        "Solicitud recibida"),
+                "jefe",
+                200);
+        execute(id);
+        enviar("jefe", id, informes(), "Resumen", hoy(), pdf("informe.pdf", "A"))
+                .andExpect(status().isCreated());
+        decidir(id, "jefe", decision("Conforme", ""), 200);
+        var respuesta =
+                patchAction(
+                        id,
+                        "acuerdo-unidad",
+                        values(
+                                "acuerdo_unidad",
+                                false,
+                                "fecha_acuerdo_unidad",
+                                LocalDate.now(Mod05Application.LIMA),
+                                "comentarios_acuerdo_unidad",
+                                "Respuesta posterior"),
+                        "jefe",
+                        200);
+        // El acuerdo no reabre ni cambia la decisión del jefe.
+        assertEquals(Atencion.CONFORME, respuesta.get("estado").asText());
+        assertEquals(1, respuesta.get("conformidades").size());
+    }
 }

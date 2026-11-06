@@ -29,9 +29,9 @@ import pe.edu.pucp.areasverdes.mod05.Usuario;
  * <ul>
  *   <li>la atención extraordinaria sin contrato (CU-MOD05-008): sin contrato responde 409 {@code
  *       sin-contrato};
- *   <li>la conformidad: la incidencia pasa a Atendida («Sistema») cuando la atención llega a
- *       «Reporte adjunto», el informe del proveedor ({@link #sincronizar()}), y ese informe vale
- *       como evidencia para cerrarla;
+ *   <li>la conformidad no condiciona la incidencia: pasa a Atendida («Sistema») cuando la atención
+ *       llega a «Reporte adjunto», el informe del proveedor ({@link #sincronizar()}), y ese informe
+ *       (también con la atención ya «Conforme / cerrado») vale como evidencia para cerrarla;
  *   <li>la poda del ejemplar de MOD-02 (RF-POD-005): {@code crear_poda} se acepta y no hace nada.
  * </ul>
  *
@@ -68,6 +68,12 @@ public class DerivacionTercerizada {
             long id, String codigo, String proveedor, String tipoAtencion, List<Paso> pasos) {}
 
     static final String REPORTE = "Reporte adjunto";
+
+    /** El jefe observó el informe: espera una nueva revisión (RF-SER-007 y RF-SER-012). */
+    static final String OBSERVADO = "Observado";
+
+    /** El jefe dio la conformidad (RF-SER-007). */
+    static final String CONFORME = "Conforme / cerrado";
 
     private final NamedParameterJdbcTemplate jdbc;
     private final AtencionService atenciones;
@@ -271,7 +277,9 @@ public class DerivacionTercerizada {
 
     /**
      * Pasa a Atendida («Sistema») las incidencias derivadas cuya última atención ya tiene el
-     * informe del proveedor («Reporte adjunto»): MOD-05 aún no registra la conformidad.
+     * informe del proveedor: «Reporte adjunto», o «Conforme / cerrado» si el jefe ya dio la
+     * conformidad. Una atención «Observado» no cuenta: su informe fue observado y espera otra
+     * revisión.
      */
     @Transactional
     public void sincronizar() {
@@ -285,19 +293,20 @@ public class DerivacionTercerizada {
                     UPDATE mod03_incidencia i SET estado = 'Atendida'
                     FROM ultimas u JOIN mod05_atenciontercerizada a ON a.id = u.atencion_id
                     WHERE i.id = u.incidencia_id AND i.estado = 'DerivadaTercerizada'
-                        AND a.estado = :reporte
+                        AND a.estado IN (:reporte, :conforme)
                     RETURNING i.id
                 )
                 INSERT INTO mod03_historial_incidencia (incidencia_id, estado, usuario_id, detalle)
                 SELECT id, 'Atendida', NULL, 'informe del proveedor en Servicios tercerizados'
                 FROM atendidas
                 """,
-                Map.of("reporte", REPORTE));
+                Map.of("reporte", REPORTE, "conforme", CONFORME));
     }
 
     /** {@code true} si la última atención de la incidencia tiene el informe del proveedor. */
     boolean conInforme(long incidencia) {
-        return REPORTE.equals(ultima(incidencia).map(a -> a.get("estado")).orElse(null));
+        Object estado = ultima(incidencia).map(a -> a.get("estado")).orElse(null);
+        return REPORTE.equals(estado) || CONFORME.equals(estado);
     }
 
     /** El último requerimiento de la incidencia con su avance, o {@code null} si no tiene. */
@@ -321,31 +330,38 @@ public class DerivacionTercerizada {
                         SELECT a.id, a.codigo, a.estado, a.fecha_creacion, a.fecha_orden_compra,
                             v.razon_social proveedor, r.tipo_atencion,
                             (SELECT min(h.fecha_hora) FROM mod05_historialestado h
-                             WHERE h.atencion_id = a.id AND h.estado_nuevo = :reporte) fecha_informe
+                             WHERE h.atencion_id = a.id AND h.estado_nuevo = :reporte) fecha_informe,
+                            (SELECT min(h.fecha_hora) FROM mod05_historialestado h
+                             WHERE h.atencion_id = a.id AND h.estado_nuevo = :conforme) fecha_conformidad
                         FROM mod03_requerimiento_incidencia r
                         JOIN mod05_atenciontercerizada a ON a.id = r.atencion_id
                         JOIN mod05_proveedor v ON v.id = r.proveedor_id
                         WHERE r.incidencia_id = :id
                         ORDER BY r.fecha_hora DESC, r.id DESC LIMIT 1
                         """,
-                        Map.of("id", incidencia, "reporte", REPORTE))
+                        Map.of("id", incidencia, "reporte", REPORTE, "conforme", CONFORME))
                 .stream()
                 .findFirst();
     }
 
     /**
-     * Requerimiento, orden de compra, informe del proveedor y conformidad (que MOD-05 aún no
-     * registra). El primero sin hacer está en curso.
+     * Requerimiento, orden de compra, informe del proveedor y conformidad. El primero sin hacer
+     * está en curso. El informe consta desde que se adjunta, aunque luego el jefe lo observe.
      */
     private static List<Paso> pasos(Map<String, Object> a) {
         String[] nombres = {
             "Requerimiento", "Orden de compra", "Informe del proveedor", "Conformidad"
         };
+        Object estadoAtencion = a.get("estado");
+        boolean conInforme =
+                REPORTE.equals(estadoAtencion)
+                        || OBSERVADO.equals(estadoAtencion)
+                        || CONFORME.equals(estadoAtencion);
         LocalDate[] fechas = {
             dia(a.get("fecha_creacion")),
             dia(a.get("fecha_orden_compra")),
-            REPORTE.equals(a.get("estado")) ? dia(a.get("fecha_informe")) : null,
-            null
+            conInforme ? dia(a.get("fecha_informe")) : null,
+            CONFORME.equals(estadoAtencion) ? dia(a.get("fecha_conformidad")) : null
         };
         List<Paso> pasos = new ArrayList<>();
         boolean enCurso = false;
