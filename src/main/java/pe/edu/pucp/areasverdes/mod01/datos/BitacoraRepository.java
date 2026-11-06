@@ -170,9 +170,9 @@ public class BitacoraRepository {
                 AND (CAST(:texto AS varchar) IS NULL OR u.nombre ILIKE :texto
                     OR u.nombre_usuario ILIKE :texto OR a.identificador ILIKE :texto)
                 AND (CAST(:desde AS date) IS NULL
-                    OR a.fecha_hora >= CAST(:desde AS date) AT TIME ZONE 'America/Lima')
+                    OR a.fecha_hora >= CAST(CAST(:desde AS date) AS timestamp) AT TIME ZONE 'America/Lima')
                 AND (CAST(:hasta AS date) IS NULL
-                    OR a.fecha_hora < (CAST(:hasta AS date) + 1) AT TIME ZONE 'America/Lima')
+                    OR a.fecha_hora < CAST(CAST(:hasta AS date) + 1 AS timestamp) AT TIME ZONE 'America/Lima')
             """;
 
     public List<Acceso> accesos(FiltroAccesos filtro, int limite, int desplazamiento) {
