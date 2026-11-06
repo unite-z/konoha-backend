@@ -4,13 +4,11 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
 import static pe.edu.pucp.areasverdes.mod05.AtencionService.values;
 
 import com.fasterxml.jackson.databind.*;
-import java.nio.file.*;
-import java.time.*;
-import java.util.*;
-import java.util.concurrent.*;
+
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.*;
@@ -24,9 +22,17 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+
 import pe.edu.pucp.areasverdes.comun.BaseDePruebas;
+
+import java.nio.file.*;
+import java.security.MessageDigest;
+import java.time.*;
+import java.util.*;
+import java.util.concurrent.*;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -654,6 +660,8 @@ class Mod05IntegrationTest {
         }
         service.fin(id, new Entradas.Fin(OffsetDateTime.now().minusHours(1)), jefe);
         try (var pool = Executors.newFixedThreadPool(2)) {
+            // Contenidos distintos: con el mismo contenido el segundo envío sería un reintento.
+            var numero = new java.util.concurrent.atomic.AtomicInteger();
             Callable<Integer> upload =
                     () -> {
                         barrier.await(10, TimeUnit.SECONDS);
@@ -668,7 +676,8 @@ class Mod05IntegrationTest {
                                                         "archivos",
                                                         "reporte.pdf",
                                                         "application/pdf",
-                                                        "%PDF-1.7".getBytes())),
+                                                        ("%PDF-1.7 " + numero.incrementAndGet())
+                                                                .getBytes())),
                                         jefe);
                         return ((Number) r.get("revision")).intValue();
                     };
@@ -723,5 +732,382 @@ class Mod05IntegrationTest {
         http.perform(get("/api/tercerizados/schema"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.openapi").exists());
+    }
+
+    // --- RF-SER-006: permisos, descarga e idempotencia de los reportes del proveedor
+    // ---------------------------------------------------------------------------------------------
+
+    static final String INFORME = "{\"categoria\":\"InformeFinal\"}";
+
+    String hoy() {
+        return LocalDate.now(Mod05Application.LIMA).toString();
+    }
+
+    MockMultipartFile pdf(String nombre, String contenido) {
+        return new MockMultipartFile(
+                "archivos", nombre, "application/pdf", ("%PDF-1.7 " + contenido).getBytes());
+    }
+
+    /** Envío multipart; con `user` nulo va sin credenciales. */
+    ResultActions enviar(
+            String user,
+            long id,
+            String docs,
+            String resumen,
+            String fecha,
+            MockMultipartFile... files)
+            throws Exception {
+        var request = multipart(BASE + id + "/reportes/");
+        for (var file : files) request.file(file);
+        request.param("documentos", docs).param("fecha_recepcion", fecha);
+        if (resumen != null) request.param("resumen", resumen);
+        if (user != null) request.with(httpBasic(user, PASSWORD));
+        return http.perform(request);
+    }
+
+    JsonNode cuerpo(ResultActions result) throws Exception {
+        return json.readTree(result.andReturn().getResponse().getContentAsByteArray());
+    }
+
+    long archivosEnDisco() throws Exception {
+        try (var paths = Files.walk(FILES)) {
+            return paths.filter(Files::isRegularFile).count();
+        }
+    }
+
+    long alcanceDe(long atencion, String funcion) {
+        return repo.jdbc()
+                .queryForObject(
+                        "SELECT "
+                                + funcion
+                                + "(id) FROM mod05_alcanceatencion WHERE atencion_id=:id",
+                        Map.of("id", atencion),
+                        Long.class);
+    }
+
+    String sha256(String contenido) throws Exception {
+        return HexFormat.of()
+                .formatHex(
+                        MessageDigest.getInstance("SHA-256")
+                                .digest(("%PDF-1.7 " + contenido).getBytes()));
+    }
+
+    @SafeVarargs
+    private String documentos(Map<String, Object>... docs) throws Exception {
+        return json.writeValueAsString(List.of(docs));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"jefe", "ingeniero", "practicante", "sinrol", "inactivo"})
+    void permisosDeReportesPorRol(String user) throws Exception {
+        long id = create().get("id").asLong();
+        execute(id);
+        int escritura = user.equals("inactivo") ? 401 : user.equals("sinrol") ? 403 : 201;
+        enviar(user, id, "[" + INFORME + "]", null, hoy(), pdf("propio.pdf", user))
+                .andExpect(status().is(escritura));
+        // Un reporte del jefe para que cada usuario intente consultarlo y descargarlo.
+        var base =
+                reports.adjuntar(
+                        id,
+                        LocalDate.now(Mod05Application.LIMA),
+                        "",
+                        List.of(new Entradas.Documento("InformeFinal", null, "")),
+                        List.of(pdf("base.pdf", "base de " + user)),
+                        jefe);
+        long reporte = ((Number) base.get("id")).longValue();
+        long documento =
+                repo.jdbc()
+                        .queryForObject(
+                                "SELECT min(id) FROM mod05_archivoasociado WHERE reporte_id=:r",
+                                Map.of("r", reporte),
+                                Long.class);
+        int lectura = user.equals("inactivo") ? 401 : user.equals("sinrol") ? 403 : 200;
+        String detalle = BASE + id + "/reportes/" + reporte + "/";
+        http.perform(get(BASE + id + "/reportes/").with(httpBasic(user, PASSWORD)))
+                .andExpect(status().is(lectura));
+        http.perform(get(detalle).with(httpBasic(user, PASSWORD))).andExpect(status().is(lectura));
+        var descarga =
+                http.perform(
+                                get(detalle + "documentos/" + documento + "/descarga/")
+                                        .with(httpBasic(user, PASSWORD)))
+                        .andExpect(status().is(lectura));
+        if (lectura == 200)
+            descarga.andExpect(content().bytes(("%PDF-1.7 base de " + user).getBytes()));
+    }
+
+    @Test
+    void reportesYDescargaExigenCredenciales() throws Exception {
+        long id = create().get("id").asLong();
+        execute(id);
+        var r = upload(id, "[" + INFORME + "]", "%PDF-1.7 reporte".getBytes(), 201);
+        enviar(null, id, "[" + INFORME + "]", null, hoy(), pdf("sin-credenciales.pdf", "x"))
+                .andExpect(status().isUnauthorized());
+        enviar("jefe", id, "[" + INFORME + "]", null, hoy(), pdf("valida.pdf", "x"))
+                .andExpect(status().isCreated());
+        String detalle = BASE + id + "/reportes/" + r.get("id").asLong() + "/";
+        http.perform(get(BASE + id + "/reportes/")).andExpect(status().isUnauthorized());
+        http.perform(get(detalle)).andExpect(status().isUnauthorized());
+        http.perform(
+                        get(
+                                detalle
+                                        + "documentos/"
+                                        + r.at("/documentos/0/id").asLong()
+                                        + "/descarga/"))
+                .andExpect(status().isUnauthorized());
+        assertEquals(2, count("reporteproveedor"));
+    }
+
+    @Test
+    void descargaNoCruzaAtencionesYFallaSiFaltaElArchivo() throws Exception {
+        long id = create().get("id").asLong(), otra = create().get("id").asLong();
+        execute(id);
+        var r = upload(id, "[" + INFORME + "]", "%PDF-1.7 reporte".getBytes(), 201);
+        String ruta =
+                BASE
+                        + "%d/reportes/"
+                        + r.get("id").asLong()
+                        + "/documentos/"
+                        + r.at("/documentos/0/id").asLong()
+                        + "/descarga/";
+        // La misma ruta con otra atención no encuentra el documento.
+        http.perform(get(ruta.formatted(otra)).with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isNotFound());
+        // Si el archivo desapareció del almacenamiento, responde 404 y no un error genérico.
+        String almacenado =
+                repo.jdbc()
+                        .queryForObject(
+                                "SELECT ruta_almacenamiento FROM mod05_archivo",
+                                Map.of(),
+                                String.class);
+        Files.delete(FILES.resolve(almacenado));
+        http.perform(get(ruta.formatted(id)).with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void reenvioIdenticoDevuelveLaUltimaRevisionSinCrearNada() throws Exception {
+        long id = create().get("id").asLong();
+        execute(id);
+        String docs = "[{\"categoria\":\"InformeFinal\",\"descripcion\":\"Informe\"}]";
+        var primero =
+                cuerpo(
+                        enviar("jefe", id, docs, "Resumen", hoy(), pdf("informe.pdf", "A"))
+                                .andExpect(status().isCreated()));
+        long enDisco = archivosEnDisco(),
+                auditoria = count("registroauditoria"),
+                historial = count("historialestado");
+        // Lo reintenta otro usuario, como tras perder la conexión: mismo contenido, misma revisión.
+        var segundo =
+                cuerpo(
+                        enviar("ingeniero", id, docs, "Resumen", hoy(), pdf("informe.pdf", "A"))
+                                .andExpect(status().isOk()));
+        assertFalse(primero.get("repetido").asBoolean());
+        assertTrue(segundo.get("repetido").asBoolean());
+        assertEquals(primero.get("id").asLong(), segundo.get("id").asLong());
+        assertEquals(1, segundo.get("revision").asInt());
+        assertEquals(sha256("A"), segundo.at("/documentos/0/archivo/hash_contenido").asText());
+        assertEquals(1, count("reporteproveedor"));
+        assertEquals(1, count("archivoasociado"));
+        assertEquals(1, count("archivo"));
+        assertEquals(enDisco, archivosEnDisco());
+        assertEquals(auditoria, count("registroauditoria"));
+        assertEquals(historial, count("historialestado"));
+        http.perform(get(BASE + id + "/reportes/").with(httpBasic("jefe", PASSWORD)))
+                .andExpect(jsonPath("$.count").value(1));
+    }
+
+    @Test
+    void laHuellaNoDependeDelOrdenNiDelNombreDeLosArchivos() throws Exception {
+        long id = create().get("id").asLong();
+        execute(id);
+        var informe = values("categoria", "InformeFinal");
+        var metrado = values("categoria", "Metrado");
+        var primero =
+                cuerpo(
+                        enviar(
+                                        "jefe",
+                                        id,
+                                        documentos(informe, metrado),
+                                        null,
+                                        hoy(),
+                                        pdf("informe.pdf", "A"),
+                                        pdf("metrado.pdf", "B"))
+                                .andExpect(status().isCreated()));
+        // Mismos documentos en otro orden y con otros nombres de archivo.
+        var segundo =
+                cuerpo(
+                        enviar(
+                                        "jefe",
+                                        id,
+                                        documentos(metrado, informe),
+                                        null,
+                                        hoy(),
+                                        pdf("copia-b.pdf", "B"),
+                                        pdf("copia-a.pdf", "A"))
+                                .andExpect(status().isOk()));
+        assertTrue(segundo.get("repetido").asBoolean());
+        assertEquals(primero.get("id").asLong(), segundo.get("id").asLong());
+        assertEquals(1, count("reporteproveedor"));
+        assertEquals(2, count("archivo"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "contenido",
+                "categoria",
+                "alcance",
+                "descripcion",
+                "resumen",
+                "fecha",
+                "documento_extra"
+            })
+    void cualquierCambioCreaUnaRevisionNueva(String cambio) throws Exception {
+        long id = create().get("id").asLong();
+        execute(id);
+        long alcance = alcanceDe(id, "min"), otroAlcance = alcanceDe(id, "max");
+        String categoria = "EvidenciaEspacio",
+                descripcion = "Foto",
+                contenido = "foto",
+                resumen = "Resumen",
+                fecha = hoy();
+        long alcanceFoto = alcance;
+        boolean extra = false;
+        var informe = values("categoria", "InformeFinal");
+        enviar(
+                        "jefe",
+                        id,
+                        documentos(
+                                informe,
+                                values(
+                                        "categoria",
+                                        categoria,
+                                        "alcance_id",
+                                        alcanceFoto,
+                                        "descripcion",
+                                        descripcion)),
+                        resumen,
+                        fecha,
+                        pdf("informe.pdf", "informe"),
+                        pdf("foto.pdf", contenido))
+                .andExpect(status().isCreated());
+        switch (cambio) {
+            case "contenido" -> contenido = "foto-corregida";
+            case "categoria" -> categoria = "RutaRecorrida";
+            case "alcance" -> alcanceFoto = otroAlcance;
+            case "descripcion" -> descripcion = "Foto del acceso";
+            case "resumen" -> resumen = "Resumen corregido";
+            case "fecha" -> fecha = LocalDate.now(Mod05Application.LIMA).plusDays(1).toString();
+            case "documento_extra" -> extra = true;
+        }
+        var foto =
+                values(
+                        "categoria",
+                        categoria,
+                        "alcance_id",
+                        alcanceFoto,
+                        "descripcion",
+                        descripcion);
+        var nueva =
+                extra
+                        ? cuerpo(
+                                enviar(
+                                                "jefe",
+                                                id,
+                                                documentos(
+                                                        informe,
+                                                        foto,
+                                                        values("categoria", "Metrado")),
+                                                resumen,
+                                                fecha,
+                                                pdf("informe.pdf", "informe"),
+                                                pdf("foto.pdf", contenido),
+                                                pdf("metrado.pdf", "metrado"))
+                                        .andExpect(status().isCreated()))
+                        : cuerpo(
+                                enviar(
+                                                "jefe",
+                                                id,
+                                                documentos(informe, foto),
+                                                resumen,
+                                                fecha,
+                                                pdf("informe.pdf", "informe"),
+                                                pdf("foto.pdf", contenido))
+                                        .andExpect(status().isCreated()));
+        assertEquals(2, nueva.get("revision").asInt());
+        assertFalse(nueva.get("repetido").asBoolean());
+        assertEquals(2, count("reporteproveedor"));
+    }
+
+    @Test
+    void volverAUnContenidoAnteriorEsUnaRevisionNuevaYSoloSeComparaConLaUltima() throws Exception {
+        long id = create().get("id").asLong();
+        execute(id);
+        String docs = "[" + INFORME + "]";
+        int[] esperado = {1, 2, 3};
+        String[] contenidos = {"A", "B", "A"};
+        for (int i = 0; i < contenidos.length; i++) {
+            var r =
+                    cuerpo(
+                            enviar("jefe", id, docs, null, hoy(), pdf("r.pdf", contenidos[i]))
+                                    .andExpect(status().isCreated()));
+            assertEquals(esperado[i], r.get("revision").asInt());
+        }
+        // El reintento de la última (A) ya no crea otra.
+        var repetido =
+                cuerpo(
+                        enviar("jefe", id, docs, null, hoy(), pdf("r.pdf", "A"))
+                                .andExpect(status().isOk()));
+        assertEquals(3, repetido.get("revision").asInt());
+        assertEquals(3, count("reporteproveedor"));
+    }
+
+    @Test
+    void elReenvioRepetidoSigueExigiendoLasValidaciones() throws Exception {
+        long id = create().get("id").asLong();
+        execute(id);
+        String docs = "[" + INFORME + "]";
+        enviar("jefe", id, docs, null, hoy(), pdf("r.pdf", "A")).andExpect(status().isCreated());
+        // Aunque el contenido sea el mismo, un envío inválido sigue siendo inválido.
+        enviar("jefe", id, "[{\"categoria\":\"Metrado\"}]", null, hoy(), pdf("r.pdf", "A"))
+                .andExpect(status().isBadRequest());
+        enviar("jefe", id, docs, null, "2000-01-01", pdf("r.pdf", "A"))
+                .andExpect(status().isBadRequest());
+        assertEquals(1, count("reporteproveedor"));
+    }
+
+    @Test
+    void enviosIdenticosSimultaneosCreanUnaSolaRevision() throws Exception {
+        long id = create().get("id").asLong();
+        execute(id);
+        var barrier = new CyclicBarrier(2);
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            Callable<Boolean> envio =
+                    () -> {
+                        barrier.await(10, TimeUnit.SECONDS);
+                        var r =
+                                reports.adjuntar(
+                                        id,
+                                        LocalDate.now(Mod05Application.LIMA),
+                                        "",
+                                        List.of(new Entradas.Documento("InformeFinal", null, "")),
+                                        List.of(pdf("r.pdf", "igual")),
+                                        jefe);
+                        return (Boolean) r.get("repetido");
+                    };
+            var resultados = pool.invokeAll(List.of(envio, envio));
+            assertEquals(
+                    Set.of(true, false), Set.of(resultados.get(0).get(), resultados.get(1).get()));
+        }
+        assertEquals(1, count("reporteproveedor"));
+        assertEquals(1, count("archivo"));
+        assertEquals(
+                1,
+                repo.jdbc()
+                        .queryForObject(
+                                "SELECT count(*) FROM mod05_historialestado WHERE"
+                                        + " estado_nuevo=:estado",
+                                Map.of("estado", Atencion.REPORTE),
+                                Integer.class));
     }
 }
