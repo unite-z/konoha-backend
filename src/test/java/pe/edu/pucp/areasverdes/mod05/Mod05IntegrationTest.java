@@ -1221,6 +1221,25 @@ class Mod05IntegrationTest {
     }
 
     @Test
+    void laBandejaFiltraPorLosEstadosDeLaConformidad() throws Exception {
+        long observada = conInforme();
+        decidir(observada, "jefe", decision("Observada", "Falta el metrado"), 200);
+        long conforme = conInforme();
+        decidir(conforme, "jefe", decision("Conforme", ""), 200);
+        http.perform(
+                        get(BASE)
+                                .param("estado", Atencion.OBSERVADO)
+                                .with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(1))
+                .andExpect(jsonPath("$.results[0].id").value(observada));
+        http.perform(get(BASE).param("estado", Atencion.CONFORME).with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(1))
+                .andExpect(jsonPath("$.results[0].id").value(conforme));
+    }
+
+    @Test
     void lasDecisionesDeConformidadSoloAdmitenInserciones() throws Exception {
         long id = conInforme();
         decidir(id, "jefe", decision("Conforme", ""), 200);
