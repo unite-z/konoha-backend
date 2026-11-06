@@ -101,9 +101,9 @@ POST  inicio/        {"fecha_hora_inicio":"2026-10-21T08:00:00-05:00"}
 POST  fin/           {"fecha_hora_fin":"2026-10-21T12:00:00-05:00"}
 ```
 
-Corregir OC exige motivo y solo se permite antes del inicio. No se emiten órdenes. El fin no precede al inicio. La marca de riesgo se hereda del catálogo o se activa al registrar; no puede desactivarse desde la petición. Iniciar atenciones de riesgo sigue bloqueado hasta integrar seguridad.
+En una atención extraordinaria el mismo paso registra su orden de servicio (RF-SER-008): el campo y el estado `OC referenciada` son los mismos y sin ella tampoco se inicia. Corregir OC exige motivo y solo se permite antes del inicio. No se emiten órdenes. El fin no precede al inicio. La marca de riesgo se hereda del catálogo o se activa al registrar; no puede desactivarse desde la petición. Iniciar atenciones de riesgo sigue bloqueado hasta integrar seguridad.
 
-Origen obligatorio: `Demanda`, `ProgramacionEstacional`, `SolicitudUnidad`. Para solicitud de unidad, enviar exclusivamente `unidad_solicitante_id` o `unidad_provisional` (nombre). La creación/reutilización de la unidad provisional es atómica. Corregir origen requiere motivo y solo puede hacerse antes del inicio. Los demás orígenes no admiten unidad.
+Clase opcional al registrar (`clase`): `ProgramadaContrato` (por defecto, según contrato) o `Extraordinaria` (fuera de programación, con orden de servicio); no se corrige después y exige igualmente un contrato vigente. La incidencia que MOD-03 deriva como extraordinaria se registra con esa clase. Origen obligatorio: `Demanda`, `ProgramacionEstacional`, `SolicitudUnidad`. Para solicitud de unidad, enviar exclusivamente `unidad_solicitante_id` o `unidad_provisional` (nombre). La creación/reutilización de la unidad provisional es atómica. Corregir origen requiere motivo y solo puede hacerse antes del inicio. Los demás orígenes no admiten unidad.
 
 Después de finalizar una solicitud de unidad:
 
@@ -115,7 +115,7 @@ Después de finalizar una solicitud de unidad:
 
 ### Búsqueda y catálogos
 
-Atenciones: `q`, `estado`, `origen`, `contrato_id`, `page`. Búsqueda global antes de paginar, sin distinguir mayúsculas, hasta 100 caracteres y ocho palabras; cada palabra debe aparecer en al menos un campo buscable. Se busca en código, descripción, OC, contrato, proveedor, servicio y unidad.
+Atenciones: `q`, `estado`, `origen`, `clase`, `contrato_id`, `page`. Búsqueda global antes de paginar, sin distinguir mayúsculas, hasta 100 caracteres y ocho palabras; cada palabra debe aparecer en al menos un campo buscable. Se busca en código, descripción, OC, contrato, proveedor, servicio y unidad.
 
 Catálogos de solo lectura bajo `catalogos/`, todos con `q` y `page`:
 
@@ -184,4 +184,4 @@ Las pruebas del MOD-06 corren en el mismo `./mvnw test` y usan la misma base `_t
 - Tarifario por tipo de intervención en los contratos (mejora futura, RF-SER-002): hoy el contrato solo tiene `monto_fijo`, obligatorio. Los contratos son únicamente de servicios tercerizados.
 - Integrar catálogos, usuarios, incidencias y programación con los módulos propietarios sin duplicar IDs.
 - Integrar almacenamiento de objetos y seguridad para atenciones de riesgo.
-- Fuera de esta entrega: extraordinarias, órdenes de servicio, subsanación completa (RF-SER-012; hoy basta una nueva revisión del informe), IA y nuevas pantallas frontend.
+- Fuera de esta entrega: extraordinarias sin contrato, corregir la clase tras el registro, subsanación completa (RF-SER-012; hoy basta una nueva revisión del informe), IA y nuevas pantallas frontend.

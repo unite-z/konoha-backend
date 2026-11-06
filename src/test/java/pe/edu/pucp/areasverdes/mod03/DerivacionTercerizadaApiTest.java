@@ -152,6 +152,28 @@ class DerivacionTercerizadaApiTest extends ApiPlanificacion {
     }
 
     @Test
+    void derivarComoProgramadaConservaLaClaseYLaOrdenDeCompra() throws Exception {
+        long id = clasificada();
+        accion(
+                        id,
+                        "requerimiento",
+                        ("{\"proveedor_id\": %d, \"contrato_id\": %d, \"tipo_atencion\":"
+                                        + " \"Programada\", \"crear_poda\": true}")
+                                .formatted(proveedor, contrato))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.requerimiento.tipo_atencion").value("Programada"))
+                .andExpect(jsonPath("$.requerimiento.pasos[1].nombre").value("Orden de compra"));
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT a.clase FROM mod03_requerimiento_incidencia r JOIN"
+                                    + " mod05_atenciontercerizada a ON a.id = r.atencion_id WHERE"
+                                    + " r.incidencia_id = :id",
+                                Map.of("id", id),
+                                String.class))
+                .isEqualTo("ProgramadaContrato");
+    }
+
+    @Test
     void derivarCreaLaAtencionDelEjemplarYLaDejaDerivada() throws Exception {
         long id = clasificada();
         derivar(id, proveedor, contrato)
@@ -163,12 +185,12 @@ class DerivacionTercerizadaApiTest extends ApiPlanificacion {
                 .andExpect(jsonPath("$.requerimiento.proveedor").value("Podas Altura Demo"))
                 .andExpect(jsonPath("$.requerimiento.tipo_atencion").value("Extraordinaria"))
                 .andExpect(jsonPath("$.requerimiento.pasos[0].estado").value("Hecho"))
-                .andExpect(jsonPath("$.requerimiento.pasos[1].nombre").value("Orden de compra"))
+                .andExpect(jsonPath("$.requerimiento.pasos[1].nombre").value("Orden de servicio"))
                 .andExpect(jsonPath("$.requerimiento.pasos[1].estado").value("EnCurso"))
                 .andExpect(jsonPath("$.requerimiento.pasos[3].estado").value("Pendiente"));
         var atencion =
                 jdbc.queryForMap(
-                        "SELECT a.origen, a.contrato_id, al.ejemplar_id, e.codigo"
+                        "SELECT a.origen, a.clase, a.contrato_id, al.ejemplar_id, e.codigo"
                                 + " FROM mod03_requerimiento_incidencia r"
                                 + " JOIN mod05_atenciontercerizada a ON a.id = r.atencion_id"
                                 + " JOIN mod05_alcanceatencion al ON al.atencion_id = a.id"
@@ -176,6 +198,7 @@ class DerivacionTercerizadaApiTest extends ApiPlanificacion {
                                 + " WHERE r.incidencia_id = :id",
                         Map.of("id", id));
         assertThat(atencion.get("origen")).isEqualTo("Demanda");
+        assertThat(atencion.get("clase")).isEqualTo("Extraordinaria");
         assertThat(((Number) atencion.get("contrato_id")).longValue()).isEqualTo(contrato);
         assertThat(atencion.get("codigo")).isEqualTo("T-0278");
         // Ya derivada, no se deriva otra vez.
