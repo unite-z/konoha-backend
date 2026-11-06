@@ -1,8 +1,8 @@
 package pe.edu.pucp.areasverdes.mod05;
 
 import java.time.OffsetDateTime;
-import java.util.Map;
 import java.util.Arrays;
+import java.util.Map;
 
 /** Estado del agregado utilizado para validar transiciones bajo bloqueo de fila. */
 public record Atencion(

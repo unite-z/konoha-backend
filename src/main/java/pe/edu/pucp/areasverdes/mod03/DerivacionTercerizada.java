@@ -354,7 +354,9 @@ public class DerivacionTercerizada {
         };
         Object estadoAtencion = a.get("estado");
         boolean conInforme =
-                REPORTE.equals(estadoAtencion) || OBSERVADO.equals(estadoAtencion) || CONFORME.equals(estadoAtencion);
+                REPORTE.equals(estadoAtencion)
+                        || OBSERVADO.equals(estadoAtencion)
+                        || CONFORME.equals(estadoAtencion);
         LocalDate[] fechas = {
             dia(a.get("fecha_creacion")),
             dia(a.get("fecha_orden_compra")),
