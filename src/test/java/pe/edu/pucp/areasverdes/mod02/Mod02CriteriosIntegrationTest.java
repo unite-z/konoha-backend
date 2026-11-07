@@ -414,6 +414,115 @@ class Mod02CriteriosIntegrationTest {
         assertThat(areasVinculadas.stream().map(Number::longValue)).containsExactly(areaId);
     }
 
+    @Test
+    void mapaDevuelveLaFichaDeCadaPoligonoParaCalcularClasificacionEfectiva() throws Exception {
+        long ornamental = crearTipoUso("Ornamental mapa " + UUID.randomUUID());
+        long deportivo = crearTipoUso("Deportivo mapa " + UUID.randomUUID());
+        long institucional = crearTipoUso("Institucional mapa " + UUID.randomUUID());
+        long areaA = idJson(crearArea("Área A mapa", ornamental, null), "$.id");
+        long areaB = idJson(crearArea("Área B mapa", deportivo, null), "$.id");
+        UUID poligonoA = UUID.randomUUID();
+        UUID poligonoB = UUID.randomUUID();
+        UUID poligonoC = UUID.randomUUID();
+
+        vincularPoligono(poligonoA, areaA);
+        vincularPoligono(poligonoB, areaB);
+        vincularPoligono(poligonoC, null);
+
+        String mapaInicial =
+                http.perform(get(API + "/mapa/poligonos").with(httpBasic("jefe", CLAVE)))
+                        .andExpect(status().isOk())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+        assertThat(
+                        JsonPath.<List<Number>>read(
+                                mapaInicial,
+                                "$[?(@.id_fuente == '" + poligonoA + "')].area_verde_tipo_uso_id"))
+                .extracting(Number::longValue)
+                .containsExactly(ornamental);
+        assertThat(
+                        JsonPath.<List<Boolean>>read(
+                                mapaInicial,
+                                "$[?(@.id_fuente == '" + poligonoA + "')].area_verde_activa"))
+                .containsExactly(true);
+        assertThat(
+                        JsonPath.<List<Object>>read(
+                                mapaInicial,
+                                "$[?(@.id_fuente == '" + poligonoC + "')].area_verde_id"))
+                .containsExactly((Object) null);
+
+        http.perform(
+                        patch(API + "/areas-verdes/" + areaA)
+                                .with(httpBasic("jefe", CLAVE))
+                                .contentType("application/json")
+                                .content("{\"tipo_uso_id\":" + institucional + "}"))
+                .andExpect(status().isOk());
+
+        String mapaActualizado =
+                http.perform(get(API + "/mapa/poligonos").with(httpBasic("jefe", CLAVE)))
+                        .andExpect(status().isOk())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+        assertThat(
+                        JsonPath.<List<Number>>read(
+                                mapaActualizado,
+                                "$[?(@.id_fuente == '" + poligonoA + "')].area_verde_tipo_uso_id"))
+                .extracting(Number::longValue)
+                .containsExactly(institucional);
+        assertThat(
+                        JsonPath.<List<Number>>read(
+                                mapaActualizado,
+                                "$[?(@.id_fuente == '" + poligonoB + "')].area_verde_tipo_uso_id"))
+                .extracting(Number::longValue)
+                .containsExactly(deportivo);
+
+        http.perform(
+                        patch(API + "/areas-verdes/" + areaA)
+                                .with(httpBasic("jefe", CLAVE))
+                                .contentType("application/json")
+                                .content("{\"activo\":false}"))
+                .andExpect(status().isOk());
+        String mapaInactivo =
+                http.perform(get(API + "/mapa/poligonos").with(httpBasic("jefe", CLAVE)))
+                        .andExpect(status().isOk())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+        assertThat(
+                        JsonPath.<List<Boolean>>read(
+                                mapaInactivo,
+                                "$[?(@.id_fuente == '" + poligonoA + "')].area_verde_activa"))
+                .containsExactly(false);
+    }
+
+    private long crearTipoUso(String nombre) throws Exception {
+        String tipo =
+                http.perform(
+                                post(API + "/tipos-uso")
+                                        .with(httpBasic("jefe", CLAVE))
+                                        .contentType("application/json")
+                                        .content("{\"nombre\":\"" + nombre + "\"}"))
+                        .andExpect(status().isCreated())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+        return idJson(tipo, "$.id");
+    }
+
+    private void vincularPoligono(UUID idFuente, Long areaId) throws Exception {
+        http.perform(
+                        put(API + "/mapa/poligonos/" + idFuente)
+                                .with(httpBasic("jefe", CLAVE))
+                                .contentType("application/json")
+                                .content(
+                                        "{\"area_verde_id\":"
+                                                + (areaId == null ? "null" : areaId)
+                                                + "}"))
+                .andExpect(status().isOk());
+    }
+
     private String crearEjemplar(String cuerpo) throws Exception {
         MvcResult resultado =
                 http.perform(

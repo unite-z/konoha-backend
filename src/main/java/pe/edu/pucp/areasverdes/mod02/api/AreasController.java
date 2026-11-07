@@ -100,6 +100,13 @@ public class AreasController {
         return areas.listar(q, tipoUsoId, sectorId, cuartelId, page);
     }
 
+    @GetMapping({"/{id}", "/{id}/"})
+    @Operation(summary = "Consulta la ficha de un área verde")
+    public AreaVerde obtener(@AuthenticationPrincipal Usuario usuario, @PathVariable long id) {
+        AccesoCoberturas.consultar(usuario);
+        return areas.obtenerPorId(id);
+    }
+
     @Operation(summary = "Registra un área verde")
     @ApiResponse(responseCode = "201", description = "Área verde registrada")
     @ApiResponse(responseCode = "400", description = "Datos no válidos")

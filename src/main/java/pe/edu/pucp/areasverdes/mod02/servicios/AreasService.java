@@ -76,6 +76,10 @@ public class AreasService {
         return new PaginaAreas(count, siguiente, anterior, resultados);
     }
 
+    public AreaVerde obtenerPorId(long id) {
+        return obtener(id);
+    }
+
     @Transactional
     public AreaVerde crear(NuevaAreaVerde nueva, Usuario usuario) {
         AccesoCoberturas.registrar(usuario);
