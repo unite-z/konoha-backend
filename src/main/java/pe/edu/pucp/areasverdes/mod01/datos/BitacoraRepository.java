@@ -83,7 +83,7 @@ public class BitacoraRepository {
                 """
                 SELECT a.*, u.nombre usuario_nombre FROM core_registro_auditoria a
                 JOIN core_usuario u ON u.id = a.usuario_id
-                WHERE a.entidad = :entidad AND a.registro_id = :registro
+                WHERE lower(a.entidad) = lower(:entidad) AND a.registro_id = :registro
                 ORDER BY a.fecha_hora DESC, a.id DESC
                 """,
                 Map.of("entidad", entidad, "registro", registroId),

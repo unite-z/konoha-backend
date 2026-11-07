@@ -107,6 +107,8 @@ public class PrecargaCampoService {
                                     row.get("id"),
                                     "nombre",
                                     row.get("nombre"),
+                                    "clase_id",
+                                    row.get("clase_id"),
                                     "activo",
                                     row.get("activo")));
             }
