@@ -61,13 +61,17 @@ public class CatalogosMod02Controller {
 
     public record NuevoNombre(
             @NotBlank(message = "Indica el nombre") @Size(max = 80) String nombre,
-            @Pattern(regexp = "^#[0-9A-Fa-f]{6}$", message = "El color debe tener el formato #RRGGBB")
+            @Pattern(
+                            regexp = "^#[0-9A-Fa-f]{6}$",
+                            message = "El color debe tener el formato #RRGGBB")
                     String color) {}
 
     public record CambioElemento(
             String nombre,
             Boolean activo,
-            @Pattern(regexp = "^#[0-9A-Fa-f]{6}$", message = "El color debe tener el formato #RRGGBB")
+            @Pattern(
+                            regexp = "^#[0-9A-Fa-f]{6}$",
+                            message = "El color debe tener el formato #RRGGBB")
                     String color) {}
 
     @GetMapping("/tipos-uso")

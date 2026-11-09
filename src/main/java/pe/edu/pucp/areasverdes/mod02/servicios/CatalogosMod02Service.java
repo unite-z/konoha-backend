@@ -87,15 +87,13 @@ public class CatalogosMod02Service {
         AccesoCoberturas.gestionar(usuario);
         try {
             String color =
-                    entrada.color() == null
-                            ? siguienteColor()
-                            : normalizarColor(entrada.color());
+                    entrada.color() == null ? siguienteColor() : normalizarColor(entrada.color());
             long id =
                     jdbc.queryForObject(
                             "INSERT INTO mod02_tipo_uso (nombre, usuario_creacion_id,"
-                                + " usuario_modificacion_id, color) VALUES (:nombre, :usuario,"
-                                + " :usuario, :color)"
-                                + " RETURNING id",
+                                    + " usuario_modificacion_id, color) VALUES (:nombre, :usuario,"
+                                    + " :usuario, :color)"
+                                    + " RETURNING id",
                             Map.of(
                                     "nombre", entrada.nombre().trim(),
                                     "usuario", usuario.id(),
