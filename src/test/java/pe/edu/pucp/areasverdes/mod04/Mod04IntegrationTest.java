@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -784,6 +785,32 @@ class Mod04IntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].actividad_id").value(actividad))
                 .andExpect(jsonPath("$[0].tipo_actividad").value("Poda menor"));
+
+        String historial = "/api/v1/inventario/ejemplares/" + bajo + "/historial-intervenciones";
+        http.perform(
+                        patch("/api/v1/inventario/ejemplares/" + bajo + "/situacion")
+                                .with(httpBasic("jefe", PASSWORD))
+                                .contentType("application/json")
+                                .content(
+                                        """
+                                        {"situacion":"retirado","fecha":"2026-10-23","motivo":"Daño irreversible"}
+                                        """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.situacion").value("retirado"));
+        http.perform(
+                        get(historial)
+                                .queryParam("fuente", "podas")
+                                .with(httpBasic("capataz1", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(actividad))
+                .andExpect(jsonPath("$[0].tipo").value("Poda menor"))
+                .andExpect(jsonPath("$[0].fecha").value("2026-10-22"))
+                .andExpect(jsonPath("$[0].origen").value("Operación de campo"));
+        http.perform(
+                        get(historial)
+                                .queryParam("fuente", "fitosanitario")
+                                .with(httpBasic("capataz1", PASSWORD)))
+                .andExpect(status().isForbidden());
 
         entrada.put("ejemplar_id", alto);
         postJson("/actividades/", entrada, "capataz1", 409);

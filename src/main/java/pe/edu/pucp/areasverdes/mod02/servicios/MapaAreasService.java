@@ -70,16 +70,34 @@ public class MapaAreasService {
     public PoligonoAsignado asignarPoligono(UUID idFuente, CambioPoligono cambio, Usuario usuario) {
         AccesoCoberturas.gestionar(usuario);
         validarArea(cambio.areaVerdeId());
-        jdbc.update(
+        guardarVinculo(idFuente, cambio.areaVerdeId(), usuario, false);
+        return obtenerPoligono(idFuente);
+    }
+
+    public void vincularPoligonoLibre(UUID idFuente, long areaId, Usuario usuario) {
+        AccesoCoberturas.gestionar(usuario);
+        if (guardarVinculo(idFuente, areaId, usuario, true) == 0) {
+            throw new ErrorCoberturas(
+                    409, "poligono-ocupado", "El polígono ya está vinculado a otra área");
+        }
+    }
+
+    private int guardarVinculo(UUID idFuente, Long areaId, Usuario usuario, boolean soloLibre) {
+        return jdbc.update(
                 "INSERT INTO mod02_mapa_poligono (id_fuente, area_verde_id,"
                         + " fecha_modificacion, usuario_modificacion_id) VALUES"
                         + " (:fuente, :area, now(), :usuario) ON CONFLICT (id_fuente) DO UPDATE SET"
                         + " area_verde_id = EXCLUDED.area_verde_id, fecha_modificacion = now(),"
-                        + " usuario_modificacion_id = EXCLUDED.usuario_modificacion_id",
+                        + " usuario_modificacion_id = EXCLUDED.usuario_modificacion_id"
+                        + " WHERE NOT :solo_libre OR mod02_mapa_poligono.area_verde_id IS NULL",
                 new MapSqlParameterSource()
                         .addValue("fuente", idFuente)
-                        .addValue("area", cambio.areaVerdeId())
-                        .addValue("usuario", usuario.id()));
+                        .addValue("area", areaId)
+                        .addValue("usuario", usuario.id())
+                        .addValue("solo_libre", soloLibre));
+    }
+
+    private PoligonoAsignado obtenerPoligono(UUID idFuente) {
         return jdbc.queryForObject(
                 "SELECT p.id_fuente, p.area_verde_id, a.nombre area_verde_nombre, a.tipo_uso_id"
                     + " area_verde_tipo_uso_id, tu.nombre area_verde_tipo_uso_nombre,"

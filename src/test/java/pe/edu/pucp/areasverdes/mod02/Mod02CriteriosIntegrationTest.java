@@ -58,6 +58,119 @@ class Mod02CriteriosIntegrationTest {
     }
 
     @Test
+    void historialDistingueFuentesVaciasPermisosYEjemplarInexistente() throws Exception {
+        String cuerpo =
+                http.perform(
+                                post(API + "/ejemplares")
+                                        .with(httpBasic("jefe", CLAVE))
+                                        .contentType("application/json")
+                                        .content("{}"))
+                        .andExpect(status().isCreated())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+        String sufijo = "/historial-intervenciones";
+        String historial = API + "/ejemplares/" + idJson(cuerpo, "$.id") + sufijo;
+        for (String fuente : List.of("podas", "fitosanitario", "incidencias")) {
+            http.perform(get(historial).queryParam("fuente", fuente))
+                    .andExpect(status().isUnauthorized());
+            http.perform(get(historial).queryParam("fuente", fuente).with(httpBasic("jefe", CLAVE)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$").isEmpty());
+        }
+        http.perform(
+                        get(API + "/ejemplares/0" + sufijo)
+                                .queryParam("fuente", "incidencias")
+                                .with(httpBasic("jefe", CLAVE)))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void trasladaYRetiraUnEjemplarConHistorialYPermisos() throws Exception {
+        String cuerpo =
+                http.perform(
+                                post(API + "/ejemplares")
+                                        .with(httpBasic("jefe", CLAVE))
+                                        .contentType("application/json")
+                                        .content(
+                                                """
+                                                {"ubicacion":"Jardín anterior","latitud":-12.07,"longitud":-77.08}
+                                                """))
+                        .andExpect(status().isCreated())
+                        .andExpect(jsonPath("$.situacion").value("activo"))
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+        long id = idJson(cuerpo, "$.id");
+        String codigo = JsonPath.read(cuerpo, "$.codigo");
+        String ficha = API + "/ejemplares/" + id;
+        String traslado =
+                """
+                {"situacion":"trasladado","fecha":"2026-10-21","motivo":"Obras",
+                 "ubicacion":"Jardín de destino","latitud":-12.071,"longitud":-77.081}
+                """;
+        http.perform(
+                        patch(ficha + "/situacion")
+                                .with(httpBasic("ingeniero", CLAVE))
+                                .contentType("application/json")
+                                .content(traslado))
+                .andExpect(status().isForbidden());
+        http.perform(
+                        patch(ficha + "/situacion")
+                                .with(httpBasic("jefe", CLAVE))
+                                .contentType("application/json")
+                                .content(
+                                        """
+                                        {"situacion":"trasladado","fecha":"2026-10-21","motivo":"Obras"}
+                                        """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.codigo").value("destino-requerido"));
+        http.perform(
+                        patch(ficha + "/situacion")
+                                .with(httpBasic("jefe", CLAVE))
+                                .contentType("application/json")
+                                .content(traslado))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.situacion").value("trasladado"))
+                .andExpect(jsonPath("$.ubicacion").value("Jardín de destino"))
+                .andExpect(jsonPath("$.latitud").value(-12.071));
+        http.perform(
+                        patch(ficha + "/situacion")
+                                .with(httpBasic("jefe", CLAVE))
+                                .contentType("application/json")
+                                .content(traslado))
+                .andExpect(status().isConflict());
+        http.perform(
+                        patch(ficha + "/situacion")
+                                .with(httpBasic("jefe", CLAVE))
+                                .contentType("application/json")
+                                .content(
+                                        """
+                                        {"situacion":"retirado","fecha":"2026-10-22","motivo":"Fin de vida útil"}
+                                        """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ubicacion").value("Jardín de destino"));
+        http.perform(
+                        get(API + "/ejemplares")
+                                .queryParam("q", codigo)
+                                .with(httpBasic("ingeniero", CLAVE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(id))
+                .andExpect(jsonPath("$[0].situacion").value("retirado"))
+                .andExpect(jsonPath("$[0].fecha_situacion").value("2026-10-22"));
+        http.perform(get(ficha + "/historial-situacion").with(httpBasic("ingeniero", CLAVE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].situacion_nueva").value("retirado"))
+                .andExpect(jsonPath("$[1].situacion_anterior").value("activo"))
+                .andExpect(jsonPath("$[1].motivo").value("Obras"))
+                .andExpect(jsonPath("$[1].autor").value("jefe"))
+                .andExpect(jsonPath("$[1].ubicacion_anterior").value("Jardín anterior"))
+                .andExpect(jsonPath("$[1].latitud_anterior").value(-12.07))
+                .andExpect(jsonPath("$[1].ubicacion_nueva").value("Jardín de destino"));
+    }
+
+    @Test
     void especiesYPlacasDuplicadasSeAdviertenYLosCodigosSonUnicosBajoConcurrencia()
             throws Exception {
         String nombreCientifico = "Schinus molle MOD02 test " + UUID.randomUUID();

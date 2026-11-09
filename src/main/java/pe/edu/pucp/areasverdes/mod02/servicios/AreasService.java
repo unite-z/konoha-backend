@@ -35,8 +35,11 @@ public class AreasService {
 
     private final NamedParameterJdbcTemplate jdbc;
 
-    public AreasService(NamedParameterJdbcTemplate jdbc) {
+    private final MapaAreasService mapa;
+
+    public AreasService(NamedParameterJdbcTemplate jdbc, MapaAreasService mapa) {
         this.jdbc = jdbc;
+        this.mapa = mapa;
     }
 
     public PaginaAreas listar(String q, Long tipoUso, Long sector, Long cuartel, int pagina) {
@@ -119,6 +122,9 @@ public class AreasService {
                         + " 'mod02_area_verde', a.id, 'Alta', :usuario, now(), '{}'::jsonb,"
                         + " to_jsonb(a), '' FROM mod02_area_verde a WHERE a.id = :id",
                 Map.of("id", id, "usuario", usuario.id()));
+        if (nueva.poligonoMapaId() != null) {
+            mapa.vincularPoligonoLibre(nueva.poligonoMapaId(), id, usuario);
+        }
         return area;
     }
 

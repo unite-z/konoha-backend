@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -98,6 +99,30 @@ class IncidenciasApiTest extends ApiPlanificacion {
                 .andExpect(jsonPath("$.reportado_por").value("Ana Quispe"))
                 .andExpect(jsonPath("$.foto_url").isEmpty())
                 .andExpect(jsonPath("$.historial[0].texto").value("Registrada · jefe"));
+        Long ejemplarId =
+                jdbc.getJdbcTemplate()
+                        .queryForObject(
+                                "SELECT id FROM mod02_ejemplar WHERE codigo = 'T-0412'",
+                                Long.class);
+        http.perform(
+                        patch("/api/v1/inventario/ejemplares/" + ejemplarId + "/situacion")
+                                .with(httpBasic("jefe", CLAVE))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        """
+                                        {"situacion":"retirado","fecha":"2026-10-22","motivo":"Daño irreversible"}
+                                        """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.situacion").value("retirado"));
+        http.perform(
+                        get("/api/v1/inventario/ejemplares/"
+                                        + ejemplarId
+                                        + "/historial-intervenciones")
+                                .queryParam("fuente", "incidencias")
+                                .with(httpBasic("jefe", CLAVE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].tipo").value(containsString("Rama caída")))
+                .andExpect(jsonPath("$[0].origen").value("Incidencias"));
     }
 
     @Test

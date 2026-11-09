@@ -13,6 +13,7 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.util.List;
+import java.util.UUID;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -68,7 +69,8 @@ public class AreasController {
             Long tipoCoberturaId,
             Long tipoUsoId,
             Long cuartelId,
-            Long sectorId) {}
+            Long sectorId,
+            UUID poligonoMapaId) {}
 
     public record CambioAreaVerde(
             @Size(max = 150) String nombre,
