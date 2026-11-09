@@ -34,28 +34,38 @@ public class MapaAreasController {
 
     public record UsoFuente(String usoFuente, Long tipoUsoId, String tipoUsoNombre) {}
 
-    public record PoligonoAsignado(UUID idFuente, Long areaVerdeId, String areaVerdeNombre) {}
+    public record PoligonoAsignado(
+            UUID idFuente,
+            Long areaVerdeId,
+            String areaVerdeNombre,
+            Long areaVerdeTipoUsoId,
+            String areaVerdeTipoUsoNombre,
+            String superficieRegistradaM2,
+            Boolean areaVerdeActiva) {}
 
     public record CambioUsoFuente(@NotBlank @Size(max = 180) String usoFuente, Long tipoUsoId) {}
 
     public record CambioPoligono(Long areaVerdeId) {}
 
     @GetMapping("/usos-fuente")
-    @Operation(summary = "Lista la clasificación de los usos originales del mapa")
+    @Operation(
+            summary =
+                    "Lista equivalencias cartográficas de los usos originales; no sustituye el tipo"
+                            + " del área vinculada")
     public List<UsoFuente> usosFuente(@AuthenticationPrincipal Usuario usuario) {
         AccesoCoberturas.consultar(usuario);
         return mapa.usosFuente();
     }
 
     @PutMapping("/usos-fuente")
-    @Operation(summary = "Asigna o quita el tipo de uso de una categoría del mapa")
+    @Operation(summary = "Asigna o quita la equivalencia cartográfica de una categoría del mapa")
     public UsoFuente cambiarUsoFuente(
             @AuthenticationPrincipal Usuario usuario, @Valid @RequestBody CambioUsoFuente cambio) {
         return mapa.cambiarUsoFuente(cambio, usuario);
     }
 
     @GetMapping("/poligonos")
-    @Operation(summary = "Lista los vínculos existentes entre polígonos y áreas del inventario")
+    @Operation(summary = "Lista los vínculos existentes y la clasificación del área vinculada")
     public List<PoligonoAsignado> poligonos(@AuthenticationPrincipal Usuario usuario) {
         AccesoCoberturas.consultar(usuario);
         return mapa.poligonos();

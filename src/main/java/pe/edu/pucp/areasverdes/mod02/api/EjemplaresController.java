@@ -47,7 +47,8 @@ public class EjemplaresController {
             @DecimalMin("-90.0") @DecimalMax("90.0") BigDecimal latitud,
             @DecimalMin("-180.0") @DecimalMax("180.0") BigDecimal longitud,
             @Positive Integer cantidad,
-            @DecimalMin("0.01") @DecimalMax("9999.99") BigDecimal alturaTotalM) {}
+            @DecimalMin("0.01") @DecimalMax("9999.99") BigDecimal alturaTotalM,
+            @Positive Long areaVerdeId) {}
 
     public record CambioEjemplar(
             @Size(max = 80) String codigoPlacaAntigua,
@@ -57,7 +58,8 @@ public class EjemplaresController {
             @DecimalMin("-90.0") @DecimalMax("90.0") BigDecimal latitud,
             @DecimalMin("-180.0") @DecimalMax("180.0") BigDecimal longitud,
             @Positive Integer cantidad,
-            @DecimalMin("0.01") @DecimalMax("9999.99") BigDecimal alturaTotalM) {}
+            @DecimalMin("0.01") @DecimalMax("9999.99") BigDecimal alturaTotalM,
+            @Positive Long areaVerdeId) {}
 
     @GetMapping
     @Operation(summary = "Consulta ejemplares por código, referencia o especie")
@@ -84,7 +86,8 @@ public class EjemplaresController {
                                 entrada.latitud(),
                                 entrada.longitud(),
                                 entrada.cantidad(),
-                                entrada.alturaTotalM()),
+                                entrada.alturaTotalM(),
+                                entrada.areaVerdeId()),
                         usuario);
         return ResponseEntity.created(URI.create("/api/v1/inventario/ejemplares/" + creado.id()))
                 .body(creado);
@@ -106,8 +109,25 @@ public class EjemplaresController {
                         cambio.latitud(),
                         cambio.longitud(),
                         cambio.cantidad(),
-                        cambio.alturaTotalM()),
+                        cambio.alturaTotalM(),
+                        cambio.areaVerdeId()),
                 usuario);
+    }
+
+    @PatchMapping("/{id}/situacion")
+    @Operation(summary = "Cambia la situación del ejemplar y conserva su historial de ubicaciones")
+    public Ejemplar cambiarSituacion(
+            @AuthenticationPrincipal Usuario usuario,
+            @PathVariable long id,
+            @Valid @RequestBody EjemplaresService.CambioSituacion cambio) {
+        return ejemplares.cambiarSituacion(id, cambio, usuario);
+    }
+
+    @GetMapping("/{id}/historial-situacion")
+    @Operation(summary = "Consulta los cambios de situación del ejemplar")
+    public List<EjemplaresService.CambioRegistrado> historialSituacion(
+            @AuthenticationPrincipal Usuario usuario, @PathVariable long id) {
+        return ejemplares.historialSituacion(id, usuario);
     }
 
     @GetMapping("/{id}/historial-actividades")
@@ -115,6 +135,15 @@ public class EjemplaresController {
     public List<EjemplaresService.Intervencion> historialActividades(
             @AuthenticationPrincipal Usuario usuario, @PathVariable long id) {
         return ejemplares.historialActividades(id, usuario);
+    }
+
+    @GetMapping("/{id}/historial-intervenciones")
+    @Operation(summary = "Consulta podas, aplicaciones fitosanitarias o incidencias de un ejemplar")
+    public List<EjemplaresService.EventoHistorial> historialIntervenciones(
+            @AuthenticationPrincipal Usuario usuario,
+            @PathVariable long id,
+            @RequestParam EjemplaresService.FuenteHistorial fuente) {
+        return ejemplares.historialIntervenciones(id, fuente, usuario);
     }
 
     @DeleteMapping("/{id}/placa-antigua")
