@@ -217,7 +217,7 @@ public class Incidencias {
                             FILTER (WHERE e.codigo IS NOT NULL), '{}') ejemplares
                         FROM mod02_area_verde a
                         LEFT JOIN mod05_areaverde v ON v.nombre = a.nombre
-                        LEFT JOIN mod02_ejemplar e ON e.area_verde_id = v.id
+                        LEFT JOIN mod02_ejemplar e ON e.area_verde_inventario_id = v.id
                         WHERE a.activo GROUP BY a.id, a.nombre ORDER BY a.nombre
                         """,
                         (rs, n) ->
