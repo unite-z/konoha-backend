@@ -1,7 +1,9 @@
 package pe.edu.pucp.areasverdes.mod02.servicios;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Pattern;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -23,9 +25,18 @@ import pe.edu.pucp.areasverdes.mod05.Usuario;
 @Service
 public class CatalogosMod02Service {
 
+    private static final Pattern COLOR_HEXADECIMAL = Pattern.compile("^#[0-9A-Fa-f]{6}$");
+    private static final String[] COLORES_INICIALES = {
+        "#1B5E20", "#1565C0", "#9A6700", "#6A1B9A", "#00838F", "#AD3A16", "#455A64"
+    };
+
     private static final RowMapper<Elemento> ELEMENTO =
             (rs, row) ->
-                    new Elemento(rs.getLong("id"), rs.getString("nombre"), rs.getBoolean("activo"));
+                    new Elemento(
+                            rs.getLong("id"),
+                            rs.getString("nombre"),
+                            rs.getBoolean("activo"),
+                            rs.getString("color"));
 
     private static final RowMapper<Sector> SECTOR =
             (rs, row) ->
@@ -65,7 +76,7 @@ public class CatalogosMod02Service {
 
     public List<Elemento> tiposUso(boolean incluirInactivos) {
         return jdbc.query(
-                "SELECT id, nombre, activo FROM mod02_tipo_uso WHERE (:incluir OR activo)"
+                "SELECT id, nombre, activo, color FROM mod02_tipo_uso WHERE (:incluir OR activo)"
                         + " ORDER BY lower(nombre), id",
                 Map.of("incluir", incluirInactivos),
                 ELEMENTO);
@@ -75,12 +86,20 @@ public class CatalogosMod02Service {
     public Elemento crearTipoUso(NuevoNombre entrada, Usuario usuario) {
         AccesoCoberturas.gestionar(usuario);
         try {
+            String color =
+                    entrada.color() == null
+                            ? siguienteColor()
+                            : normalizarColor(entrada.color());
             long id =
                     jdbc.queryForObject(
                             "INSERT INTO mod02_tipo_uso (nombre, usuario_creacion_id,"
-                                + " usuario_modificacion_id) VALUES (:nombre, :usuario, :usuario)"
+                                + " usuario_modificacion_id, color) VALUES (:nombre, :usuario,"
+                                + " :usuario, :color)"
                                 + " RETURNING id",
-                            Map.of("nombre", entrada.nombre().trim(), "usuario", usuario.id()),
+                            Map.of(
+                                    "nombre", entrada.nombre().trim(),
+                                    "usuario", usuario.id(),
+                                    "color", color),
                             Long.class);
             auditar("mod02_tipo_uso", id, "crear", usuario.id());
             return tiposUso(true).stream().filter(t -> t.id() == id).findFirst().orElseThrow();
@@ -92,14 +111,16 @@ public class CatalogosMod02Service {
     @Transactional
     public Elemento cambiarTipoUso(long id, CambioElemento cambio, Usuario usuario) {
         AccesoCoberturas.gestionar(usuario);
-        if (cambio.nombre() == null && cambio.activo() == null) {
+        if (cambio.nombre() == null && cambio.activo() == null && cambio.color() == null) {
             throw new ErrorCoberturas(400, "cambio-vacio", "Indica un nombre o un estado");
         }
+        String color = cambio.color() == null ? null : normalizarColor(cambio.color());
         try {
             int actualizados =
                     jdbc.update(
                             "UPDATE mod02_tipo_uso SET nombre = coalesce(:nombre, nombre), activo ="
-                                    + " coalesce(:activo, activo), fecha_modificacion = now(),"
+                                    + " coalesce(:activo, activo), color = coalesce(:color, color),"
+                                    + " fecha_modificacion = now(),"
                                     + " usuario_modificacion_id = :usuario WHERE id = :id",
                             new MapSqlParameterSource()
                                     .addValue("id", id)
@@ -107,13 +128,30 @@ public class CatalogosMod02Service {
                                     .addValue(
                                             "nombre",
                                             cambio.nombre() == null ? null : cambio.nombre().trim())
-                                    .addValue("activo", cambio.activo()));
+                                    .addValue("activo", cambio.activo())
+                                    .addValue("color", color));
             if (actualizados == 0) throw noExiste("No existe ese tipo de uso");
             auditar("mod02_tipo_uso", id, "modificar", usuario.id());
             return tiposUso(true).stream().filter(t -> t.id() == id).findFirst().orElseThrow();
         } catch (DuplicateKeyException e) {
             throw new ErrorCoberturas(409, "tipo-uso-duplicado", "Ya existe ese tipo de uso");
         }
+    }
+
+    private String siguienteColor() {
+        Integer cantidad =
+                jdbc.queryForObject("SELECT count(*) FROM mod02_tipo_uso", Map.of(), Integer.class);
+        return COLORES_INICIALES[
+                Math.floorMod(cantidad == null ? 0 : cantidad, COLORES_INICIALES.length)];
+    }
+
+    private static String normalizarColor(String color) {
+        String normalizado = color.trim().toUpperCase(Locale.ROOT);
+        if (!COLOR_HEXADECIMAL.matcher(normalizado).matches()) {
+            throw new ErrorCoberturas(
+                    400, "color-invalido", "El color debe tener el formato hexadecimal #RRGGBB");
+        }
+        return normalizado;
     }
 
     @Transactional

@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.net.URI;
 import java.util.List;
@@ -56,12 +57,18 @@ public class CatalogosMod02Controller {
 
     public record Persona(long id, String nombre) {}
 
-    public record Elemento(long id, String nombre, boolean activo) {}
+    public record Elemento(long id, String nombre, boolean activo, String color) {}
 
     public record NuevoNombre(
-            @NotBlank(message = "Indica el nombre") @Size(max = 80) String nombre) {}
+            @NotBlank(message = "Indica el nombre") @Size(max = 80) String nombre,
+            @Pattern(regexp = "^#[0-9A-Fa-f]{6}$", message = "El color debe tener el formato #RRGGBB")
+                    String color) {}
 
-    public record CambioElemento(String nombre, Boolean activo) {}
+    public record CambioElemento(
+            String nombre,
+            Boolean activo,
+            @Pattern(regexp = "^#[0-9A-Fa-f]{6}$", message = "El color debe tener el formato #RRGGBB")
+                    String color) {}
 
     @GetMapping("/tipos-uso")
     public List<Elemento> tiposUso(
