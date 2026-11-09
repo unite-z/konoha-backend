@@ -126,8 +126,9 @@ public class Mod04Repository {
         var row =
                 one(
                         """
-                        SELECT c.*,p.nombres||' '||p.apellidos capataz_nombre FROM mod04_cuadrilla c
-                        JOIN mod04_personal p ON p.id=c.capataz_id WHERE c.id=:id
+                        SELECT c.*,COALESCE(u.nombre,concat_ws(' ',p.nombres,p.apellidos)) capataz_nombre
+                        FROM mod04_cuadrilla c JOIN mod04_personal p ON p.id=c.capataz_id
+                        LEFT JOIN core_usuario u ON u.id=p.usuario_id WHERE c.id=:id
                         """,
                         Map.of("id", id));
         var members =
@@ -146,10 +147,11 @@ public class Mod04Repository {
     public Map<String, Object> encargo(long id) {
         return one(
                 """
-                SELECT e.*,NULL::text estado,c.nombre cuadrilla_nombre,p.nombres||' '||p.apellidos capataz_nombre,
+                SELECT e.*,NULL::text estado,c.nombre cuadrilla_nombre,COALESCE(u.nombre,concat_ws(' ',p.nombres,p.apellidos)) capataz_nombre,
                     t.nombre tipo_actividad_nombre,a.nombre area_verde_nombre
                 FROM mod04_encargo e JOIN mod04_cuadrilla c ON c.id=e.cuadrilla_id
                 JOIN mod04_personal p ON p.id=e.capataz_id JOIN mod04_tipo_actividad t ON t.id=e.tipo_actividad_id
+                LEFT JOIN core_usuario u ON u.id=p.usuario_id
                 JOIN mod05_areaverde a ON a.id=e.area_verde_id WHERE e.id=:id
                 """,
                 Map.of("id", id));

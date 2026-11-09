@@ -1,5 +1,6 @@
 package pe.edu.pucp.areasverdes.mod04.api;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
@@ -25,7 +26,14 @@ public final class Entradas {
     /** PUT reemplaza la composición completa, no aplica cambios parciales. */
     public record Cuadrilla(
             @NotBlank @Size(max = 150) String nombre,
-            @NotNull @Positive Long capatazId,
+            @Schema(
+                            description =
+                                    "Identificador de la ficha de campo. Alternativo a"
+                                            + " capataz_usuario_id.")
+                    @Positive
+                    Long capatazId,
+            @Schema(description = "Identificador de una cuenta activa con rol Capataz.") @Positive
+                    Long capatazUsuarioId,
             @NotNull Boolean activa,
             @NotNull @Size(max = 200) List<@NotNull @Positive Long> operarios) {}
 

@@ -14,17 +14,20 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
+import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import pe.edu.pucp.areasverdes.AreasVerdesApplication;
+import pe.edu.pucp.areasverdes.mod01.servicios.ConsultaCampo;
 import pe.edu.pucp.areasverdes.mod04.api.Entradas;
 import pe.edu.pucp.areasverdes.mod04.datos.Mod04Repository;
 import pe.edu.pucp.areasverdes.mod05.ApiError;
 import pe.edu.pucp.areasverdes.mod05.Usuario;
 
 @Service
+@Primary
 @Transactional(readOnly = true)
-public class OperacionCampoService {
+public class OperacionCampoService implements ConsultaCampo {
     public static final String CAPATAZ = "Capataz";
     final Mod04Repository repo;
     final Clock clock;
@@ -64,6 +67,34 @@ public class OperacionCampoService {
         return people.isEmpty() ? null : number(people.getFirst(), "id");
     }
 
+    @Override
+    public Set<Long> cuadrillasDelCapataz(long usuarioId) {
+        return Set.copyOf(
+                repo.jdbc()
+                        .queryForList(
+                                """
+                                SELECT c.id FROM mod04_cuadrilla c JOIN mod04_personal p ON p.id=c.capataz_id
+                                WHERE c.activa AND p.activo AND p.usuario_id=:usuario
+                                """,
+                                Map.of("usuario", usuarioId),
+                                Long.class));
+    }
+
+    @Override
+    public List<EncargoAbierto> encargosAbiertos(long usuarioId) {
+        return repo.jdbc()
+                .query(
+                        """
+                        SELECT e.id,e.descripcion FROM mod04_encargo e
+                        JOIN mod04_personal p ON p.id=e.capataz_id
+                        WHERE p.usuario_id=:usuario AND e.fecha_fin>=:hoy ORDER BY e.id
+                        """,
+                        Map.of("usuario", usuarioId, "hoy", LocalDate.now(clock)),
+                        (fila, indice) ->
+                                new EncargoAbierto(
+                                        fila.getLong("id"), fila.getString("descripcion")));
+    }
+
     void exigirCapataz(long capataz, Usuario user, boolean escritura) {
         exigirLectura(user);
         if (jefe(user)) return;
@@ -92,6 +123,8 @@ public class OperacionCampoService {
     @Transactional
     public Map<String, Object> crearPersonal(Entradas.Personal body, Usuario user) {
         exigirJefe(user);
+        if (CAPATAZ.equals(body.tipoPersonal()) && body.usuarioId() == null)
+            throw ApiError.invalid("Selecciona una cuenta de Capataz de Usuarios y roles");
         if (body.usuarioId() != null) {
             if (!body.tipoPersonal().equals(CAPATAZ))
                 throw ApiError.invalid("Solo un capataz puede vincularse a una cuenta");
@@ -124,14 +157,53 @@ public class OperacionCampoService {
         return result;
     }
 
+    private long vincularCapataz(long usuarioId, Usuario autor) {
+        var params = Map.of("id", usuarioId, "hoy", LocalDate.now(clock));
+        var cuentas =
+                repo.rows(
+                        """
+                        SELECT u.nombre FROM core_usuario u JOIN core_rol r ON r.id=u.rol_id
+                        WHERE u.id=:id AND u.activo AND r.codigo='capataz'
+                            AND (u.fecha_fin_vigencia IS NULL OR u.fecha_fin_vigencia>=:hoy)
+                        FOR UPDATE OF u
+                        """,
+                        params);
+        if (cuentas.isEmpty())
+            throw ApiError.invalid("Selecciona una cuenta activa con el rol Capataz");
+        var nuevas =
+                repo.rows(
+                        """
+                        INSERT INTO mod04_personal (nombres,apellidos,tipo_personal,usuario_id)
+                        VALUES (:nombre,'','Capataz',:id)
+                        ON CONFLICT (usuario_id) DO NOTHING RETURNING *
+                        """,
+                        Map.of("id", usuarioId, "nombre", cuentas.getFirst().get("nombre")));
+        if (!nuevas.isEmpty()) {
+            var nueva = nuevas.getFirst();
+            long id = number(nueva, "id");
+            repo.audit("Personal", id, "Crear", autor.id(), Map.of(), nueva);
+            return id;
+        }
+        return number(repo.one("SELECT id FROM mod04_personal WHERE usuario_id=:id", params), "id");
+    }
+
     @Transactional
     public Map<String, Object> guardarCuadrilla(Long id, Entradas.Cuadrilla body, Usuario user) {
         exigirJefe(user);
+        if ((body.capatazId() == null) == (body.capatazUsuarioId() == null))
+            throw ApiError.invalid("Selecciona un capataz");
         sinDuplicados(body.operarios());
-        if (body.operarios().contains(body.capatazId()))
-            throw ApiError.invalid("El capataz no puede figurar como operario");
         if (!body.activa() && !body.operarios().isEmpty())
             throw ApiError.invalid("Una cuadrilla inactiva no admite operarios asignados");
+        Long usuarioCapataz = body.capatazUsuarioId();
+        if (usuarioCapataz == null && body.activa()) {
+            Object cuenta = repo.get("personal", body.capatazId(), false).get("usuario_id");
+            if (cuenta instanceof Number numero) usuarioCapataz = numero.longValue();
+        }
+        long capataz =
+                usuarioCapataz == null ? body.capatazId() : vincularCapataz(usuarioCapataz, user);
+        if (body.operarios().contains(capataz))
+            throw ApiError.invalid("El capataz no puede figurar como operario");
         Map<String, Object> before = Map.of();
         if (id != null) {
             repo.get("cuadrilla", id, true);
@@ -140,14 +212,13 @@ public class OperacionCampoService {
         // Bloqueo de personal en orden estable: serializa asignaciones del mismo operario entre
         // cuadrillas.
         var locks = new TreeSet<>(body.operarios());
-        locks.add(body.capatazId());
-        for (long person : locks)
-            personalValido(person, person == body.capatazId() ? CAPATAZ : "Operario");
+        locks.add(capataz);
+        for (long person : locks) personalValido(person, person == capataz ? CAPATAZ : "Operario");
         if (body.activa()
                 && !repo.rows(
                                 "SELECT id FROM mod04_cuadrilla WHERE activa AND capataz_id=:c AND"
                                         + " id<>:id",
-                                Map.of("c", body.capatazId(), "id", id == null ? 0 : id))
+                                Map.of("c", capataz, "id", id == null ? 0 : id))
                         .isEmpty())
             throw ApiError.conflict("El capataz ya tiene una cuadrilla activa");
         for (long operario : body.operarios()) {
@@ -164,7 +235,7 @@ public class OperacionCampoService {
                                 + " ya pertenece a otra cuadrilla; retíralo antes de reasignarlo");
         }
         if (id != null
-                && (!body.activa() || number(before, "capataz_id") != body.capatazId())
+                && (!body.activa() || number(before, "capataz_id") != capataz)
                 && !repo.rows(
                                 "SELECT id FROM mod04_parte_diario WHERE cuadrilla_id=:id AND"
                                         + " estado='Abierto'",
@@ -176,7 +247,7 @@ public class OperacionCampoService {
                         "nombre",
                         body.nombre().strip(),
                         "capataz_id",
-                        body.capatazId(),
+                        capataz,
                         "activa",
                         body.activa(),
                         "fecha_modificacion",
