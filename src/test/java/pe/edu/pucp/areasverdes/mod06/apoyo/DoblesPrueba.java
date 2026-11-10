@@ -5,6 +5,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 import jakarta.servlet.http.HttpServletRequest;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.springframework.boot.test.autoconfigure.web.servlet.MockMvcBuilderCustomizer;
@@ -14,9 +15,13 @@ import org.springframework.context.annotation.Primary;
 import pe.edu.pucp.areasverdes.mod06.config.Mod06Propiedades;
 import pe.edu.pucp.areasverdes.mod06.fuentesdatos.FuenteDatos;
 import pe.edu.pucp.areasverdes.mod06.fuentesdatos.SelectorFuenteDatos;
+import pe.edu.pucp.areasverdes.mod06.ia.CatalogoFormatos;
+import pe.edu.pucp.areasverdes.mod06.ia.CatalogoFormatosFuenteDatos;
 import pe.edu.pucp.areasverdes.mod06.ia.ClienteGemini;
 import pe.edu.pucp.areasverdes.mod06.ia.ClienteIA;
 import pe.edu.pucp.areasverdes.mod06.ia.FabricaClienteIA;
+import pe.edu.pucp.areasverdes.mod06.ia.comun.AlmacenSugerencias;
+import pe.edu.pucp.areasverdes.mod06.ia.comun.AlmacenSugerenciasFuenteDatos;
 import pe.edu.pucp.areasverdes.mod06.permisos.Permisos;
 import pe.edu.pucp.areasverdes.mod06.permisos.ProveedorUsuario;
 import pe.edu.pucp.areasverdes.mod06.permisos.Usuario;
@@ -126,6 +131,67 @@ public class DoblesPrueba {
     @Primary
     UsuarioPrueba usuarioPrueba() {
         return new UsuarioPrueba();
+    }
+
+    /**
+     * Sugerencias en la fuente instalada con {@code usarFuente}, para que las pruebas de la API
+     * sigan comprobando lo guardado en memoria. {@code SugerenciasIaRepositoryApiTest} cubre la
+     * tabla real.
+     */
+    @Bean
+    @Primary
+    AlmacenSugerencias almacenPrueba(SelectorPrueba selector) {
+        return new AlmacenSugerencias() {
+            private AlmacenSugerencias actual() {
+                return new AlmacenSugerenciasFuenteDatos(selector.obtenerFuenteDatos());
+            }
+
+            @Override
+            public Map<String, Object> crear(Map<String, Object> datos) {
+                return actual().crear(datos);
+            }
+
+            @Override
+            public Map<String, Object> obtener(long id) {
+                return actual().obtener(id);
+            }
+
+            @Override
+            public Map<String, Object> obtenerParaRevisar(long id) {
+                return actual().obtenerParaRevisar(id);
+            }
+
+            @Override
+            public List<Map<String, Object>> listar(
+                    String tipo, String estado, String entidad, Long registroId) {
+                return actual().listar(tipo, estado, entidad, registroId);
+            }
+
+            @Override
+            public Map<String, Object> guardarRevision(
+                    long id, Map<String, Object> cambios, String motivo) {
+                return actual().guardarRevision(id, cambios, motivo);
+            }
+        };
+    }
+
+    /** Formato estándar de la fuente instalada con {@code usarFuente}. */
+    @Bean
+    @Primary
+    CatalogoFormatos catalogoPrueba(SelectorPrueba selector) {
+        return new CatalogoFormatos() {
+            @Override
+            public Map<String, Object> formatoVigente(Object tipoServicioId) {
+                return new CatalogoFormatosFuenteDatos(selector.obtenerFuenteDatos())
+                        .formatoVigente(tipoServicioId);
+            }
+
+            @Override
+            public List<Map<String, Object>> campos(Object formatoId) {
+                return new CatalogoFormatosFuenteDatos(selector.obtenerFuenteDatos())
+                        .campos(formatoId);
+            }
+        };
     }
 
     /** Permisos que MOD-01 concede hoy a cada rol ({@code V9__core_permisos.sql}). */
