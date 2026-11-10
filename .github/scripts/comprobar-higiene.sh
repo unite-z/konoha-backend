@@ -84,10 +84,16 @@ if git diff -U0 "$base"...HEAD -- . ':(exclude)*.md' ':(exclude).github/scripts/
 fi
 
 # Una migración fusionada no se edita: Flyway valida su checksum y la api no arrancaría en UAT ni en prod.
-while IFS= read -r ruta; do
+while IFS=$'\t' read -r estado ruta destino; do
   [[ -z "$ruta" ]] && continue
+  # AV-318: la versión V63 duplicada impedía que Flyway aplicara esta migración.
+  if [[ "$estado" == R100 &&
+        "$ruta" == src/main/resources/db/migration/V63__mod05_conformidad.sql &&
+        "$destino" == src/main/resources/db/migration/V70__mod05_conformidad.sql ]]; then
+    continue
+  fi
   falla "$ruta" "Migración ya fusionada en main: no se edita, renombra ni borra. Corrígela con una migración nueva (docs/estandares/base-datos.md)."
-done < <(git diff --name-only --diff-filter=MDR "$base"...HEAD -- src/main/resources/db/migration/)
+done < <(git diff --name-status -M100% --diff-filter=MDR "$base"...HEAD -- src/main/resources/db/migration/)
 
 # La base de pruebas solo se lee en BaseDePruebas: un módulo con variables propias se queda sin base en el CI (AV-242).
 if git diff -U0 "$base"...HEAD -- src/test/java ':(exclude)src/test/java/pe/edu/pucp/areasverdes/comun/BaseDePruebas.java' \
