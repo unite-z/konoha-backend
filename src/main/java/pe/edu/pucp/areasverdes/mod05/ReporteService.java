@@ -69,6 +69,8 @@ public class ReporteService {
             ultima.put("repetido", true);
             return ultima;
         }
+        if (Atencion.OBSERVADO.equals(a.estado()) && (resumen == null || resumen.isBlank()))
+            throw ApiError.invalid("Indique cómo se subsanó la observación del informe");
         List<String> paths = new ArrayList<>();
         // Incluye fallos en el COMMIT, después de retornar de este método.
         TransactionSynchronizationManager.registerSynchronization(

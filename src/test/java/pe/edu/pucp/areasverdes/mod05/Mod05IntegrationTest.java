@@ -1204,20 +1204,46 @@ class Mod05IntegrationTest {
                 .andExpect(status().isOk());
         assertEquals(Atencion.OBSERVADO, repo.atencion(id).get("estado"));
         // Una revisión distinta es la subsanación y devuelve la atención a «Reporte adjunto».
+        enviar("sinrol", id, informes(), "Metrado corregido", hoy(), pdf("informe.pdf", "B"))
+                .andExpect(status().isForbidden());
+        enviar("ingeniero", id, informes(), "   ", hoy(), pdf("informe.pdf", "B"))
+                .andExpect(status().isBadRequest());
         var segunda =
                 cuerpo(
-                        enviar("jefe", id, informes(), "Resumen", hoy(), pdf("informe.pdf", "B"))
+                        enviar(
+                                        "ingeniero",
+                                        id,
+                                        informes(),
+                                        "Metrado corregido",
+                                        hoy(),
+                                        pdf("informe.pdf", "B"))
                                 .andExpect(status().isCreated()));
         assertEquals(2, segunda.get("revision").asInt());
         assertEquals(Atencion.REPORTE, repo.atencion(id).get("estado"));
 
+        assertEquals("Metrado corregido", segunda.get("resumen").asText());
+        decidir(id, "ingeniero", decision("Conforme", ""), 403);
+        decidir(id, "jefe", decision("Observada", "Falta el plano"), 200);
+        decidir(id, "jefe", decision("Conforme", ""), 409);
+        var tercera =
+                cuerpo(
+                        enviar(
+                                        "ingeniero",
+                                        id,
+                                        informes(),
+                                        "Adjunto plano",
+                                        hoy(),
+                                        pdf("plano.pdf", "C"))
+                                .andExpect(status().isCreated()));
+        assertEquals(3, tercera.get("revision").asInt());
         var conforme = decidir(id, "jefe", decision("Conforme", ""), 200);
         assertEquals(Atencion.CONFORME, conforme.get("estado").asText());
-        assertEquals(2, conforme.get("conformidades").size());
-        assertEquals("Observada", conforme.at("/conformidades/0/resultado").asText());
-        assertEquals(1, conforme.at("/conformidades/0/revision").asInt());
-        assertEquals("Conforme", conforme.at("/conformidades/1/resultado").asText());
+        assertEquals(3, conforme.get("conformidades").size());
+        assertEquals("Falta el metrado", conforme.at("/conformidades/0/comentarios").asText());
+        assertEquals("Falta el plano", conforme.at("/conformidades/1/comentarios").asText());
         assertEquals(2, conforme.at("/conformidades/1/revision").asInt());
+        assertEquals("Conforme", conforme.at("/conformidades/2/resultado").asText());
+        assertEquals(3, conforme.at("/conformidades/2/revision").asInt());
     }
 
     // --- Atenciones programadas y extraordinarias (RF-SER-008) ---

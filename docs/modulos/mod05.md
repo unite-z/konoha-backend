@@ -149,6 +149,10 @@ PDF, JPEG, PNG, DOCX y XLSX, 20 MB por archivo y 100 MB por petición por defect
 
 Archivos fuera de la BD con nombres UUID. El directorio no se publica como recurso estático; descargas autenticadas como adjuntos sin caché pública. Revisiones previas permanecen disponibles. Bloqueo de la atención serializa cambios de estado y numeración de reportes. Si falla la escritura o el commit, se limpian archivos nuevos; fallos de limpieza se registran en logs. Una terminación abrupta puede dejar huérfanos y necesita reconciliación operativa.
 
+### Subsanación (RF-SER-012)
+
+Con la atención en `Observado`, una nueva revisión requiere la respuesta del proveedor en `resumen` y los documentos vigentes, incluido el informe final. El personal autorizado registra esa entrega. Cada revisión conserva su respuesta, archivos y fecha. La atención vuelve a `Reporte adjunto` para que el jefe pueda observar nuevamente o dar conformidad.
+
 ### Conformidad
 
 El jefe de sección decide sobre la última revisión del informe (RF-SER-007), solo con la atención en `Reporte adjunto`. Sin informe responde 409 (RN-007).
@@ -184,4 +188,4 @@ Las pruebas del MOD-06 corren en el mismo `./mvnw test` y usan la misma base `_t
 - Tarifario por tipo de intervención en los contratos (mejora futura, RF-SER-002): hoy el contrato solo tiene `monto_fijo`, obligatorio. Los contratos son únicamente de servicios tercerizados.
 - Integrar catálogos, usuarios, incidencias y programación con los módulos propietarios sin duplicar IDs.
 - Integrar almacenamiento de objetos y seguridad para atenciones de riesgo.
-- Fuera de esta entrega: extraordinarias sin contrato, corregir la clase tras el registro, subsanación completa (RF-SER-012; hoy basta una nueva revisión del informe), IA y nuevas pantallas frontend.
+- Fuera de esta entrega: extraordinarias sin contrato, corregir la clase tras el registro, IA y nuevas pantallas frontend.
