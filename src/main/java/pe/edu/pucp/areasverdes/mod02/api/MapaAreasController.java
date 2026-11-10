@@ -21,10 +21,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import pe.edu.pucp.areasverdes.mod02.servicios.AccesoCoberturas;
-import pe.edu.pucp.areasverdes.mod02.servicios.MapaAreasService;
-import pe.edu.pucp.areasverdes.mod02.servicios.GeometriaCampus;
 import pe.edu.pucp.areasverdes.mod02.servicios.EjemplaresService;
 import pe.edu.pucp.areasverdes.mod02.servicios.EjemplaresService.Ejemplar;
+import pe.edu.pucp.areasverdes.mod02.servicios.GeometriaCampus;
+import pe.edu.pucp.areasverdes.mod02.servicios.MapaAreasService;
 import pe.edu.pucp.areasverdes.mod05.Usuario;
 
 @RestController
@@ -38,7 +38,8 @@ public class MapaAreasController {
     private final GeometriaCampus geometria;
     private final EjemplaresService ejemplares;
 
-    public MapaAreasController(MapaAreasService mapa, GeometriaCampus geometria, EjemplaresService ejemplares) {
+    public MapaAreasController(
+            MapaAreasService mapa, GeometriaCampus geometria, EjemplaresService ejemplares) {
         this.mapa = mapa;
         this.geometria = geometria;
         this.ejemplares = ejemplares;
@@ -63,7 +64,9 @@ public class MapaAreasController {
 
     public record EjemplarAfectado(long id, String codigo) {}
 
-    public record ImpactoPoligono(Long areaAnteriorId, List<EjemplarAfectado> reasignables,
+    public record ImpactoPoligono(
+            Long areaAnteriorId,
+            List<EjemplarAfectado> reasignables,
             List<EjemplarAfectado> conflictos) {}
 
     @GetMapping(value = "/geometria", produces = "application/geo+json")
@@ -86,14 +89,16 @@ public class MapaAreasController {
 
     @GetMapping("/poligonos/{idFuente}/ejemplares")
     @Operation(summary = "Lista los ejemplares ubicados físicamente dentro del polígono")
-    public List<Ejemplar> ejemplares(@AuthenticationPrincipal Usuario usuario, @PathVariable UUID idFuente) {
+    public List<Ejemplar> ejemplares(
+            @AuthenticationPrincipal Usuario usuario, @PathVariable UUID idFuente) {
         return ejemplares.enPoligono(idFuente, usuario);
     }
 
     @GetMapping("/poligonos/{idFuente}/impacto")
     @Operation(summary = "Consulta qué ejemplares afecta un cambio de vínculo cartográfico")
     public ImpactoPoligono impacto(
-            @AuthenticationPrincipal Usuario usuario, @PathVariable UUID idFuente,
+            @AuthenticationPrincipal Usuario usuario,
+            @PathVariable UUID idFuente,
             @RequestParam(name = "area_verde_id", required = false) Long areaVerdeId) {
         return mapa.impacto(idFuente, areaVerdeId, usuario);
     }

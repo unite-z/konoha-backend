@@ -26,17 +26,16 @@ public class EjemplaresService {
 
     private static final String CONSULTA =
             "SELECT e.id, e.codigo, e.referencia_catastro, e.codigo_catastro,"
-                    + " e.codigo_placa_antigua, e.especie_id, s.nombre_comun especie_nombre_comun,"
-                    + " s.nombre_cientifico especie_nombre_cientifico, s.forma_biologica"
-                    + " especie_forma_biologica, e.tipo_vegetacion, e.ubicacion,"
-                    + " ST_Y(e.ubicacion_geografica) latitud,"
-                    + " ST_X(e.ubicacion_geografica) longitud, e.cantidad,"
-                    + " e.area_verde_inventario_id area_verde_id, e.altura_total_m, e.situacion, e.fecha_situacion,"
-                    + " (e.codigo_placa_antigua IS NOT NULL AND"
-                    + " EXISTS (SELECT 1 FROM mod02_ejemplar otro WHERE otro.id <> e.id AND"
-                    + " lower(otro.codigo_placa_antigua) = lower(e.codigo_placa_antigua)))"
-                    + " advertencia_placa_repetida FROM mod02_ejemplar e LEFT JOIN"
-                    + " mod02_especie_vegetal s ON s.id = e.especie_id";
+                + " e.codigo_placa_antigua, e.especie_id, s.nombre_comun especie_nombre_comun,"
+                + " s.nombre_cientifico especie_nombre_cientifico, s.forma_biologica"
+                + " especie_forma_biologica, e.tipo_vegetacion, e.ubicacion,"
+                + " ST_Y(e.ubicacion_geografica) latitud, ST_X(e.ubicacion_geografica) longitud,"
+                + " e.cantidad, e.area_verde_inventario_id area_verde_id, e.altura_total_m,"
+                + " e.situacion, e.fecha_situacion, (e.codigo_placa_antigua IS NOT NULL AND EXISTS"
+                + " (SELECT 1 FROM mod02_ejemplar otro WHERE otro.id <> e.id AND"
+                + " lower(otro.codigo_placa_antigua) = lower(e.codigo_placa_antigua)))"
+                + " advertencia_placa_repetida FROM mod02_ejemplar e LEFT JOIN"
+                + " mod02_especie_vegetal s ON s.id = e.especie_id";
 
     private final NamedParameterJdbcTemplate jdbc;
 
@@ -65,13 +64,12 @@ public class EjemplaresService {
         return jdbc.query(
                 CONSULTA
                         + " WHERE (:q = '' OR e.codigo ILIKE '%' || :q || '%' OR"
-                        + " e.referencia_catastro ILIKE '%' || :q || '%' OR"
-                        + " e.codigo_placa_antigua ILIKE '%' || :q || '%' OR"
-                        + " s.nombre_comun ILIKE '%' || :q || '%' OR"
-                        + " s.nombre_cientifico ILIKE '%' || :q || '%')"
-                        + " AND (:referencia = '' OR e.referencia_catastro = :referencia)"
-                        + " AND (CAST(:area AS bigint) IS NULL OR e.area_verde_inventario_id = :area)"
-                        + " ORDER BY e.id LIMIT :limite OFFSET :offset",
+                        + " e.referencia_catastro ILIKE '%' || :q || '%' OR e.codigo_placa_antigua"
+                        + " ILIKE '%' || :q || '%' OR s.nombre_comun ILIKE '%' || :q || '%' OR"
+                        + " s.nombre_cientifico ILIKE '%' || :q || '%') AND (:referencia = '' OR"
+                        + " e.referencia_catastro = :referencia) AND (CAST(:area AS bigint) IS NULL"
+                        + " OR e.area_verde_inventario_id = :area) ORDER BY e.id LIMIT :limite"
+                        + " OFFSET :offset",
                 parametros,
                 new DataClassRowMapper<>(Ejemplar.class));
     }
@@ -79,13 +77,15 @@ public class EjemplaresService {
     public List<Ejemplar> enPoligono(UUID idFuente, Usuario usuario) {
         AccesoCoberturas.consultar(usuario);
         return jdbc.query(
-                CONSULTA + """
+                CONSULTA
+                        + """
                          WHERE EXISTS (
                              SELECT 1 FROM mod02_mapa_geometria g WHERE g.id_fuente = :fuente
                                  AND ST_Covers(g.geometria, e.ubicacion_geografica)
                          ) ORDER BY e.id
                         """,
-                Map.of("fuente", idFuente), new DataClassRowMapper<>(Ejemplar.class));
+                Map.of("fuente", idFuente),
+                new DataClassRowMapper<>(Ejemplar.class));
     }
 
     @Transactional
@@ -98,13 +98,13 @@ public class EjemplaresService {
         long id =
                 jdbc.queryForObject(
                         "INSERT INTO mod02_ejemplar (codigo_placa_antigua, especie_id,"
-                                + " tipo_vegetacion, ubicacion, ubicacion_geografica, cantidad,"
-                                + " altura_total_m, area_verde_inventario_id) VALUES (:placa, :especie,"
-                                + " :vegetacion, :ubicacion, CASE WHEN CAST(:latitud AS numeric) IS"
-                                + " NULL THEN NULL ELSE ST_SetSRID (ST_MakePoint(CAST(:longitud AS"
-                                + " double precision), CAST(:latitud AS double precision)),"
-                                + " 4326)::geometry(Point, 4326) END, :cantidad, :altura, :area)"
-                                + " RETURNING id",
+                            + " tipo_vegetacion, ubicacion, ubicacion_geografica, cantidad,"
+                            + " altura_total_m, area_verde_inventario_id) VALUES (:placa, :especie,"
+                            + " :vegetacion, :ubicacion, CASE WHEN CAST(:latitud AS numeric) IS"
+                            + " NULL THEN NULL ELSE ST_SetSRID (ST_MakePoint(CAST(:longitud AS"
+                            + " double precision), CAST(:latitud AS double precision)),"
+                            + " 4326)::geometry(Point, 4326) END, :cantidad, :altura, :area)"
+                            + " RETURNING id",
                         parametros(entrada).addValue("area", entrada.areaVerdeId()),
                         Long.class);
         geometria.validarEjemplar(id);
@@ -151,18 +151,16 @@ public class EjemplaresService {
         int filas =
                 jdbc.update(
                         "UPDATE mod02_ejemplar SET especie_id = coalesce(:especie, especie_id),"
-                                + " tipo_vegetacion = coalesce(:vegetacion, tipo_vegetacion),"
-                                + " ubicacion = coalesce(:ubicacion, ubicacion),"
-                                + " ubicacion_geografica = CASE WHEN :latitud IS NULL AND"
-                                + " :longitud IS NULL THEN ubicacion_geografica ELSE"
-                                + " ST_SetSRID(ST_MakePoint(coalesce(:longitud,"
-                                + " ST_X(ubicacion_geografica)), coalesce(:latitud,"
-                                + " ST_Y(ubicacion_geografica))), 4326)::geometry(Point, 4326) END,"
-                                + " cantidad = coalesce(:cantidad, cantidad),"
-                                + " altura_total_m = coalesce(:altura, altura_total_m),"
-                                + " codigo_placa_antigua = coalesce(:placa, codigo_placa_antigua),"
-                                + " area_verde_inventario_id = coalesce(:area, area_verde_inventario_id)"
-                                + " WHERE id = :id",
+                            + " tipo_vegetacion = coalesce(:vegetacion, tipo_vegetacion), ubicacion"
+                            + " = coalesce(:ubicacion, ubicacion), ubicacion_geografica = CASE WHEN"
+                            + " :latitud IS NULL AND :longitud IS NULL THEN ubicacion_geografica"
+                            + " ELSE ST_SetSRID(ST_MakePoint(coalesce(:longitud,"
+                            + " ST_X(ubicacion_geografica)), coalesce(:latitud,"
+                            + " ST_Y(ubicacion_geografica))), 4326)::geometry(Point, 4326) END,"
+                            + " cantidad = coalesce(:cantidad, cantidad), altura_total_m ="
+                            + " coalesce(:altura, altura_total_m), codigo_placa_antigua ="
+                            + " coalesce(:placa, codigo_placa_antigua), area_verde_inventario_id ="
+                            + " coalesce(:area, area_verde_inventario_id) WHERE id = :id",
                         parametros(cambio)
                                 .addValue("area", cambio.areaVerdeId())
                                 .addValue("id", id));
