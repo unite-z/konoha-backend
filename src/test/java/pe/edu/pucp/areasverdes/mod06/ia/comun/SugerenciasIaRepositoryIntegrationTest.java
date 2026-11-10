@@ -42,8 +42,11 @@ class SugerenciasIaRepositoryIntegrationTest {
         usuario =
                 jdbc.queryForObject(
                         """
-                        INSERT INTO core_usuario (nombre_usuario, nombre, credencial_hash, rol_id)
-                        SELECT 'prueba-mod06-ia', 'Ana Revisora', 'x', id FROM core_rol WHERE codigo = 'jefe-seccion'
+                        -- Id explícito: otras suites crean usuarios con id y dejan atrás la secuencia.
+                        INSERT INTO core_usuario (id, nombre_usuario, nombre, credencial_hash, rol_id)
+                        SELECT (SELECT COALESCE(max(id), 0) + 1 FROM core_usuario), 'prueba-mod06-ia',
+                               'Ana Revisora', 'x', id
+                        FROM core_rol WHERE codigo = 'jefe-seccion'
                         RETURNING id
                         """,
                         Map.of(),
