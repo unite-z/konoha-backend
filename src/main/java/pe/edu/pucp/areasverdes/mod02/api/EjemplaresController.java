@@ -68,8 +68,9 @@ public class EjemplaresController {
             @RequestParam(required = false) String q,
             @RequestParam(required = false) String referencia,
             @RequestParam(name = "area_verde_id", required = false) @Positive Long areaVerdeId,
+            @RequestParam(required = false) @Size(max = 40) String codigo,
             @RequestParam(defaultValue = "1") int page) {
-        return ejemplares.listar(q, referencia, areaVerdeId, page, usuario);
+        return ejemplares.listar(q, referencia, areaVerdeId, codigo, page, usuario);
     }
 
     @PostMapping

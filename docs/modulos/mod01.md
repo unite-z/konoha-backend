@@ -55,7 +55,7 @@ Todos bajo `/api/v1/core/`, con y sin barra final. Errores en `{codigo, detalle}
 | `GET usuarios/{id}/historial/` | Jefe | Altas, cambios de datos, de rol y de estado |
 | `GET` y `PUT usuarios/{id}/rol/` | Jefe | PUT `{rol, motivo}`. 409 `rol-no-habilitado`, `rol-sin-cambio`, `ultimo-jefe-seccion` o `capataz-con-cuadrilla` |
 | `GET roles/` | Jefe | Roles con sus permisos. El operario sale con `activo: false` |
-| `GET accesos/` | Jefe | Filtros `usuario_id` y `resultado` (`Exitoso`, `Fallido`, `Bloqueado`, `Denegado`, `SinPermiso`, `CierreSesion`) |
+| `GET accesos/` | Jefe | Filtros `usuario_id`, `usuario` (texto en el nombre, la cuenta o el identificador escrito), `canal` (`oficina`, `campo`, `api`), `desde` y `hasta` (días en hora de Lima, ambos incluidos; 400 `periodo-invalido` si están invertidos) y `resultado` (`Exitoso`, `Fallido`, `Bloqueado`, `Denegado`, `SinPermiso`, `CierreSesion`) |
 | `GET historial/?entidad=&registro_id=` | Según la entidad | `actividad`, `atencion`, `incidencia`, `ejemplar` y `usuario`. Los importes no salen para quien no tiene `SER.CONTRATO.VER_MONTOS` |
 | `POST adjuntos/` | Según la entidad | Multipart `entidad`, `registro_id`, `descripcion` y `archivo`, con la cabecera `Idempotency-Key` (UUID). 201 si es nuevo, 200 si es un reintento, 409 `archivo-duplicado` o `entidad-no-disponible` |
 | `GET adjuntos/?entidad=&registro_id=` | Según la entidad | |
