@@ -25,17 +25,37 @@ import pe.edu.pucp.areasverdes.mod05.Usuario;
 public class EjemplaresService {
 
     private static final String CONSULTA =
-            "SELECT e.id, e.codigo, e.referencia_catastro, e.codigo_catastro,"
-                + " e.codigo_placa_antigua, e.especie_id, s.nombre_comun especie_nombre_comun,"
-                + " s.nombre_cientifico especie_nombre_cientifico, s.forma_biologica"
-                + " especie_forma_biologica, e.tipo_vegetacion, e.ubicacion,"
-                + " ST_Y(e.ubicacion_geografica) latitud, ST_X(e.ubicacion_geografica) longitud,"
-                + " e.cantidad, e.area_verde_inventario_id area_verde_id, e.altura_total_m,"
-                + " e.situacion, e.fecha_situacion, (e.codigo_placa_antigua IS NOT NULL AND EXISTS"
-                + " (SELECT 1 FROM mod02_ejemplar otro WHERE otro.id <> e.id AND"
-                + " lower(otro.codigo_placa_antigua) = lower(e.codigo_placa_antigua)))"
-                + " advertencia_placa_repetida FROM mod02_ejemplar e LEFT JOIN"
-                + " mod02_especie_vegetal s ON s.id = e.especie_id";
+            """
+            SELECT e.id, e.codigo, e.referencia_catastro, e.codigo_catastro,
+                   e.codigo_placa_antigua, e.especie_id, s.nombre_comun especie_nombre_comun,
+                   s.nombre_cientifico especie_nombre_cientifico,
+                   s.forma_biologica especie_forma_biologica, e.tipo_vegetacion, e.ubicacion,
+                   ST_Y(e.ubicacion_geografica) latitud, ST_X(e.ubicacion_geografica) longitud,
+                   e.cantidad, e.area_verde_inventario_id area_verde_id, e.altura_total_m,
+                   a.nombre area_verde_nombre, mapa.total > 1 varios_poligonos,
+                   CASE WHEN mapa.total = 1 THEN (
+                       SELECT jsonb_object_agg(f #>> '{properties,mapa_id}', f #>> '{properties,Nombre}')
+                       FROM mod02_mapa_capa c CROSS JOIN LATERAL jsonb_array_elements(c.geojson->'features') f
+                       WHERE c.unica
+                   ) ->> mapa.id_fuente END nombre_poligono,
+                   e.situacion, e.fecha_situacion,
+                   (e.codigo_placa_antigua IS NOT NULL AND EXISTS (
+                       SELECT 1 FROM mod02_ejemplar otro WHERE otro.id <> e.id
+                           AND lower(otro.codigo_placa_antigua) = lower(e.codigo_placa_antigua)
+                   )) advertencia_placa_repetida
+            FROM mod02_ejemplar e
+            LEFT JOIN mod02_especie_vegetal s ON s.id = e.especie_id
+            LEFT JOIN mod02_area_verde a ON a.id = e.area_verde_inventario_id
+            LEFT JOIN LATERAL (
+                SELECT count(*) total, min(g.id_fuente::text) id_fuente
+                FROM (
+                    SELECT id_fuente FROM mod02_mapa_geometria
+                    WHERE e.area_verde_inventario_id IS NULL AND e.ubicacion_geografica IS NOT NULL
+                        AND ST_Covers(geometria, e.ubicacion_geografica)
+                    LIMIT 2
+                ) g
+            ) mapa ON true
+            """;
 
     private final NamedParameterJdbcTemplate jdbc;
 
@@ -47,7 +67,12 @@ public class EjemplaresService {
     }
 
     public List<Ejemplar> listar(
-            String q, String referencia, Long areaVerdeId, int page, Usuario usuario) {
+            String q,
+            String referencia,
+            Long areaVerdeId,
+            String codigo,
+            int page,
+            Usuario usuario) {
         AccesoCoberturas.consultar(usuario);
         if (page < 1) {
             throw new ErrorCoberturas(400, "pagina-invalida", "La página debe ser mayor que cero");
@@ -59,6 +84,7 @@ public class EjemplaresService {
                         .addValue("q", termino)
                         .addValue("referencia", ref)
                         .addValue("area", areaVerdeId)
+                        .addValue("codigo", codigo, java.sql.Types.VARCHAR)
                         .addValue("limite", 25)
                         .addValue("offset", (page - 1) * 25);
         return jdbc.query(
@@ -68,8 +94,8 @@ public class EjemplaresService {
                         + " ILIKE '%' || :q || '%' OR s.nombre_comun ILIKE '%' || :q || '%' OR"
                         + " s.nombre_cientifico ILIKE '%' || :q || '%') AND (:referencia = '' OR"
                         + " e.referencia_catastro = :referencia) AND (CAST(:area AS bigint) IS NULL"
-                        + " OR e.area_verde_inventario_id = :area) ORDER BY e.id LIMIT :limite"
-                        + " OFFSET :offset",
+                        + " OR e.area_verde_inventario_id = :area) AND (:codigo IS NULL OR e.codigo"
+                        + " = :codigo) ORDER BY e.id LIMIT :limite OFFSET :offset",
                 parametros,
                 new DataClassRowMapper<>(Ejemplar.class));
     }
@@ -510,6 +536,9 @@ public class EjemplaresService {
             BigDecimal longitud,
             int cantidad,
             Long areaVerdeId,
+            String areaVerdeNombre,
+            String nombrePoligono,
+            boolean variosPoligonos,
             BigDecimal alturaTotalM,
             Situacion situacion,
             LocalDate fechaSituacion,
