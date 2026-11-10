@@ -1,7 +1,6 @@
 package pe.edu.pucp.areasverdes.mod06.gestion.datos;
 
 import java.util.List;
-import org.springframework.stereotype.Component;
 import pe.edu.pucp.areasverdes.mod06.gestion.RangoFechas;
 
 /**
@@ -16,8 +15,10 @@ import pe.edu.pucp.areasverdes.mod06.gestion.RangoFechas;
  *       tablas de MOD-04 y la traducción de {@code tipo_movimiento} y {@code categoria};
  *   <li>borrar esta clase.
  * </ol>
+ *
+ * <p>Ya no es un bean: el adaptador real es {@link FuenteMovimientosMaterialMod04} (AV-228). Se
+ * conserva para las pruebas de «fuente no disponible», que comprueban el «Sin datos» con su motivo.
  */
-@Component
 public class FuenteMovimientosMaterialNoDisponible implements FuenteMovimientosMaterial {
 
     public static final String MOTIVO =

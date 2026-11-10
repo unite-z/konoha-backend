@@ -1,6 +1,8 @@
 package pe.edu.pucp.areasverdes.mod06.gestion;
 
+import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.hasKey;
+import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -10,7 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.ResultActions;
-import pe.edu.pucp.areasverdes.mod06.gestion.datos.FuenteMovimientosMaterialNoDisponible;
+import pe.edu.pucp.areasverdes.mod06.gestion.servicios.MaterialVegetalService;
 
 /**
  * RF-REP-005 · HU-MOD05-029 · CU-MOD05-029 con el adaptador real: en {@code main} no hay
@@ -31,7 +33,7 @@ class MaterialVegetalApiTest extends ApiGestion {
                 .andExpect(jsonPath("$.sin_datos").value(true))
                 .andExpect(
                         jsonPath("$.mensaje_sin_datos")
-                                .value(FuenteMovimientosMaterialNoDisponible.MOTIVO))
+                                .value(MaterialVegetalService.MENSAJE_SIN_DATOS_MES))
                 .andExpect(jsonPath("$.periodo.desde").value("2026-10-01"))
                 .andExpect(jsonPath("$.periodo.hasta").value("2026-10-31"))
                 .andExpect(jsonPath("$.filtros_aplicados.mes").value("2026-10"))
@@ -42,7 +44,10 @@ class MaterialVegetalApiTest extends ApiGestion {
                 .andExpect(jsonPath("$.consumido").isEmpty())
                 .andExpect(jsonPath("$.propagado").isEmpty())
                 .andExpect(jsonPath("$.trasladado").isEmpty())
-                .andExpect(jsonPath("$.comparacion").isEmpty())
+                // La fuente existe: los tres meses anteriores salen, cada uno «sin datos» (nunca
+                // con ceros).
+                .andExpect(jsonPath("$.comparacion.length()").value(3))
+                .andExpect(jsonPath("$.comparacion[*].sin_datos", everyItem(is(true))))
                 .andExpect(jsonPath("$.productos_proveedor.sin_datos").value(true))
                 .andExpect(jsonPath("$.generado_en").isNotEmpty());
     }

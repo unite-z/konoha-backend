@@ -16,8 +16,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.ResultActions;
 import pe.edu.pucp.areasverdes.mod06.comun.Periodo;
-import pe.edu.pucp.areasverdes.mod06.gestion.datos.FuenteMovimientosMaterialNoDisponible;
-import pe.edu.pucp.areasverdes.mod06.gestion.datos.FuenteOperacionCampoNoDisponible;
 import pe.edu.pucp.areasverdes.mod06.gestion.servicios.PanelService;
 
 /**
@@ -110,19 +108,17 @@ class PanelApiTest extends ApiGestion {
                         jsonPath("$.indicadores[4].desglose[3].etiqueta").value("Reporte adjunto"));
     }
 
+    /** Sin actividades de MOD-04 en el periodo: «Sin datos», nunca un 0 (AV-228). */
     @Test
-    void losIndicadoresSinFuenteDicenSuMotivo() throws Exception {
+    void sinActividadesLosIndicadoresDeMod04DicenSinDatos() throws Exception {
         var r = panel("");
-        Map<Integer, String> motivos =
-                Map.of(
-                        0, FuenteOperacionCampoNoDisponible.MOTIVO,
-                        1, FuenteOperacionCampoNoDisponible.MOTIVO,
-                        3, FuenteMovimientosMaterialNoDisponible.MOTIVO);
-        for (var m : motivos.entrySet()) {
-            String i = "$.indicadores[" + m.getKey() + "]";
-            r.andExpect(jsonPath(i + ".sin_datos").value(true))
-                    .andExpect(jsonPath(i + ".valor").value(nullValue()))
-                    .andExpect(jsonPath(i + ".mensaje_sin_datos").value(m.getValue()));
+        for (int i : new int[] {0, 1, 3}) {
+            String indicador = "$.indicadores[" + i + "]";
+            r.andExpect(jsonPath(indicador + ".sin_datos").value(true))
+                    .andExpect(jsonPath(indicador + ".valor").value(nullValue()))
+                    .andExpect(
+                            jsonPath(indicador + ".mensaje_sin_datos")
+                                    .value(PanelService.MENSAJE_SIN_DATOS));
         }
     }
 
