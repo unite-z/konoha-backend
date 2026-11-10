@@ -62,7 +62,7 @@ public class EjemplaresController {
             @Positive Long areaVerdeId) {}
 
     @GetMapping
-    @Operation(summary = "Consulta ejemplares por código, referencia o especie")
+    @Operation(summary = "Consulta ejemplares por texto o por código exacto")
     public List<Ejemplar> listar(
             @AuthenticationPrincipal Usuario usuario,
             @RequestParam(required = false) String q,
