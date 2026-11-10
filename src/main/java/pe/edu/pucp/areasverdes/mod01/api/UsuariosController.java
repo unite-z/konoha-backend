@@ -8,6 +8,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.net.URI;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.ResponseEntity;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 import pe.edu.pucp.areasverdes.mod01.datos.BitacoraRepository;
 import pe.edu.pucp.areasverdes.mod01.datos.BitacoraRepository.Acceso;
 import pe.edu.pucp.areasverdes.mod01.datos.BitacoraRepository.Cambio;
+import pe.edu.pucp.areasverdes.mod01.datos.BitacoraRepository.FiltroAccesos;
 import pe.edu.pucp.areasverdes.mod01.servicios.Autorizacion;
 import pe.edu.pucp.areasverdes.mod01.servicios.ErrorCore;
 import pe.edu.pucp.areasverdes.mod01.servicios.RolesService;
@@ -196,19 +198,32 @@ public class UsuariosController {
         return roles.listar();
     }
 
-    /** Resultados: Exitoso, Fallido, Bloqueado, Denegado, SinPermiso y CierreSesion. */
+    /**
+     * Resultados: Exitoso, Fallido, Bloqueado, Denegado, SinPermiso y CierreSesion. Canales:
+     * oficina, campo y api. Las fechas son días en hora de Lima, ambos incluidos.
+     */
     @Operation(summary = "Registro de accesos (no se puede modificar ni borrar)")
     @GetMapping({"/accesos", "/accesos/"})
     public Pagina<Acceso> accesos(
             @AuthenticationPrincipal UsuarioSesion yo,
             @RequestParam(name = "usuario_id", required = false) Long usuarioId,
+            @RequestParam(required = false) String usuario,
             @RequestParam(required = false) String resultado,
+            @RequestParam(required = false) String canal,
+            @RequestParam(required = false) LocalDate desde,
+            @RequestParam(required = false) LocalDate hasta,
             @RequestParam(defaultValue = "1") int page) {
         autorizacion.exigir(yo, GESTIONAR);
         int p = pagina(page);
+        if (desde != null && hasta != null && hasta.isBefore(desde)) {
+            throw new ErrorCore(
+                    400, "periodo-invalido", "«Hasta» no puede ser anterior a «Desde»", Map.of());
+        }
+        String texto = usuario == null || usuario.isBlank() ? null : usuario.trim();
+        var filtro = new FiltroAccesos(usuarioId, texto, resultado, canal, desde, hasta);
         return Pagina.conTotal(
-                bitacora.accesos(usuarioId, resultado, Pagina.TAMANO, (p - 1) * Pagina.TAMANO),
-                bitacora.contarAccesos(usuarioId, resultado),
+                bitacora.accesos(filtro, Pagina.TAMANO, (p - 1) * Pagina.TAMANO),
+                bitacora.contarAccesos(filtro),
                 p);
     }
 

@@ -234,6 +234,43 @@ class UsuariosApiTest extends ApiCore {
                 .andExpect(jsonPath("$.results[0].ruta").value("GET " + USUARIOS));
     }
 
+    private void acceso(String identificador, String canal, String resultado, String instante) {
+        jdbc.update(
+                """
+                INSERT INTO core_registro_acceso (identificador, canal, resultado, fecha_hora)
+                VALUES (:i, :c, :r, CAST(:f AS timestamptz))
+                """,
+                Map.of("i", identificador, "c", canal, "r", resultado, "f", instante));
+    }
+
+    private void cuentaAccesos(String filtros, int esperados, jakarta.servlet.http.Cookie jefe)
+            throws Exception {
+        http.perform(get("/api/v1/core/accesos/?" + filtros).cookie(jefe))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(esperados))
+                .andExpect(jsonPath("$.results.length()").value(esperados));
+    }
+
+    @Test
+    void elRegistroDeAccesosFiltraPorUsuarioCanalYFecha() throws Exception {
+        var jefe = sesion("jefe");
+        acceso("ajeno_1@pucp.edu.pe", "campo", "Fallido", "2026-10-10T12:00:00-05:00");
+        acceso("ajeno%2@pucp.edu.pe", "api", "Denegado", "2026-10-11T00:00:00-05:00");
+        acceso("otra@pucp.edu.pe", "campo", "Exitoso", "2026-10-11T23:59:00-05:00");
+        acceso("otra@pucp.edu.pe", "campo", "Exitoso", "2026-10-12T00:00:00-05:00");
+
+        cuentaAccesos("usuario=AJENO", 2, jefe);
+        cuentaAccesos("usuario=ajeno_", 1, jefe);
+        cuentaAccesos("canal=campo", 3, jefe);
+        cuentaAccesos("desde=2026-10-11&hasta=2026-10-11", 2, jefe);
+        cuentaAccesos("hasta=2026-10-10", 1, jefe);
+        cuentaAccesos("usuario=otra&canal=campo&resultado=Exitoso&desde=2026-10-12", 1, jefe);
+        cuentaAccesos("usuario=jefe", 1, jefe);
+        http.perform(get("/api/v1/core/accesos/?desde=2026-10-12&hasta=2026-10-11").cookie(jefe))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.codigo").value("periodo-invalido"));
+    }
+
     private int cambios(String accion) {
         Integer n =
                 jdbc.queryForObject(
