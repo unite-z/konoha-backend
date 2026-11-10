@@ -456,6 +456,35 @@ class Mod04IntegrationTest {
     }
 
     @Test
+    void oficinaConsultaRegistroRealPorCuadrillaFechaYHoraDeAlta() throws Exception {
+        long equipo = cuadrilla(c1, o1);
+        long otraCuadrilla = cuadrilla(c2, o2);
+        long actividad = actividad(equipo);
+        String consulta = BASE + "/actividades/?cuadrilla_id=" + equipo + "&fecha=" + HOY;
+        Cookie sesion = sesionCore("ingeniero");
+        http.perform(get(consulta).cookie(sesion))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(1))
+                .andExpect(jsonPath("$.results[0].id").value(actividad))
+                .andExpect(jsonPath("$.results[0].tipo_actividad_nombre").value("Mantenimiento"))
+                .andExpect(
+                        jsonPath("$.results[0].fecha_hora_actividad")
+                                .value("2026-10-22T08:00:00-05:00"))
+                .andExpect(
+                        jsonPath("$.results[0].fecha_hora_registro")
+                                .value("2026-10-22T13:00:00-05:00"));
+        http.perform(get(BASE + "/actividades/?cuadrilla_id=" + otraCuadrilla).cookie(sesion))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(0));
+        http.perform(get(consulta + "3").cookie(sesion)).andExpect(status().isBadRequest());
+        http.perform(get(BASE + "/actividades/?fecha=" + HOY.plusDays(1)).cookie(sesion))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(0));
+        http.perform(get(consulta).with(httpBasic("sinrol", PASSWORD)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void opcionesYDetalleDeActividadRespetanPertenenciaYRol() throws Exception {
         long squad = cuadrilla(c1, o1, o2), act = actividad(squad);
         http.perform(get(BASE + "/actividades/" + act).with(httpBasic("capataz1", PASSWORD)))
@@ -476,9 +505,15 @@ class Mod04IntegrationTest {
                                 .with(httpBasic("jefe", PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results[0].cuadrilla_id").value(squad));
-        http.perform(get(BASE + "/actividades/").with(httpBasic("jefe", PASSWORD)))
+        String consulta = BASE + "/actividades/?cuadrilla_id=" + squad;
+        http.perform(get(consulta).with(httpBasic("jefe", PASSWORD)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.results[0].area_verde_nombre").value("Jardín A"));
+                .andExpect(jsonPath("$.count").value(1))
+                .andExpect(jsonPath("$.results[0].area_verde_nombre").value("Jardín A"))
+                .andExpect(jsonPath("$.results[0].fecha_hora_registro").isNotEmpty());
+        http.perform(get(consulta).with(httpBasic("capataz2", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(0));
     }
 
     @Test
