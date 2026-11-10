@@ -201,7 +201,9 @@ class FuenteReportesProveedorMod05Test {
                         new Mod06Propiedades(
                                 "mock", null, null, null, new Mod06Propiedades.Ia("mod05")),
                         beans.getBeanProvider(FuenteReportesProveedorMod05.class));
-        return new ExtraccionReportesService(datos, null, Clock.system(Fechas.LIMA), reportes);
+        // Sin almacén ni catálogo propios: las sugerencias y el formato se leen de la memoria.
+        return new ExtraccionReportesService(
+                datos, null, Clock.system(Fechas.LIMA), reportes, null, null);
     }
 
     // --- Pruebas
