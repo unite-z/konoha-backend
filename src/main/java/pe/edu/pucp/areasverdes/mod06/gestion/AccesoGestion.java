@@ -16,11 +16,21 @@ public final class AccesoGestion {
     /** Permiso de MOD-01 «Consultar el panel de indicadores y reportes». */
     public static final String CONSULTAR = "REP.INDICADOR.CONSULTAR";
 
+    /** Permiso de MOD-01 «Exportar reportes» (RF-REP-009, V9): generar y descargar archivos. */
+    public static final String EXPORTAR = "REP.INDICADOR.EXPORTAR";
+
     private AccesoGestion() {}
 
     /** Consulta de solo lectura: el usuario de la sesión necesita {@link #CONSULTAR}. */
     public static void consultar(UsuarioSesion usuario) {
         if (usuario == null || !usuario.tiene(CONSULTAR)) {
+            throw ErrorGestion.sinPermiso();
+        }
+    }
+
+    /** Generar o descargar una exportación: el usuario necesita {@link #EXPORTAR}. */
+    public static void exportar(UsuarioSesion usuario) {
+        if (usuario == null || !usuario.tiene(EXPORTAR)) {
             throw ErrorGestion.sinPermiso();
         }
     }
