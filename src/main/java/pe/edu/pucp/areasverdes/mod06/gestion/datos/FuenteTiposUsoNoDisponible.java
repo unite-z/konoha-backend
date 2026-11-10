@@ -2,7 +2,6 @@ package pe.edu.pucp.areasverdes.mod06.gestion.datos;
 
 import java.util.Collection;
 import java.util.Map;
-import org.springframework.stereotype.Component;
 
 /**
  * {@link FuenteTiposUso} mientras el tipo de uso de MOD-02 no esté en {@code main}.
@@ -12,8 +11,10 @@ import org.springframework.stereotype.Component;
  * mod05_alcanceatencion.area_verde_id} apunta a {@code mod05_areaverde}, no a {@code
  * mod02_area_verde}; hay que resolver la correspondencia (deuda «consolidar las tablas duplicadas»
  * de AGENTS.md). Después, borrar esta clase.
+ *
+ * <p>Ya no es un bean: el adaptador real es {@link FuenteUbicacionesMod02} (AV-228). Se conserva
+ * para las pruebas de «fuente no disponible», que comprueban el «Sin datos» con su motivo.
  */
-@Component
 public class FuenteTiposUsoNoDisponible implements FuenteTiposUso {
 
     public static final String MOTIVO =

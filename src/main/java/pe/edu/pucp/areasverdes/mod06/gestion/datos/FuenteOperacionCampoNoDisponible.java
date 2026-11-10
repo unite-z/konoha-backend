@@ -1,7 +1,6 @@
 package pe.edu.pucp.areasverdes.mod06.gestion.datos;
 
 import java.util.List;
-import org.springframework.stereotype.Component;
 import pe.edu.pucp.areasverdes.mod06.gestion.RangoFechas;
 
 /**
@@ -12,8 +11,10 @@ import pe.edu.pucp.areasverdes.mod06.gestion.RangoFechas;
  * mod04_participacion_actividad} y {@code mod04_cuadrilla} existen solo en la rama {@code
  * feat/mod04-cuadrillas-encargos-participantes}. Cuando se fusionen, se crea el adaptador JDBC de
  * solo lectura sobre ellas y se borra esta clase.
+ *
+ * <p>Ya no es un bean: el adaptador real es {@link FuenteOperacionCampoMod04} (AV-228). Se conserva
+ * para las pruebas de «fuente no disponible», que comprueban el «Sin datos» con su motivo.
  */
-@Component
 public class FuenteOperacionCampoNoDisponible implements FuenteOperacionCampo {
 
     public static final String MOTIVO =

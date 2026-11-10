@@ -3,7 +3,6 @@ package pe.edu.pucp.areasverdes.mod06.gestion.datos;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.Collection;
 import java.util.Map;
-import org.springframework.stereotype.Component;
 
 /**
  * {@link FuenteUbicaciones} mientras las geometrías de MOD-02 no estén en {@code main}: las
@@ -21,8 +20,10 @@ import org.springframework.stereotype.Component;
  * </ol>
  *
  * Después, borrar esta clase.
+ *
+ * <p>Ya no es un bean: el adaptador real es {@link FuenteUbicacionesMod02} (AV-228). Se conserva
+ * para las pruebas de «fuente no disponible», que comprueban el «Sin datos» con su motivo.
  */
-@Component
 public class FuenteUbicacionesNoDisponible implements FuenteUbicaciones {
 
     public static final String MOTIVO =
