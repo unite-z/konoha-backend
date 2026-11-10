@@ -317,7 +317,8 @@ public class AtencionService {
         user.exigir(true);
         var antes = repo.lock("atenciontercerizada", id);
         var a = Atencion.from(antes);
-        a.exigir(EJECUTADO, REPORTE);
+        // La unidad puede responder después de la conformidad: el acuerdo nunca cierra la atención.
+        a.exigir(EJECUTADO, REPORTE, OBSERVADO, CONFORME);
         if (!a.origen().equals("SolicitudUnidad"))
             throw ApiError.invalid("El acuerdo corresponde únicamente a solicitudes de unidad");
         if ((input.acuerdo_unidad() == null) != (input.fecha_acuerdo_unidad() == null))
@@ -339,5 +340,63 @@ public class AtencionService {
                 antes,
                 user,
                 "");
+    }
+
+    /**
+     * RF-SER-007: el jefe da la conformidad o observa la última revisión del informe. Conforme
+     * cierra el ciclo; observar deja la atención «Observado» hasta que el proveedor suba otra
+     * revisión (RF-SER-012). Es una decisión por revisión: la base lo impide con una restricción
+     * única. No es el acuerdo de la unidad solicitante, que se registra aparte.
+     */
+    @Transactional
+    public Map<String, Object> conformidad(long id, Entradas.Conformidad input, Usuario user) {
+        user.exigir(true);
+        var antes = repo.lock("atenciontercerizada", id);
+        var a = Atencion.from(antes);
+        if (a.estado().equals(EJECUTADO))
+            throw ApiError.conflict(
+                    "RN-007: adjunta el informe del proveedor antes de dar la conformidad");
+        a.exigir(REPORTE);
+        var revisiones =
+                repo.rows(
+                        "SELECT id, fecha_recepcion FROM mod05_reporteproveedor"
+                                + " WHERE atencion_id=:id ORDER BY revision DESC LIMIT 1",
+                        Map.of("id", id));
+        if (revisiones.isEmpty())
+            throw ApiError.conflict(
+                    "RN-007: la atención no tiene informe del proveedor para evaluar");
+        var revision = revisiones.get(0);
+        if (input.fecha_conformidad()
+                .isBefore(LocalDate.parse(revision.get("fecha_recepcion").toString())))
+            throw ApiError.invalid("La decisión no puede ser anterior a la recepción del informe");
+        boolean observada = input.resultado().equals("Observada");
+        String comentarios = text(input.comentarios());
+        if (observada && comentarios.isEmpty())
+            throw ApiError.invalid("Al observar el informe indica qué debe corregir el proveedor");
+        long decision =
+                repo.insert(
+                        "conformidad",
+                        values(
+                                "atencion_id",
+                                id,
+                                "reporte_id",
+                                number(revision, "id"),
+                                "resultado",
+                                input.resultado(),
+                                "fecha_conformidad",
+                                input.fecha_conformidad(),
+                                "comentarios",
+                                comentarios,
+                                "usuario_id",
+                                user.id()));
+        repo.audit(
+                "Conformidad",
+                decision,
+                "Alta",
+                user,
+                Map.of(),
+                repo.get("conformidad", decision),
+                "");
+        return guardar(id, values("estado", observada ? OBSERVADO : CONFORME), antes, user, "");
     }
 }

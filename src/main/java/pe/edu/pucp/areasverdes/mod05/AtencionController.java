@@ -124,6 +124,14 @@ public class AtencionController {
         return service.acuerdo(id, body, user);
     }
 
+    @PostMapping({"/atenciones/{id}/conformidad/", "/atenciones/{id}/conformidad"})
+    public Map<String, Object> conformidad(
+            @AuthenticationPrincipal Usuario user,
+            @PathVariable long id,
+            @Valid @RequestBody Entradas.Conformidad body) {
+        return service.conformidad(id, body, user);
+    }
+
     @GetMapping({"/atenciones/{id}/reportes/", "/atenciones/{id}/reportes"})
     public ConsultasService.Pagina reports(
             @AuthenticationPrincipal Usuario user,

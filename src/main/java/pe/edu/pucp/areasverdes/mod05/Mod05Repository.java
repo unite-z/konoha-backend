@@ -211,6 +211,17 @@ public class Mod05Repository {
                         WHERE h.atencion_id=:id ORDER BY h.fecha_hora,h.id
                         """,
                         Map.of("id", id)));
+        a.put(
+                "conformidades",
+                rows(
+                        """
+                        SELECT c.id,c.resultado,c.fecha_conformidad,c.comentarios,r.revision,c.usuario_id,
+                            u.nombre usuario_nombre,c.fecha_creacion
+                        FROM mod05_conformidad c JOIN mod05_reporteproveedor r ON r.id=c.reporte_id
+                        JOIN mod05_usuario u ON u.id=c.usuario_id
+                        WHERE c.atencion_id=:id ORDER BY c.fecha_creacion,c.id
+                        """,
+                        Map.of("id", id)));
         return a;
     }
 
