@@ -46,11 +46,14 @@ public class CatalogosMod02Repository {
 
     public List<Asignacion> historialCapataz(long sectorId) {
         return jdbc.query(
-                "SELECT h.id, h.capataz_id, u.nombre capataz_nombre, h.fecha_inicio::text"
-                        + " fecha_inicio, h.fecha_fin::text fecha_fin FROM"
-                        + " mod02_historial_capataz_sector h JOIN core_usuario u ON u.id ="
-                        + " h.capataz_id WHERE h.sector_id = :id ORDER BY h.fecha_inicio DESC,"
-                        + " h.id DESC",
+                """
+                SELECT h.id, h.capataz_id, u.nombre capataz_nombre,
+                    h.fecha_inicio::text fecha_inicio, h.fecha_fin::text fecha_fin, h.motivo,
+                    lag(u.nombre) OVER (ORDER BY h.fecha_inicio, h.id) capataz_anterior_nombre,
+                    h.fecha_inicio <= now() AND (h.fecha_fin IS NULL OR h.fecha_fin > now()) vigente
+                FROM mod02_historial_capataz_sector h JOIN core_usuario u ON u.id = h.capataz_id
+                WHERE h.sector_id = :id ORDER BY h.fecha_inicio DESC, h.id DESC
+                """,
                 Map.of("id", sectorId),
                 new DataClassRowMapper<>(Asignacion.class));
     }

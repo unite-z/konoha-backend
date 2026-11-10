@@ -179,8 +179,8 @@ public class EjemplaresService {
                         "UPDATE mod02_ejemplar SET especie_id = coalesce(:especie, especie_id),"
                             + " tipo_vegetacion = coalesce(:vegetacion, tipo_vegetacion), ubicacion"
                             + " = coalesce(:ubicacion, ubicacion), ubicacion_geografica = CASE WHEN"
-                            + " :latitud IS NULL AND :longitud IS NULL THEN ubicacion_geografica"
-                            + " ELSE ST_SetSRID(ST_MakePoint(coalesce(:longitud,"
+                            + " NOT :cambiaUbicacion THEN ubicacion_geografica ELSE"
+                            + " ST_SetSRID(ST_MakePoint(coalesce(:longitud,"
                             + " ST_X(ubicacion_geografica)), coalesce(:latitud,"
                             + " ST_Y(ubicacion_geografica))), 4326)::geometry(Point, 4326) END,"
                             + " cantidad = coalesce(:cantidad, cantidad), altura_total_m ="
@@ -188,6 +188,7 @@ public class EjemplaresService {
                             + " coalesce(:placa, codigo_placa_antigua), area_verde_inventario_id ="
                             + " coalesce(:area, area_verde_inventario_id) WHERE id = :id",
                         parametros(cambio)
+                                .addValue("cambiaUbicacion", cambiaUbicacion)
                                 .addValue("area", cambio.areaVerdeId())
                                 .addValue("id", id));
         if (filas == 0) {

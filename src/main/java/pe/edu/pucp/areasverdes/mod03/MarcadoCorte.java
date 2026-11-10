@@ -56,7 +56,8 @@ public class MarcadoCorte {
             r.programacion_id = :programacion AND EXISTS (SELECT 1
                 FROM mod02_historial_area_sector ha
                 JOIN mod02_historial_capataz_sector hc ON hc.sector_id = ha.sector_id
-                    AND hc.fecha_fin IS NULL AND hc.capataz_id = :usuario
+                    AND hc.fecha_inicio <= now() AND (hc.fecha_fin IS NULL OR hc.fecha_fin > now())
+                    AND hc.capataz_id = :usuario
                 WHERE ha.area_verde_id = r.area_verde_id AND ha.fecha_fin IS NULL)
             """;
 
