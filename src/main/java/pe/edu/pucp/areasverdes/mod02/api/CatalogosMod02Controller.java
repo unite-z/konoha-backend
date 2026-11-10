@@ -8,6 +8,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.net.URI;
+import java.time.LocalDate;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -50,10 +51,20 @@ public class CatalogosMod02Controller {
     public record CambioSector(
             Boolean activo, @JsonAlias("atencion_a_demanda") Boolean atencionDemanda) {}
 
-    public record CambioCapataz(@JsonAlias("capataz_id") Long capatazId) {}
+    public record CambioCapataz(
+            @JsonAlias("capataz_id") Long capatazId,
+            LocalDate fechaInicio,
+            @Size(max = 300) String motivo) {}
 
     public record Asignacion(
-            long id, long capatazId, String capatazNombre, String fechaInicio, String fechaFin) {}
+            long id,
+            long capatazId,
+            String capatazNombre,
+            String fechaInicio,
+            String fechaFin,
+            String motivo,
+            String capatazAnteriorNombre,
+            boolean vigente) {}
 
     public record Persona(long id, String nombre) {}
 
@@ -134,8 +145,8 @@ public class CatalogosMod02Controller {
     public Sector asignarCapataz(
             @AuthenticationPrincipal Usuario usuario,
             @PathVariable long id,
-            @RequestBody CambioCapataz cambio) {
-        return catalogos.asignarCapataz(id, cambio.capatazId(), usuario);
+            @Valid @RequestBody CambioCapataz cambio) {
+        return catalogos.asignarCapataz(id, cambio, usuario);
     }
 
     @GetMapping("/sectores/{id}/historial-capataz")

@@ -1,5 +1,7 @@
 package pe.edu.pucp.areasverdes.mod02.servicios;
 
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -11,6 +13,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import pe.edu.pucp.areasverdes.mod02.api.CatalogosMod02Controller.Asignacion;
+import pe.edu.pucp.areasverdes.mod02.api.CatalogosMod02Controller.CambioCapataz;
 import pe.edu.pucp.areasverdes.mod02.api.CatalogosMod02Controller.CambioElemento;
 import pe.edu.pucp.areasverdes.mod02.api.CatalogosMod02Controller.CambioSector;
 import pe.edu.pucp.areasverdes.mod02.api.CatalogosMod02Controller.Elemento;
@@ -60,11 +63,13 @@ public class CatalogosMod02Service {
         return jdbc.query(
                 "SELECT s.id, s.nombre, s.activo, s.atencion_a_demanda, u.nombre capataz_nombre,"
                     + " coalesce(sum(a.superficie_m2), 0)::text superficie_m2 FROM mod02_sector s"
-                    + " LEFT JOIN mod02_historial_capataz_sector hc ON hc.sector_id = s.id AND"
-                    + " hc.fecha_fin IS NULL LEFT JOIN core_usuario u ON u.id = hc.capataz_id LEFT"
-                    + " JOIN mod02_historial_area_sector ha ON ha.sector_id = s.id AND ha.fecha_fin"
-                    + " IS NULL LEFT JOIN mod02_area_verde a ON a.id = ha.area_verde_id AND"
-                    + " a.activo WHERE (:incluir OR s.activo) GROUP BY s.id, u.nombre ORDER BY"
+                    + " LEFT JOIN LATERAL (SELECT capataz_id FROM mod02_historial_capataz_sector"
+                    + " WHERE sector_id = s.id AND fecha_inicio <= now() AND (fecha_fin IS NULL OR"
+                    + " fecha_fin > now()) ORDER BY fecha_inicio DESC, id DESC LIMIT 1) hc ON true"
+                    + " LEFT JOIN core_usuario u ON u.id = hc.capataz_id LEFT JOIN"
+                    + " mod02_historial_area_sector ha ON ha.sector_id = s.id AND ha.fecha_fin IS"
+                    + " NULL LEFT JOIN mod02_area_verde a ON a.id = ha.area_verde_id AND a.activo"
+                    + " WHERE (:incluir OR s.activo) GROUP BY s.id, u.nombre ORDER BY"
                     + " lower(s.nombre), s.id",
                 Map.of("incluir", incluirInactivos),
                 SECTOR);
@@ -201,25 +206,86 @@ public class CatalogosMod02Service {
     }
 
     @Transactional
-    public Sector asignarCapataz(long sectorId, Long capatazId, Usuario usuario) {
+    public Sector asignarCapataz(long sectorId, CambioCapataz cambio, Usuario usuario) {
         AccesoCoberturas.gestionar(usuario);
-        if (!repository.existeSector(sectorId)) throw noExiste("No existe ese sector");
+        var sectorBloqueado =
+                jdbc.query(
+                        "SELECT id FROM mod02_sector WHERE id = :id FOR UPDATE",
+                        Map.of("id", sectorId),
+                        (rs, fila) -> rs.getLong(1));
+        if (sectorBloqueado.isEmpty()) throw noExiste("No existe ese sector");
+        Long capatazId = cambio.capatazId();
         if (capatazId != null && !repository.esCapatazActivo(capatazId)) {
             throw noExiste("El usuario indicado no es un capataz activo");
         }
+        var ultima =
+                jdbc.query(
+                        """
+                        SELECT fecha_inicio, fecha_fin FROM mod02_historial_capataz_sector
+                        WHERE sector_id = :id ORDER BY fecha_inicio DESC, id DESC LIMIT 1
+                        """,
+                        Map.of("id", sectorId),
+                        (rs, fila) ->
+                                new Periodo(
+                                        rs.getObject("fecha_inicio", OffsetDateTime.class),
+                                        rs.getObject("fecha_fin", OffsetDateTime.class)));
+        OffsetDateTime inicio =
+                cambio.fechaInicio() == null
+                        ? jdbc.queryForObject("SELECT now()", Map.of(), OffsetDateTime.class)
+                        : cambio.fechaInicio()
+                                .atStartOfDay(ZoneId.of("America/Lima"))
+                                .toOffsetDateTime();
+        String motivo = cambio.motivo() == null ? "" : cambio.motivo().strip();
+        if (!ultima.isEmpty()) {
+            Periodo anterior = ultima.getFirst();
+            if (!inicio.isAfter(anterior.inicio())
+                    || (anterior.fin() != null && inicio.isBefore(anterior.fin()))) {
+                throw new ErrorCoberturas(
+                        409,
+                        "fecha-asignacion-invalida",
+                        "La fecha debe ser posterior al inicio de la última asignación y no solapar"
+                                + " su vigencia");
+            }
+            if (capatazId != null
+                    && cambio.fechaInicio() != null
+                    && anterior.fin() == null
+                    && motivo.isEmpty()) {
+                throw new ErrorCoberturas(
+                        400, "motivo-requerido", "Indica el motivo de la reasignación");
+            }
+        }
         jdbc.update(
-                "UPDATE mod02_historial_capataz_sector SET fecha_fin = greatest(now(),"
-                        + " fecha_inicio) WHERE sector_id = :sector AND fecha_fin IS NULL",
-                Map.of("sector", sectorId));
+                "UPDATE mod02_historial_capataz_sector SET fecha_fin = :fin"
+                        + " WHERE sector_id = :sector AND fecha_fin IS NULL",
+                Map.of(
+                        "sector",
+                        sectorId,
+                        "fin",
+                        cambio.fechaInicio() == null ? inicio : inicio.minusNanos(1000)));
         if (capatazId != null) {
             jdbc.update(
-                    "INSERT INTO mod02_historial_capataz_sector (sector_id, capataz_id, usuario_id)"
-                            + " VALUES (:sector, :capataz, :usuario)",
-                    Map.of("sector", sectorId, "capataz", capatazId, "usuario", usuario.id()));
+                    """
+                    INSERT INTO mod02_historial_capataz_sector
+                        (sector_id, capataz_id, usuario_id, fecha_inicio, motivo)
+                    VALUES (:sector, :capataz, :usuario, :inicio, nullif(:motivo, ''))
+                    """,
+                    Map.of(
+                            "sector",
+                            sectorId,
+                            "capataz",
+                            capatazId,
+                            "usuario",
+                            usuario.id(),
+                            "inicio",
+                            inicio,
+                            "motivo",
+                            motivo));
         }
         auditar("mod02_sector", sectorId, "asignar-capataz", usuario.id());
         return sector(sectorId);
     }
+
+    private record Periodo(OffsetDateTime inicio, OffsetDateTime fin) {}
 
     public List<Asignacion> historialCapataz(long sectorId) {
         if (!repository.existeSector(sectorId)) throw noExiste("No existe ese sector");

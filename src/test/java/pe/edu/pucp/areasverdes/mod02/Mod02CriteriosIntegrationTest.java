@@ -416,6 +416,62 @@ class Mod02CriteriosIntegrationTest {
     }
 
     @Test
+    void programaReasignacionConFechaMotivoYConservaCapatazVigente() throws Exception {
+        long sector = crearSector("Sector con reasignación programada");
+        long anterior = idCore("capataz-a");
+        long nuevo = idCore("capataz-b");
+        String ruta = API + "/sectores/" + sector;
+        var fecha = java.time.LocalDate.now(java.time.ZoneId.of("America/Lima")).plusDays(2);
+        String asignacion =
+                "{\"capataz_id\":%d,\"fecha_inicio\":\"%s\",\"motivo\":\"Redistribución\"}"
+                        .formatted(nuevo, fecha);
+        http.perform(
+                        patch(ruta + "/capataz")
+                                .with(httpBasic("jefe", CLAVE))
+                                .contentType("application/json")
+                                .content(
+                                        "{\"capataz_id\":%d,\"fecha_inicio\":\"%s\"}"
+                                                .formatted(anterior, fecha.minusDays(4))))
+                .andExpect(status().isOk());
+        http.perform(
+                        patch(ruta + "/capataz")
+                                .with(httpBasic("ingeniero", CLAVE))
+                                .contentType("application/json")
+                                .content(asignacion))
+                .andExpect(status().isForbidden());
+        http.perform(
+                        patch(ruta + "/capataz")
+                                .with(httpBasic("jefe", CLAVE))
+                                .contentType("application/json")
+                                .content(asignacion))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.capataz_nombre").value("capataz-a"));
+        http.perform(
+                        patch(ruta + "/capataz")
+                                .with(httpBasic("jefe", CLAVE))
+                                .contentType("application/json")
+                                .content(asignacion))
+                .andExpect(status().isConflict());
+        http.perform(get(ruta + "/historial-capataz").with(httpBasic("ingeniero", CLAVE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].capataz_id").value(nuevo))
+                .andExpect(jsonPath("$[0].capataz_anterior_nombre").isNotEmpty())
+                .andExpect(jsonPath("$[0].motivo").value("Redistribución"))
+                .andExpect(jsonPath("$[0].vigente").value(false))
+                .andExpect(jsonPath("$[1].vigente").value(true));
+        assertThat(
+                        jdbc.queryForObject(
+                                """
+                                SELECT (fecha_fin AT TIME ZONE 'America/Lima')::date
+                                FROM mod02_historial_capataz_sector WHERE sector_id = :sector AND capataz_id = :capataz
+                                """,
+                                Map.of("sector", sector, "capataz", anterior),
+                                java.time.LocalDate.class))
+                .isEqualTo(fecha.minusDays(1));
+    }
+
+    @Test
     void reasignarYQuitarCapatazConservaHistorialYRespetaPermisos() throws Exception {
         long sector = crearSector("Sector capataces");
         long capatazUno = idCore("capataz-a");
