@@ -11,6 +11,7 @@ package pe.edu.pucp.areasverdes.mod06.gestion.api;
  *   <li>RF-REP-005 · HU-MOD05-029 · CU-MOD05-029
  *   <li>RF-REP-007 · HU-MOD06-003 · CU-MOD06-003
  *   <li>RF-REP-008 · CU-MOD06-002
+ *   <li>RF-REP-009 (exportaciones: también POST)
  *   <li>RF-REP-010
  * </ul>
  *
@@ -24,6 +25,7 @@ public final class DocumentacionGestion {
     public static final String TAG_REP_005 = "RF-REP-005 Material vegetal";
     public static final String TAG_REP_007 = "RF-REP-007 Mapa de atenciones";
     public static final String TAG_REP_008 = "RF-REP-008 Reporte por servicio tercerizado";
+    public static final String TAG_REP_009 = "RF-REP-009 Exportaciones";
     public static final String TAG_REP_010 = "RF-REP-010 Programado frente a ejecutado";
 
     public static final String R400 =
