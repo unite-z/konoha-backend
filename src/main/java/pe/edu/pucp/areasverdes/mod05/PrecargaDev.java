@@ -14,6 +14,7 @@ public class PrecargaDev {
     ApplicationRunner precarga(
             PrecargaService seed,
             PrecargaPlanificacion planificacion,
+            FormatosReporteIniciales formatos,
             @Value("${mod05.seed:false}") boolean enabled,
             @Value("${mod05.mock-data}") String folder,
             @Value("${MOD05_DEMO_PASSWORD:}") String password) {
@@ -23,6 +24,8 @@ public class PrecargaDev {
                 // MOD-03: servicios periódicos y ruidosos (AV-368) y valores iniciales de la
                 // sección (AV-363) para los servicios de demostración.
                 planificacion.cargar(Path.of(folder));
+                // RF-SER-009: formato estándar del informe del proveedor que usa la IA (RF-IA-001).
+                formatos.precargar(Path.of(folder));
                 LoggerFactory.getLogger(PrecargaDev.class)
                         .info("Precarga MOD-05 completada. Usuarios existentes no modificados.");
             }
