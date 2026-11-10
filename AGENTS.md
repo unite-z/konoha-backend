@@ -7,7 +7,7 @@ Este fichero es la guía para personas y agentes. Estándares comunes y ADR: en 
 ## Estado
 
 - Sprint 0 (en curso): repos, estándares, CI y despliegue preparados. Aún sin EC2: `deploy-uat.yml` se salta hasta que `DESPLIEGUE_ACTIVO=true`.
-- MOD-05 y MOD-06: borrador importado y funcionando en local. MOD-06 lee datos `mock`.
+- MOD-05 y MOD-06: borrador importado y funcionando en local. MOD-06 lee la base común (`DATA_SOURCE=db`); `mock` queda para demos locales.
 - MOD-01: sesión, usuarios, roles, permisos, auditoría común, adjuntos y repositorio en `/api/v1/core/` (tablas `core_`). Ver `docs/modulos/mod01.md`.
 - Pendiente de arranque: tablas de MOD-02, PostGIS y almacenamiento en S3.
 

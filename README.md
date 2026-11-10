@@ -9,7 +9,7 @@ Repos hermanos: `konoha-frontend` (PWA) y `konoha-infra` (despliegue, estándare
 | Módulo | Paquete | Rutas | Datos |
 |---|---|---|---|
 | MOD-05 «Atenciones tercerizadas» | `pe.edu.pucp.areasverdes.mod05` | `/api/tercerizados/` (HTTP Basic) | PostgreSQL con Flyway. Ver [docs/modulos/mod05.md](docs/modulos/mod05.md) |
-| MOD-06 «Reportes, indicadores e IA» | `pe.edu.pucp.areasverdes.mod06` | `/api/v1/` (sesión de MOD-01) | `DATA_SOURCE=mock` lee `mock-data/` (`db`, pendiente) |
+| MOD-06 «Reportes, indicadores e IA» | `pe.edu.pucp.areasverdes.mod06` | `/api/v1/` (sesión de MOD-01) | `DATA_SOURCE=db` (por defecto) lee las tablas de los módulos dueños; `mock` lee `mock-data/` en demos locales |
 
 Documentación de la API: `http://localhost:8000/api/docs` (OpenAPI en `/api/schema`).
 
@@ -27,12 +27,12 @@ cp .env.example .env      # completar MOD05_DB_PASSWORD; GEMINI_API_KEY solo par
 | Variable | Uso |
 |---|---|
 | `PORT` | Puerto HTTP (8000 por defecto) |
-| `DATA_SOURCE` | Fuente del MOD-06: `mock` o `db` |
+| `DATA_SOURCE` | Fuente del MOD-06: `db` (por defecto) o `mock` (solo demos locales) |
 | `MOCK_DATA_DIR` | Carpeta de datos simulados del MOD-06 (por defecto `mock-data`) |
 | `GEMINI_API_KEY`, `GEMINI_MODEL` | Extracción con IA del MOD-06 (RF-IA-001). La clave no se versiona |
 | `GEMINI_THINKING_LEVEL` | Razonamiento de Gemini: `minimal`, `low` (por defecto), `medium` o `high` |
 | `IA_FUENTE_REPORTES` | Origen del reporte para RF-IA-001: `mod05` (por defecto) o `mock` |
-| `POSTGRES_*` | Reservadas para `DATA_SOURCE=db` del MOD-06 (pendiente) |
+| `POSTGRES_*` | Reservadas (MOD-06 usa la misma conexión que el resto, `MOD05_DB_*`) |
 | `MOD05_*` | Base de datos, archivos y precarga del MOD-05 (ver [docs/modulos/mod05.md](docs/modulos/mod05.md)) |
 
 ## Pruebas
