@@ -8,6 +8,7 @@ import java.util.HexFormat;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import pe.edu.pucp.areasverdes.mod04.datos.Mod04Repository;
@@ -26,6 +27,11 @@ public class IdempotenciaCampo {
         this.repo = repo;
         this.acceso = acceso;
         this.json = json;
+    }
+
+    @Scheduled(cron = "0 30 2 * * *", zone = "America/Lima")
+    public void limpiarCaducadas() {
+        repo.jdbc().update("DELETE FROM mod04_idempotencia WHERE caduca <= now()", Map.of());
     }
 
     @Transactional

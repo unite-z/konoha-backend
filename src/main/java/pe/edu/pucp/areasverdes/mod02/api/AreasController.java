@@ -13,6 +13,7 @@ import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.util.List;
+import java.util.UUID;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -68,7 +69,8 @@ public class AreasController {
             Long tipoCoberturaId,
             Long tipoUsoId,
             Long cuartelId,
-            Long sectorId) {}
+            Long sectorId,
+            UUID poligonoMapaId) {}
 
     public record CambioAreaVerde(
             @Size(max = 150) String nombre,
@@ -98,6 +100,13 @@ public class AreasController {
             @RequestParam(defaultValue = "1") int page) {
         AccesoCoberturas.consultar(usuario);
         return areas.listar(q, tipoUsoId, sectorId, cuartelId, page);
+    }
+
+    @GetMapping({"/{id}", "/{id}/"})
+    @Operation(summary = "Consulta la ficha de un área verde")
+    public AreaVerde obtener(@AuthenticationPrincipal Usuario usuario, @PathVariable long id) {
+        AccesoCoberturas.consultar(usuario);
+        return areas.obtenerPorId(id);
     }
 
     @Operation(summary = "Registra un área verde")

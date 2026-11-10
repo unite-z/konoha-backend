@@ -319,6 +319,43 @@ class PlanFitosanitarioIntegrationTest {
         var atencion = sendGet("atenciones/" + atencionId + "/", "jefe", 200);
         assertEquals(especial, atencion.get("atencion_especial_id").asLong());
         assertEquals("Demanda", atencion.get("origen").asText());
+
+        var historial =
+                get("/api/v1/inventario/ejemplares/" + ejemplar + "/historial-intervenciones")
+                        .queryParam("fuente", "fitosanitario")
+                        .with(httpBasic("jefe", PASSWORD));
+        http.perform(historial).andExpect(status().isOk()).andExpect(jsonPath("$").isEmpty());
+        http.perform(
+                        patch(BASE + "atenciones/" + atencionId + "/orden-compra/")
+                                .with(httpBasic("jefe", PASSWORD))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"numero_orden_compra\":\"OC-FIT-TEST\"}"))
+                .andExpect(status().isOk());
+        send(
+                "atenciones/" + atencionId + "/inicio/",
+                values("fecha_hora_inicio", "2026-11-06T08:00:00-05:00"),
+                "jefe",
+                200);
+        send(
+                "atenciones/" + atencionId + "/fin/",
+                values("fecha_hora_fin", "2026-11-06T10:00:00-05:00"),
+                "jefe",
+                200);
+        http.perform(
+                        patch("/api/v1/inventario/ejemplares/" + ejemplar + "/situacion")
+                                .with(httpBasic("jefe", PASSWORD))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        """
+                                        {"situacion":"retirado","fecha":"2026-11-06","motivo":"Daño irreversible"}
+                                        """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.situacion").value("retirado"));
+        http.perform(historial)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(atencionId))
+                .andExpect(jsonPath("$[0].fecha").value("2026-11-06"))
+                .andExpect(jsonPath("$[0].origen").value("Servicios tercerizados"));
     }
 
     JsonNode sendGet(String path, String user, int expected) throws Exception {

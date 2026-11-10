@@ -64,6 +64,13 @@ public class UsuariosRepository {
                 .findFirst();
     }
 
+    public Optional<Cuenta> porIdBloqueado(long id) {
+        return jdbc
+                .query(SELECCION + " WHERE u.id = :id FOR UPDATE OF u", Map.of("id", id), filas)
+                .stream()
+                .findFirst();
+    }
+
     /** Busca por correo (sin distinguir mayúsculas) o por nombre de usuario (cuentas de MOD-05). */
     public Optional<Cuenta> porIdentificador(String identificador) {
         return jdbc

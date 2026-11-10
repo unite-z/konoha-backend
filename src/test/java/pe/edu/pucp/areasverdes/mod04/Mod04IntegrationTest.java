@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -49,6 +50,7 @@ import pe.edu.pucp.areasverdes.comun.BaseDePruebas;
 import pe.edu.pucp.areasverdes.mod01.config.PrecargaDevMod01;
 import pe.edu.pucp.areasverdes.mod04.api.OperacionCampoController;
 import pe.edu.pucp.areasverdes.mod04.datos.Mod04Repository;
+import pe.edu.pucp.areasverdes.mod04.servicios.IdempotenciaCampo;
 import pe.edu.pucp.areasverdes.mod04.servicios.PrecargaCampoService;
 import pe.edu.pucp.areasverdes.mod05.Mod05Repository;
 
@@ -78,6 +80,7 @@ class Mod04IntegrationTest {
     @Autowired Mod04Repository repo;
     @Autowired Mod05Repository cuentas;
     @Autowired PrecargaCampoService seed;
+    @Autowired IdempotenciaCampo idempotencia;
     long jefe, c1, c2, o1, o2, o3, tipo, area;
 
     @BeforeEach
@@ -785,6 +788,32 @@ class Mod04IntegrationTest {
                 .andExpect(jsonPath("$[0].actividad_id").value(actividad))
                 .andExpect(jsonPath("$[0].tipo_actividad").value("Poda menor"));
 
+        String historial = "/api/v1/inventario/ejemplares/" + bajo + "/historial-intervenciones";
+        http.perform(
+                        patch("/api/v1/inventario/ejemplares/" + bajo + "/situacion")
+                                .with(httpBasic("jefe", PASSWORD))
+                                .contentType("application/json")
+                                .content(
+                                        """
+                                        {"situacion":"retirado","fecha":"2026-10-23","motivo":"Daño irreversible"}
+                                        """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.situacion").value("retirado"));
+        http.perform(
+                        get(historial)
+                                .queryParam("fuente", "podas")
+                                .with(httpBasic("capataz1", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(actividad))
+                .andExpect(jsonPath("$[0].tipo").value("Poda menor"))
+                .andExpect(jsonPath("$[0].fecha").value("2026-10-22"))
+                .andExpect(jsonPath("$[0].origen").value("Operación de campo"));
+        http.perform(
+                        get(historial)
+                                .queryParam("fuente", "fitosanitario")
+                                .with(httpBasic("capataz1", PASSWORD)))
+                .andExpect(status().isForbidden());
+
         entrada.put("ejemplar_id", alto);
         postJson("/actividades/", entrada, "capataz1", 409);
         entrada.put("ejemplar_id", null);
@@ -1194,5 +1223,64 @@ class Mod04IntegrationTest {
                                 .content(json.writeValueAsBytes(body)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.codigo").value("idempotency-key-reutilizada"));
+    }
+
+    @Test
+    void registraOperariosSinCuentaYExigeCuentaParaElCapataz() throws Exception {
+        var cuerpo =
+                values("nombres", "Personal", "apellidos", "Nuevo", "tipo_personal", "Capataz");
+        postJson("/personal/", cuerpo, "jefe", 400);
+        cuerpo.put("tipo_personal", "Operario");
+        var creado = postJson("/personal/", cuerpo, "jefe", 201);
+        assertEquals("Operario", creado.path("tipo_personal").asText());
+        assertTrue(creado.path("usuario_id").isNull());
+    }
+
+    @Test
+    void asignaUnaCuentaCapatazSinCrearOtroUsuario() throws Exception {
+        long usuario = cuenta("capataznuevo", "Capataz");
+        var cuerpo =
+                values(
+                        "nombre",
+                        "Cuadrilla vinculada",
+                        "capataz_usuario_id",
+                        usuario,
+                        "activa",
+                        true,
+                        "operarios",
+                        List.of(o1));
+        var creada = postJson("/cuadrillas/", cuerpo, "jefe", 201);
+        long id = creada.path("id").asLong();
+        long ficha = creada.path("capataz_id").asLong();
+        assertEquals("capataznuevo", creada.path("capataz_nombre").asText());
+        assertEquals(
+                ficha,
+                putJson("/cuadrillas/" + id, cuerpo, "jefe", 200).path("capataz_id").asLong());
+        http.perform(get(BASE + "/cuadrillas/" + id).cookie(sesionCore("capataznuevo")))
+                .andExpect(status().isOk());
+        cuerpo.put("capataz_usuario_id", jefe);
+        postJson("/cuadrillas/", cuerpo, "jefe", 400);
+    }
+
+    @Test
+    void limpiezaDeIdempotenciaConservaClavesVigentes() {
+        UUID vencida = UUID.randomUUID();
+        UUID vigente = UUID.randomUUID();
+        repo.jdbc()
+                .update(
+                        """
+                        INSERT INTO mod04_idempotencia (usuario_id, clave, hash, respuesta, caduca)
+                        VALUES (:usuario, :vencida, 'hash', '{}'::jsonb, now() - interval '1 hour'),
+                               (:usuario, :vigente, 'hash', '{}'::jsonb, now() + interval '1 hour')
+                        """,
+                        Map.of("usuario", jefe, "vencida", vencida, "vigente", vigente));
+
+        idempotencia.limpiarCaducadas();
+
+        assertEquals(
+                List.of(vigente),
+                repo.jdbc()
+                        .queryForList(
+                                "SELECT clave FROM mod04_idempotencia", Map.of(), UUID.class));
     }
 }

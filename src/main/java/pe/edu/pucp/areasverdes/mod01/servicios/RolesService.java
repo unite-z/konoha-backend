@@ -89,7 +89,7 @@ public class RolesService {
                     "El motivo no puede superar los " + MOTIVO_MAXIMO + " caracteres");
         }
         var cuenta =
-                usuarios.porId(usuarioId)
+                usuarios.porIdBloqueado(usuarioId)
                         .orElseThrow(() -> ErrorCore.noEncontrado("El usuario no existe"));
         Rol nuevo =
                 roles.porCodigo(codigoRol == null ? "" : codigoRol)

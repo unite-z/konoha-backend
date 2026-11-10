@@ -77,7 +77,7 @@ class ImportadorInventario implements Importador {
         if (!cobertura.isEmpty() && coberturaId == null) {
             return Clasificacion.error(codigo, "Cobertura no registrada: " + cobertura);
         }
-        String tipoUso = fila.getOrDefault(TIPO_USO, "");
+        String tipoUso = tipoUsoCanonico(fila.getOrDefault(TIPO_USO, "").strip());
         Long tipoUsoId = catalogo("mod02_tipo_uso", tipoUso);
         if (!tipoUso.isEmpty() && tipoUsoId == null) {
             return Clasificacion.error(codigo, "Tipo de uso no registrado: " + tipoUso);
@@ -109,7 +109,11 @@ class ImportadorInventario implements Importador {
         p.put("ubicacion", fila.get(UBICACION));
         p.put("superficie", superficie(fila.get(SUPERFICIE)));
         p.put("cobertura", catalogo("mod02_cobertura_vegetal", fila.getOrDefault(COBERTURA, "")));
-        p.put("tipoUso", catalogo("mod02_tipo_uso", fila.getOrDefault(TIPO_USO, "")));
+        p.put(
+                "tipoUso",
+                catalogo(
+                        "mod02_tipo_uso",
+                        tipoUsoCanonico(fila.getOrDefault(TIPO_USO, "").strip())));
         p.put("usuario", usuarioId);
         Map<String, Object> auditados = new HashMap<>(p);
         auditados.values().removeIf(Objects::isNull);
@@ -151,6 +155,15 @@ class ImportadorInventario implements Importador {
     /**
      * {@code tabla} solo recibe las dos constantes de esta clase, nunca una entrada del usuario.
      */
+    private static String tipoUsoCanonico(String nombre) {
+        return switch (nombre.strip().toLowerCase(Locale.ROOT)) {
+            case "recreativo" -> "Áreas de uso recreativo/descanso";
+            case "institucional" -> "Uso Institucional";
+            case "deportivo" -> "Áreas deportivas y recreación activa";
+            default -> nombre.strip();
+        };
+    }
+
     private Long catalogo(String tabla, String nombre) {
         if (nombre.isEmpty()) {
             return null;

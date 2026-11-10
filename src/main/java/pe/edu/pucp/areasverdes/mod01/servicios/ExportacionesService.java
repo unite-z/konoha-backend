@@ -131,10 +131,11 @@ public class ExportacionesService {
                             """
                             SELECT e.codigo, e.codigo_catastro, e.referencia_catastro,
                                 coalesce(s.nombre_comun, s.nombre_cientifico) especie,
-                                e.tipo_vegetacion, v.nombre area, e.ubicacion, e.cantidad
+                                e.tipo_vegetacion, coalesce(v.nombre, historica.nombre) area, e.ubicacion, e.cantidad
                             FROM mod02_ejemplar e
                             LEFT JOIN mod02_especie_vegetal s ON s.id = e.especie_id
-                            LEFT JOIN mod05_areaverde v ON v.id = e.area_verde_id
+                            LEFT JOIN mod02_area_verde v ON v.id = e.area_verde_inventario_id
+                            LEFT JOIN mod05_areaverde historica ON historica.id = e.area_verde_id
                             ORDER BY e.codigo
                             """));
 

@@ -197,6 +197,45 @@ class MarcadoCorteApiTest extends ApiPlanificacion {
     }
 
     @Test
+    void registraCorteADemandaEnJardinSinSector() throws Exception {
+        long jardin =
+                jdbc.getJdbcTemplate()
+                        .queryForObject(
+                                """
+                                INSERT INTO mod02_area_verde (nombre, lugar, ubicacion, superficie_m2,
+                                    usuario_creacion_id, usuario_modificacion_id)
+                                VALUES ('Jardín sin sector', 'Campus', 'Campus', 100, 1, 1)
+                                RETURNING id
+                                """,
+                                Long.class);
+        http.perform(
+                        get(RUTA + "ruta-de-hoy/fuera-de-ruta/")
+                                .param("q", "Jardín sin sector")
+                                .with(httpBasic("ingeniero", CLAVE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[0].id").value(jardin))
+                .andExpect(jsonPath("$.results[0].zona").value(""));
+        http.perform(
+                        post(RUTA + "ciclos/" + ciclo + "/fuera-de-ruta/")
+                                .with(httpBasic("ingeniero", CLAVE))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        """
+                                        {"jardin_id": %d, "nota": "Atención solicitada fuera de ruta"}
+                                        """
+                                                .formatted(jardin)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.jardin.nombre").value("Jardín sin sector"));
+        assertEquals(
+                1,
+                jdbc.getJdbcTemplate()
+                        .queryForObject(
+                                "SELECT count(*) FROM mod03_fuera_de_ruta WHERE area_verde_id = ?",
+                                Integer.class,
+                                jardin));
+    }
+
+    @Test
     void elAvanceCuentaLosCortadosPorDiaYAvisaSiEstaDesactualizado() throws Exception {
         String avance = RUTA + "ciclos/" + ciclo + "/avance/";
         http.perform(get(avance).with(httpBasic("jefe", CLAVE)))
