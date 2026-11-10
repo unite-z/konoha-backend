@@ -70,6 +70,14 @@ class MatrizPermisosGestionApiTest extends ApiGestion {
                     new Fila(
                             "GET /api/v1/reportes/mapa-atenciones",
                             "/api/v1/reportes/mapa-atenciones/?desde=2026-10-01&hasta=2026-10-31",
+                            CONSULTA),
+                    new Fila(
+                            "GET /api/v1/reportes/servicios-tercerizados",
+                            "/api/v1/reportes/servicios-tercerizados/?desde=2026-10-01&hasta=2026-10-31&tipo_servicio_id=1",
+                            CONSULTA),
+                    new Fila(
+                            "GET /api/v1/reportes/programado-ejecutado",
+                            "/api/v1/reportes/programado-ejecutado/?desde=2026-10-01&hasta=2026-10-31",
                             CONSULTA));
 
     @Autowired

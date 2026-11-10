@@ -30,7 +30,9 @@ class OpenApiGestionApiTest extends ApiGestion {
                     "/api/v1/reportes/panel", DocumentacionGestion.TAG_REP_001,
                     "/api/v1/reportes/panel/{indicador}", DocumentacionGestion.TAG_REP_001,
                     "/api/v1/reportes/material-vegetal", DocumentacionGestion.TAG_REP_005,
-                    "/api/v1/reportes/mapa-atenciones", DocumentacionGestion.TAG_REP_007);
+                    "/api/v1/reportes/mapa-atenciones", DocumentacionGestion.TAG_REP_007,
+                    "/api/v1/reportes/servicios-tercerizados", DocumentacionGestion.TAG_REP_008,
+                    "/api/v1/reportes/programado-ejecutado", DocumentacionGestion.TAG_REP_010);
 
     @Autowired ObjectMapper json;
 
