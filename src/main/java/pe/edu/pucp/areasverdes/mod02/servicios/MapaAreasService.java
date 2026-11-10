@@ -1,7 +1,9 @@
 package pe.edu.pucp.areasverdes.mod02.servicios;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import org.springframework.jdbc.core.DataClassRowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -11,6 +13,8 @@ import org.springframework.transaction.annotation.Transactional;
 import pe.edu.pucp.areasverdes.mod02.api.ErrorCoberturas;
 import pe.edu.pucp.areasverdes.mod02.api.MapaAreasController.CambioPoligono;
 import pe.edu.pucp.areasverdes.mod02.api.MapaAreasController.CambioUsoFuente;
+import pe.edu.pucp.areasverdes.mod02.api.MapaAreasController.EjemplarAfectado;
+import pe.edu.pucp.areasverdes.mod02.api.MapaAreasController.ImpactoPoligono;
 import pe.edu.pucp.areasverdes.mod02.api.MapaAreasController.PoligonoAsignado;
 import pe.edu.pucp.areasverdes.mod02.api.MapaAreasController.UsoFuente;
 import pe.edu.pucp.areasverdes.mod05.Usuario;
@@ -20,8 +24,11 @@ public class MapaAreasService {
 
     private final NamedParameterJdbcTemplate jdbc;
 
-    public MapaAreasService(NamedParameterJdbcTemplate jdbc) {
+    private final GeometriaCampus geometria;
+
+    public MapaAreasService(NamedParameterJdbcTemplate jdbc, GeometriaCampus geometria) {
         this.jdbc = jdbc;
+        this.geometria = geometria;
     }
 
     public List<UsoFuente> usosFuente() {
@@ -69,13 +76,100 @@ public class MapaAreasService {
     @Transactional
     public PoligonoAsignado asignarPoligono(UUID idFuente, CambioPoligono cambio, Usuario usuario) {
         AccesoCoberturas.gestionar(usuario);
-        validarArea(cambio.areaVerdeId());
-        guardarVinculo(idFuente, cambio.areaVerdeId(), usuario, false);
+        geometria.bloquearCambios();
+        Long destino = cambio.areaVerdeId();
+        ImpactoPoligono impacto = impacto(idFuente, destino, usuario);
+        if (!impacto.conflictos().isEmpty()) {
+            throw new ErrorCoberturas(
+                    409,
+                    "conflictos-cartograficos",
+                    "Hay ejemplares cuyo vínculo quedaría fuera de su área. Revisa el impacto antes"
+                            + " de continuar.");
+        }
+        var confirmacion = cambio.confirmacion();
+        var ids = impacto.reasignables().stream().map(EjemplarAfectado::id).toList();
+        if (confirmacion != null
+                && destino != null
+                && Objects.equals(impacto.areaAnteriorId(), destino)) {
+            return obtenerPoligono(idFuente);
+        }
+        if ((confirmacion == null && !ids.isEmpty())
+                || (confirmacion != null
+                        && (!Objects.equals(confirmacion.areaAnteriorId(), impacto.areaAnteriorId())
+                                || confirmacion.ejemplaresIds() == null
+                                || !new HashSet<>(confirmacion.ejemplaresIds())
+                                        .equals(new HashSet<>(ids))))) {
+            throw new ErrorCoberturas(
+                    409,
+                    "confirmar-impacto-poligono",
+                    "Revisa y confirma los ejemplares afectados antes de cambiar el vínculo.");
+        }
+        guardarVinculo(idFuente, destino, usuario, false);
+        if (!ids.isEmpty()) {
+            jdbc.update(
+                    "UPDATE mod02_ejemplar SET area_verde_inventario_id = :area WHERE id IN (:ids)",
+                    Map.of("area", destino, "ids", ids));
+        }
         return obtenerPoligono(idFuente);
     }
 
+    public ImpactoPoligono impacto(UUID idFuente, Long destino, Usuario usuario) {
+        AccesoCoberturas.gestionar(usuario);
+        validarArea(destino);
+        var parametros = new MapSqlParameterSource("fuente", idFuente).addValue("destino", destino);
+        Long anterior =
+                jdbc.query(
+                        "SELECT area_verde_id FROM mod02_mapa_poligono WHERE id_fuente = :fuente",
+                        parametros,
+                        rs -> rs.next() ? rs.getObject(1, Long.class) : null);
+        if (Objects.equals(anterior, destino))
+            return new ImpactoPoligono(anterior, List.of(), List.of());
+        parametros.addValue("anterior", anterior);
+
+        var filas = new DataClassRowMapper<>(EjemplarAfectado.class);
+        var afectados =
+                anterior == null
+                        ? List.<EjemplarAfectado>of()
+                        : jdbc.query(
+                                """
+                                SELECT e.id, e.codigo FROM mod02_ejemplar e
+                                JOIN mod02_mapa_geometria g ON g.id_fuente = :fuente
+                                WHERE e.area_verde_inventario_id = :anterior AND ST_Covers(g.geometria, e.ubicacion_geografica)
+                                    AND NOT EXISTS (
+                                        SELECT 1 FROM mod02_mapa_poligono p
+                                        JOIN mod02_mapa_geometria otro USING (id_fuente)
+                                        WHERE p.area_verde_id = :anterior AND p.id_fuente <> :fuente
+                                            AND ST_Covers(otro.geometria, e.ubicacion_geografica))
+                                ORDER BY e.codigo
+                                """,
+                                parametros,
+                                filas);
+        if (destino == null) {
+            return new ImpactoPoligono(
+                    anterior,
+                    List.of(),
+                    geometria.tieneGeometria(anterior, idFuente) ? afectados : List.of());
+        }
+        var conflictos =
+                geometria.tieneGeometria(destino, null)
+                        ? List.<EjemplarAfectado>of()
+                        : jdbc.query(
+                                """
+                                SELECT e.id, e.codigo FROM mod02_ejemplar e
+                                JOIN mod02_mapa_geometria g ON g.id_fuente = :fuente
+                                WHERE e.area_verde_inventario_id = :destino AND e.ubicacion_geografica IS NOT NULL
+                                    AND NOT ST_Covers(g.geometria, e.ubicacion_geografica)
+                                ORDER BY e.codigo
+                                """,
+                                parametros,
+                                filas);
+        return new ImpactoPoligono(anterior, afectados, conflictos);
+    }
+
+    @Transactional
     public void vincularPoligonoLibre(UUID idFuente, long areaId, Usuario usuario) {
         AccesoCoberturas.gestionar(usuario);
+        geometria.bloquearCambios();
         if (guardarVinculo(idFuente, areaId, usuario, true) == 0) {
             throw new ErrorCoberturas(
                     409, "poligono-ocupado", "El polígono ya está vinculado a otra área");

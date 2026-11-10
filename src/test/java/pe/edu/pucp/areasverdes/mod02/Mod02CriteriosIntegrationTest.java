@@ -636,6 +636,119 @@ class Mod02CriteriosIntegrationTest {
                 .andExpect(status().isOk());
     }
 
+    @Test
+    void validaElPuntoYConfirmaLaReasignacionCartografica() throws Exception {
+        UUID poligono = UUID.fromString("d52663f2-83ee-5d20-84f7-65e644611c2a");
+        long anterior = idJson(crearArea("Área anterior geográfica", null, null), "$.id");
+        long destino = idJson(crearArea("Área nueva geográfica", null, null), "$.id");
+        vincularPoligono(poligono, anterior);
+        Map<String, Object> borde =
+                jdbc.queryForMap(
+                        """
+                        SELECT ST_X(punto) longitud, ST_Y(punto) latitud
+                        FROM (SELECT ST_PointN(ST_ExteriorRing(ST_GeometryN(geometria, 1)), 1) punto
+                              FROM mod02_mapa_geometria WHERE id_fuente = :id) coordenadas
+                        """,
+                        Map.of("id", poligono));
+        String punto =
+                "\"latitud\":" + borde.get("latitud") + ",\"longitud\":" + borde.get("longitud");
+        String vinculo = "\"area_verde_id\":" + anterior;
+        String codigo = crearEjemplar("{" + punto + "," + vinculo + "}");
+        String sinVinculo = crearEjemplar("{" + punto + "}");
+        long ejemplar =
+                jdbc.queryForObject(
+                        "SELECT id FROM mod02_ejemplar WHERE codigo = :codigo",
+                        Map.of("codigo", codigo),
+                        Long.class);
+        String ficha = API + "/ejemplares/" + ejemplar;
+        String fuera = "{\"latitud\":0,\"longitud\":0}";
+        http.perform(
+                        post(API + "/ejemplares")
+                                .with(httpBasic("jefe", CLAVE))
+                                .contentType("application/json")
+                                .content("{\"latitud\":0,\"longitud\":0," + vinculo + "}"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.codigo").value("punto-fuera-del-area"));
+        http.perform(
+                        patch(ficha)
+                                .with(httpBasic("jefe", CLAVE))
+                                .contentType("application/json")
+                                .content(fuera))
+                .andExpect(status().isUnprocessableEntity());
+        http.perform(
+                        patch(ficha + "/situacion")
+                                .with(httpBasic("jefe", CLAVE))
+                                .contentType("application/json")
+                                .content(
+                                        "{\"situacion\":\"trasladado\",\"fecha\":\"2026-10-21\",\"motivo\":\"Obras\",\"latitud\":0,\"longitud\":0,"
+                                                + vinculo
+                                                + "}"))
+                .andExpect(status().isUnprocessableEntity());
+
+        String mapa = API + "/mapa";
+        String ruta = mapa + "/poligonos/" + poligono;
+        http.perform(get(mapa + "/geometria").with(httpBasic("jefe", CLAVE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.features.length()").value(521));
+        http.perform(
+                        get(mapa + "/ubicacion")
+                                .with(httpBasic("ingeniero", CLAVE))
+                                .param("latitud", borde.get("latitud").toString())
+                                .param("longitud", borde.get("longitud").toString())
+                                .param("area_verde_id", String.valueOf(anterior)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estado").value("dentro"))
+                .andExpect(jsonPath("$.areas[0].id").value((int) anterior));
+        http.perform(get(ruta + "/ejemplares").with(httpBasic("jefe", CLAVE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].codigo").value(codigo))
+                .andExpect(jsonPath("$[1].codigo").value(sinVinculo));
+        http.perform(
+                        get(ruta + "/impacto")
+                                .param("area_verde_id", String.valueOf(destino))
+                                .with(httpBasic("capataz-a", CLAVE)))
+                .andExpect(status().isForbidden());
+        http.perform(
+                        get(ruta + "/impacto")
+                                .param("area_verde_id", String.valueOf(destino))
+                                .with(httpBasic("jefe", CLAVE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.reasignables[0].codigo").value(codigo))
+                .andExpect(jsonPath("$.conflictos").isEmpty());
+        String cambio = "{\"area_verde_id\":" + destino;
+        http.perform(
+                        put(ruta)
+                                .with(httpBasic("jefe", CLAVE))
+                                .contentType("application/json")
+                                .content(cambio + "}"))
+                .andExpect(status().isConflict());
+        String confirmacion =
+                ",\"confirmacion\":{\"area_anterior_id\":" + anterior + ",\"ejemplares_ids\":";
+        http.perform(
+                        put(ruta)
+                                .with(httpBasic("jefe", CLAVE))
+                                .contentType("application/json")
+                                .content(cambio + confirmacion + "[]}}"))
+                .andExpect(status().isConflict());
+        http.perform(
+                        put(ruta)
+                                .with(httpBasic("jefe", CLAVE))
+                                .contentType("application/json")
+                                .content(cambio + confirmacion + "[" + ejemplar + "]}}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.area_verde_id").value((int) destino));
+        assertThat(
+                        jdbc.queryForMap(
+                                """
+                                SELECT area_verde_inventario_id area_verde_id, ST_X(ubicacion_geografica) longitud, ST_Y(ubicacion_geografica) latitud
+                                FROM mod02_ejemplar WHERE id = :id
+                                """,
+                                Map.of("id", ejemplar)))
+                .containsEntry("area_verde_id", destino)
+                .containsEntry("longitud", borde.get("longitud"))
+                .containsEntry("latitud", borde.get("latitud"));
+    }
+
     private String crearEjemplar(String cuerpo) throws Exception {
         MvcResult resultado =
                 http.perform(

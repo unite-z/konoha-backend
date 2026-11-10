@@ -12,6 +12,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.springframework.jdbc.core.DataClassRowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -25,22 +26,24 @@ public class EjemplaresService {
 
     private static final String CONSULTA =
             "SELECT e.id, e.codigo, e.referencia_catastro, e.codigo_catastro,"
-                    + " e.codigo_placa_antigua, e.especie_id, s.nombre_comun especie_nombre_comun,"
-                    + " s.nombre_cientifico especie_nombre_cientifico, s.forma_biologica"
-                    + " especie_forma_biologica, e.tipo_vegetacion, e.ubicacion,"
-                    + " ST_Y(e.ubicacion_geografica)::numeric(10, 7) latitud,"
-                    + " ST_X(e.ubicacion_geografica)::numeric(10, 7) longitud, e.cantidad,"
-                    + " e.area_verde_id, e.altura_total_m, e.situacion, e.fecha_situacion,"
-                    + " (e.codigo_placa_antigua IS NOT NULL AND"
-                    + " EXISTS (SELECT 1 FROM mod02_ejemplar otro WHERE otro.id <> e.id AND"
-                    + " lower(otro.codigo_placa_antigua) = lower(e.codigo_placa_antigua)))"
-                    + " advertencia_placa_repetida FROM mod02_ejemplar e LEFT JOIN"
-                    + " mod02_especie_vegetal s ON s.id = e.especie_id";
+                + " e.codigo_placa_antigua, e.especie_id, s.nombre_comun especie_nombre_comun,"
+                + " s.nombre_cientifico especie_nombre_cientifico, s.forma_biologica"
+                + " especie_forma_biologica, e.tipo_vegetacion, e.ubicacion,"
+                + " ST_Y(e.ubicacion_geografica) latitud, ST_X(e.ubicacion_geografica) longitud,"
+                + " e.cantidad, e.area_verde_inventario_id area_verde_id, e.altura_total_m,"
+                + " e.situacion, e.fecha_situacion, (e.codigo_placa_antigua IS NOT NULL AND EXISTS"
+                + " (SELECT 1 FROM mod02_ejemplar otro WHERE otro.id <> e.id AND"
+                + " lower(otro.codigo_placa_antigua) = lower(e.codigo_placa_antigua)))"
+                + " advertencia_placa_repetida FROM mod02_ejemplar e LEFT JOIN"
+                + " mod02_especie_vegetal s ON s.id = e.especie_id";
 
     private final NamedParameterJdbcTemplate jdbc;
 
-    public EjemplaresService(NamedParameterJdbcTemplate jdbc) {
+    private final GeometriaCampus geometria;
+
+    public EjemplaresService(NamedParameterJdbcTemplate jdbc, GeometriaCampus geometria) {
         this.jdbc = jdbc;
+        this.geometria = geometria;
     }
 
     public List<Ejemplar> listar(
@@ -61,14 +64,27 @@ public class EjemplaresService {
         return jdbc.query(
                 CONSULTA
                         + " WHERE (:q = '' OR e.codigo ILIKE '%' || :q || '%' OR"
-                        + " e.referencia_catastro ILIKE '%' || :q || '%' OR"
-                        + " e.codigo_placa_antigua ILIKE '%' || :q || '%' OR"
-                        + " s.nombre_comun ILIKE '%' || :q || '%' OR"
-                        + " s.nombre_cientifico ILIKE '%' || :q || '%')"
-                        + " AND (:referencia = '' OR e.referencia_catastro = :referencia)"
-                        + " AND (CAST(:area AS bigint) IS NULL OR e.area_verde_id = :area)"
-                        + " ORDER BY e.id LIMIT :limite OFFSET :offset",
+                        + " e.referencia_catastro ILIKE '%' || :q || '%' OR e.codigo_placa_antigua"
+                        + " ILIKE '%' || :q || '%' OR s.nombre_comun ILIKE '%' || :q || '%' OR"
+                        + " s.nombre_cientifico ILIKE '%' || :q || '%') AND (:referencia = '' OR"
+                        + " e.referencia_catastro = :referencia) AND (CAST(:area AS bigint) IS NULL"
+                        + " OR e.area_verde_inventario_id = :area) ORDER BY e.id LIMIT :limite"
+                        + " OFFSET :offset",
                 parametros,
+                new DataClassRowMapper<>(Ejemplar.class));
+    }
+
+    public List<Ejemplar> enPoligono(UUID idFuente, Usuario usuario) {
+        AccesoCoberturas.consultar(usuario);
+        return jdbc.query(
+                CONSULTA
+                        + """
+                         WHERE EXISTS (
+                             SELECT 1 FROM mod02_mapa_geometria g WHERE g.id_fuente = :fuente
+                                 AND ST_Covers(g.geometria, e.ubicacion_geografica)
+                         ) ORDER BY e.id
+                        """,
+                Map.of("fuente", idFuente),
                 new DataClassRowMapper<>(Ejemplar.class));
     }
 
@@ -78,18 +94,20 @@ public class EjemplaresService {
         validarParCoordenadas(entrada.latitud(), entrada.longitud());
         validarEspecie(entrada.especieId());
         validarArea(entrada.areaVerdeId());
+        if (entrada.areaVerdeId() != null && entrada.latitud() != null) geometria.bloquearCambios();
         long id =
                 jdbc.queryForObject(
                         "INSERT INTO mod02_ejemplar (codigo_placa_antigua, especie_id,"
-                                + " tipo_vegetacion, ubicacion, ubicacion_geografica, cantidad,"
-                                + " altura_total_m, area_verde_id) VALUES (:placa, :especie,"
-                                + " :vegetacion, :ubicacion, CASE WHEN CAST(:latitud AS numeric) IS"
-                                + " NULL THEN NULL ELSE ST_SetSRID (ST_MakePoint(CAST(:longitud AS"
-                                + " double precision), CAST(:latitud AS double precision)),"
-                                + " 4326)::geometry(Point, 4326) END, :cantidad, :altura, :area)"
-                                + " RETURNING id",
+                            + " tipo_vegetacion, ubicacion, ubicacion_geografica, cantidad,"
+                            + " altura_total_m, area_verde_inventario_id) VALUES (:placa, :especie,"
+                            + " :vegetacion, :ubicacion, CASE WHEN CAST(:latitud AS numeric) IS"
+                            + " NULL THEN NULL ELSE ST_SetSRID (ST_MakePoint(CAST(:longitud AS"
+                            + " double precision), CAST(:latitud AS double precision)),"
+                            + " 4326)::geometry(Point, 4326) END, :cantidad, :altura, :area)"
+                            + " RETURNING id",
                         parametros(entrada).addValue("area", entrada.areaVerdeId()),
                         Long.class);
+        geometria.validarEjemplar(id);
         return buscar(id);
     }
 
@@ -109,6 +127,8 @@ public class EjemplaresService {
                     400, "cambio-vacio", "Indica algún dato que quieras modificar");
         }
         boolean cambiaUbicacion = cambio.latitud() != null || cambio.longitud() != null;
+        boolean cambiaVinculo = cambiaUbicacion || cambio.areaVerdeId() != null;
+        if (cambiaVinculo) geometria.bloquearCambios();
         if (cambiaUbicacion
                 && ((cambio.latitud() == null || cambio.longitud() == null)
                         && !tieneUbicacion(id))) {
@@ -131,24 +151,23 @@ public class EjemplaresService {
         int filas =
                 jdbc.update(
                         "UPDATE mod02_ejemplar SET especie_id = coalesce(:especie, especie_id),"
-                                + " tipo_vegetacion = coalesce(:vegetacion, tipo_vegetacion),"
-                                + " ubicacion = coalesce(:ubicacion, ubicacion),"
-                                + " ubicacion_geografica = CASE WHEN :latitud IS NULL AND"
-                                + " :longitud IS NULL THEN ubicacion_geografica ELSE"
-                                + " ST_SetSRID(ST_MakePoint(coalesce(:longitud,"
-                                + " ST_X(ubicacion_geografica)), coalesce(:latitud,"
-                                + " ST_Y(ubicacion_geografica))), 4326)::geometry(Point, 4326) END,"
-                                + " cantidad = coalesce(:cantidad, cantidad),"
-                                + " altura_total_m = coalesce(:altura, altura_total_m),"
-                                + " codigo_placa_antigua = coalesce(:placa, codigo_placa_antigua),"
-                                + " area_verde_id = coalesce(:area, area_verde_id)"
-                                + " WHERE id = :id",
+                            + " tipo_vegetacion = coalesce(:vegetacion, tipo_vegetacion), ubicacion"
+                            + " = coalesce(:ubicacion, ubicacion), ubicacion_geografica = CASE WHEN"
+                            + " :latitud IS NULL AND :longitud IS NULL THEN ubicacion_geografica"
+                            + " ELSE ST_SetSRID(ST_MakePoint(coalesce(:longitud,"
+                            + " ST_X(ubicacion_geografica)), coalesce(:latitud,"
+                            + " ST_Y(ubicacion_geografica))), 4326)::geometry(Point, 4326) END,"
+                            + " cantidad = coalesce(:cantidad, cantidad), altura_total_m ="
+                            + " coalesce(:altura, altura_total_m), codigo_placa_antigua ="
+                            + " coalesce(:placa, codigo_placa_antigua), area_verde_inventario_id ="
+                            + " coalesce(:area, area_verde_inventario_id) WHERE id = :id",
                         parametros(cambio)
                                 .addValue("area", cambio.areaVerdeId())
                                 .addValue("id", id));
         if (filas == 0) {
             throw noExiste();
         }
+        if (cambiaVinculo) geometria.validarEjemplar(id);
         return buscar(id);
     }
 
@@ -184,6 +203,7 @@ public class EjemplaresService {
     public Ejemplar cambiarSituacion(long id, CambioSituacion cambio, Usuario usuario) {
         AccesoCoberturas.gestionar(usuario);
         boolean traslado = cambio.situacion() == Situacion.trasladado;
+        if (traslado) geometria.bloquearCambios();
         String ubicacion = cambio.ubicacion() == null ? "" : cambio.ubicacion().strip();
         validarParCoordenadas(cambio.latitud(), cambio.longitud());
         if (traslado && ubicacion.isEmpty() && cambio.latitud() == null) {
@@ -241,12 +261,12 @@ public class EjemplaresService {
                             SET situacion = :situacion, fecha_situacion = :fecha,
                                 ubicacion = CASE WHEN :traslado THEN :ubicacion ELSE e.ubicacion END,
                                 ubicacion_geografica = CASE WHEN :traslado THEN d.punto ELSE e.ubicacion_geografica END,
-                                area_verde_id = CASE WHEN :traslado THEN :area ELSE e.area_verde_id END
+                                area_verde_inventario_id = CASE WHEN :traslado THEN :area ELSE e.area_verde_inventario_id END
                             FROM destino d
                             WHERE e.id = :id AND (e.situacion <> :situacion OR (:traslado AND (
                                 e.ubicacion IS DISTINCT FROM :ubicacion OR
                                 e.ubicacion_geografica IS DISTINCT FROM d.punto OR
-                                e.area_verde_id IS DISTINCT FROM :area)))
+                                e.area_verde_inventario_id IS DISTINCT FROM :area)))
                             RETURNING e.*
                         )
                         INSERT INTO mod02_historial_situacion_ejemplar
@@ -255,7 +275,7 @@ public class EjemplaresService {
                              area_anterior_id, area_nueva_id)
                         SELECT e.id, e.situacion, a.situacion, :fecha, :motivo, :usuario,
                                e.ubicacion, a.ubicacion, e.ubicacion_geografica, a.ubicacion_geografica,
-                               e.area_verde_id, a.area_verde_id
+                               e.area_verde_inventario_id, a.area_verde_inventario_id
                         FROM mod02_ejemplar e JOIN actualizado a ON a.id = e.id
                         """,
                         parametros);
@@ -263,6 +283,7 @@ public class EjemplaresService {
             throw new ErrorCoberturas(
                     409, "sin-cambio-situacion", "El ejemplar ya tiene esa situación y ubicación");
         }
+        if (traslado) geometria.validarEjemplar(id);
         return buscar(id);
     }
 
@@ -273,10 +294,10 @@ public class EjemplaresService {
                 """
                 SELECT h.id, h.situacion_anterior, h.situacion_nueva, h.fecha, h.fecha_registro,
                        h.motivo, h.usuario_id, u.nombre autor, h.ubicacion_anterior, h.ubicacion_nueva,
-                       ST_Y(h.punto_anterior)::numeric(10, 7) latitud_anterior,
-                       ST_X(h.punto_anterior)::numeric(10, 7) longitud_anterior,
-                       ST_Y(h.punto_nuevo)::numeric(10, 7) latitud_nueva,
-                       ST_X(h.punto_nuevo)::numeric(10, 7) longitud_nueva,
+                       ST_Y(h.punto_anterior) latitud_anterior,
+                       ST_X(h.punto_anterior) longitud_anterior,
+                       ST_Y(h.punto_nuevo) latitud_nueva,
+                       ST_X(h.punto_nuevo) longitud_nueva,
                        h.area_anterior_id, h.area_nueva_id
                 FROM mod02_historial_situacion_ejemplar h
                 JOIN core_usuario u ON u.id = h.usuario_id
