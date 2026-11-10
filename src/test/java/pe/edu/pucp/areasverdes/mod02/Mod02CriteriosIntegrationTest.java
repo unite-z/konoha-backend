@@ -654,7 +654,21 @@ class Mod02CriteriosIntegrationTest {
                 "\"latitud\":" + borde.get("latitud") + ",\"longitud\":" + borde.get("longitud");
         String vinculo = "\"area_verde_id\":" + anterior;
         String codigo = crearEjemplar("{" + punto + "," + vinculo + "}");
-        String sinVinculo = crearEjemplar("{" + punto + "}");
+        Map<String, Object> interior =
+                jdbc.queryForMap(
+                        """
+                        SELECT ST_X(punto) longitud, ST_Y(punto) latitud
+                        FROM (SELECT ST_PointOnSurface(geometria) punto
+                              FROM mod02_mapa_geometria WHERE id_fuente = :id) coordenadas
+                        """,
+                        Map.of("id", poligono));
+        String sinVinculo =
+                crearEjemplar(
+                        "{\"latitud\":"
+                                + interior.get("latitud")
+                                + ",\"longitud\":"
+                                + interior.get("longitud")
+                                + "}");
         long ejemplar =
                 jdbc.queryForObject(
                         "SELECT id FROM mod02_ejemplar WHERE codigo = :codigo",
@@ -702,7 +716,9 @@ class Mod02CriteriosIntegrationTest {
         http.perform(get(ruta + "/ejemplares").with(httpBasic("jefe", CLAVE)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].codigo").value(codigo))
-                .andExpect(jsonPath("$[1].codigo").value(sinVinculo));
+                .andExpect(jsonPath("$[1].codigo").value(sinVinculo))
+                .andExpect(jsonPath("$[1].nombre_poligono").value("Bosque Húmedo"))
+                .andExpect(jsonPath("$[1].varios_poligonos").value(false));
         http.perform(
                         get(ruta + "/impacto")
                                 .param("area_verde_id", String.valueOf(destino))
@@ -737,6 +753,14 @@ class Mod02CriteriosIntegrationTest {
                                 .content(cambio + confirmacion + "[" + ejemplar + "]}}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.area_verde_id").value((int) destino));
+        http.perform(
+                        get(API + "/ejemplares")
+                                .param("codigo", codigo)
+                                .with(httpBasic("ingeniero", CLAVE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].codigo").value(codigo))
+                .andExpect(jsonPath("$[0].area_verde_nombre").value("Área nueva geográfica"));
         assertThat(
                         jdbc.queryForMap(
                                 """
