@@ -172,7 +172,9 @@ public class MapaAreasService {
         geometria.bloquearCambios();
         if (guardarVinculo(idFuente, areaId, usuario, true) == 0) {
             throw new ErrorCoberturas(
-                    409, "poligono-ocupado", "El polígono ya está vinculado a otra área");
+                    409,
+                    "poligono-ocupado",
+                    "El área del mapa ya tiene una ficha del inventario vinculada.");
         }
     }
 
