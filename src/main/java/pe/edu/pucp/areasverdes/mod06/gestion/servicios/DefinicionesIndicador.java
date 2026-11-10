@@ -96,6 +96,26 @@ public final class DefinicionesIndicador {
                     CUMPLIMIENTO_TERCERIZADOS,
                     MAPA_ATENCIONES);
 
+    /** RF-REP-002: reporte propio, sin tarjeta en el panel (por eso no está en {@link #TODAS}). */
+    public static final Indicador CUMPLIMIENTO_CORTE =
+            new Indicador(
+                    "RF-REP-002",
+                    "Cumplimiento del corte de césped",
+                    "Por cada ciclo con fecha de inicio real en el periodo: días naturales desde el"
+                        + " inicio del ciclo anterior frente a la frecuencia práctica y máxima de"
+                        + " la estación (dentro, tolerado o fuera de frecuencia), y días de corte"
+                        + " (fin de corte − inicio + 1) y de limpieza frente a la duración máxima y"
+                        + " los días de limpieza configurados. Sin fechas o límites no se calcula"
+                        + " el cumplimiento.",
+                    null,
+                    "días");
+
+    /** Todas las definiciones de MOD-06: las del panel y las de reportes propios. */
+    public static final List<Indicador> CATALOGO =
+            java.util.stream.Stream.concat(
+                            TODAS.stream(), java.util.stream.Stream.of(CUMPLIMIENTO_CORTE))
+                    .toList();
+
     /** Definición por código, o vacío si no existe. */
     public static Optional<Indicador> porCodigo(String codigo) {
         return TODAS.stream().filter(i -> i.codigo().equals(codigo)).findFirst();
