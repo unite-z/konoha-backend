@@ -773,6 +773,35 @@ class Mod02CriteriosIntegrationTest {
                 .containsEntry("latitud", borde.get("latitud"));
     }
 
+    @Test
+    void guardarAlturaConservaLaUbicacionDelEjemplar() throws Exception {
+        for (String cuerpo : List.of("{}", "{\"latitud\":-12.0731,\"longitud\":-77.0814}")) {
+            String codigo = crearEjemplar(cuerpo);
+            long id =
+                    jdbc.queryForObject(
+                            "SELECT id FROM mod02_ejemplar WHERE codigo = :codigo",
+                            Map.of("codigo", codigo),
+                            Long.class);
+            var respuesta =
+                    http.perform(
+                                    patch(API + "/ejemplares/" + id)
+                                            .with(httpBasic("jefe", CLAVE))
+                                            .contentType("application/json")
+                                            .content("{\"altura_total_m\":3.5}"))
+                            .andExpect(status().isOk())
+                            .andExpect(jsonPath("$.altura_total_m").value(3.5));
+            if (cuerpo.equals("{}")) {
+                respuesta
+                        .andExpect(jsonPath("$.latitud").doesNotExist())
+                        .andExpect(jsonPath("$.longitud").doesNotExist());
+            } else {
+                respuesta
+                        .andExpect(jsonPath("$.latitud").value(-12.0731))
+                        .andExpect(jsonPath("$.longitud").value(-77.0814));
+            }
+        }
+    }
+
     private String crearEjemplar(String cuerpo) throws Exception {
         MvcResult resultado =
                 http.perform(
