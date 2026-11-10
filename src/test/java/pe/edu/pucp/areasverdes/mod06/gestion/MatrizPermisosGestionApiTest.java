@@ -111,6 +111,10 @@ class MatrizPermisosGestionApiTest extends ApiGestion {
                     .startsWith("pe.edu.pucp.areasverdes.mod06.gestion")) {
                 continue;
             }
+            // Las funciones de IA tienen su propia matriz (MatrizPermisosIaApiTest).
+            if (e.getValue().getBeanType().getPackageName().endsWith(".gestion.ia")) {
+                continue;
+            }
             RequestMappingInfo info = e.getKey();
             Set<String> patrones =
                     info.getPathPatternsCondition() != null
