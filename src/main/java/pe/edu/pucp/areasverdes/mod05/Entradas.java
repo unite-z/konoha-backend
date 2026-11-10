@@ -11,6 +11,9 @@ public final class Entradas {
     private Entradas() {}
 
     public static final String ORIGEN = "Demanda|ProgramacionEstacional|SolicitudUnidad";
+    public static final String CLASE_PROGRAMADA = "ProgramadaContrato";
+    public static final String CLASE_EXTRAORDINARIA = "Extraordinaria";
+    public static final String CLASE = CLASE_PROGRAMADA + "|" + CLASE_EXTRAORDINARIA;
     public static final String CATEGORIA =
             "InformeFinal|Metrado|PlantasAtendidas|FichasDiarias|CharlasTecnicas|PlagasAtendidas|ProductosAplicados|EvidenciaEspacio|RutaRecorrida";
 
@@ -32,7 +35,32 @@ public final class Entradas {
             Boolean es_riesgo,
             @NotEmpty List<@NotNull @Valid Alcance> alcances,
             List<@NotNull @Valid ProductoAplicado> productos,
-            List<@NotNull @Positive Long> plagas_controladas) {}
+            List<@NotNull @Positive Long> plagas_controladas,
+            @Pattern(regexp = CLASE) String clase) {
+        /** Sin clase, la atención es programada según contrato. */
+        public Crear(
+                Long contrato_id,
+                String descripcion,
+                String origen,
+                Long unidad_solicitante_id,
+                String unidad_provisional,
+                Boolean es_riesgo,
+                List<Alcance> alcances,
+                List<ProductoAplicado> productos,
+                List<Long> plagas_controladas) {
+            this(
+                    contrato_id,
+                    descripcion,
+                    origen,
+                    unidad_solicitante_id,
+                    unidad_provisional,
+                    es_riesgo,
+                    alcances,
+                    productos,
+                    plagas_controladas,
+                    null);
+        }
+    }
 
     public record Orden(@NotBlank @Size(max = 30) String numero_orden_compra, String motivo) {}
 

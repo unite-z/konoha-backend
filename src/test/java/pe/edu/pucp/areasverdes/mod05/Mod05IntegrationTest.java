@@ -1220,6 +1220,88 @@ class Mod05IntegrationTest {
         assertEquals(2, conforme.at("/conformidades/1/revision").asInt());
     }
 
+    // --- Atenciones programadas y extraordinarias (RF-SER-008) ---
+
+    JsonNode crearComo(String clase, int esperado) throws Exception {
+        var cuerpo = input();
+        if (clase != null) cuerpo.put("clase", clase);
+        return cuerpo(
+                http.perform(
+                                post(BASE)
+                                        .with(httpBasic("jefe", PASSWORD))
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(json.writeValueAsBytes(cuerpo)))
+                        .andExpect(status().is(esperado)));
+    }
+
+    @Test
+    void laClaseDeLaAtencionSeGuardaSeFiltraYSeValida() throws Exception {
+        assertEquals("ProgramadaContrato", crearComo(null, 201).get("clase").asText());
+        assertEquals(
+                "ProgramadaContrato", crearComo("ProgramadaContrato", 201).get("clase").asText());
+        long extraordinaria = crearComo("Extraordinaria", 201).get("id").asLong();
+        crearComo("Otra", 400);
+        crearComo("", 400);
+        http.perform(get(BASE).param("clase", "Extraordinaria").with(httpBasic("jefe", PASSWORD)))
+                .andExpect(jsonPath("$.count").value(1))
+                .andExpect(jsonPath("$.results[0].id").value(extraordinaria))
+                .andExpect(jsonPath("$.results[0].clase").value("Extraordinaria"));
+        http.perform(
+                        get(BASE)
+                                .param("clase", "ProgramadaContrato")
+                                .with(httpBasic("jefe", PASSWORD)))
+                .andExpect(jsonPath("$.count").value(2));
+        http.perform(get(BASE).param("clase", "Otra").with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void laExtraordinariaNoIniciaSinSuOrdenDeServicio() throws Exception {
+        long id = crearComo("Extraordinaria", 201).get("id").asLong();
+        var inicio = values("fecha_hora_inicio", OffsetDateTime.now().minusHours(1).toString());
+        http.perform(
+                        post(BASE + id + "/inicio/")
+                                .with(httpBasic("jefe", PASSWORD))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(json.writeValueAsBytes(inicio)))
+                .andExpect(status().isConflict());
+        var conOrden =
+                patchAction(
+                        id,
+                        "orden-compra",
+                        Map.of("numero_orden_compra", "OS-2026-001"),
+                        "jefe",
+                        200);
+        assertEquals(Atencion.OC, conOrden.get("estado").asText());
+        assertEquals("OS-2026-001", conOrden.get("numero_orden_compra").asText());
+        assertEquals("Extraordinaria", conOrden.get("clase").asText());
+        http.perform(
+                        post(BASE + id + "/inicio/")
+                                .with(httpBasic("jefe", PASSWORD))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(json.writeValueAsBytes(inicio)))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void laBandejaFiltraPorLosEstadosDeLaConformidad() throws Exception {
+        long observada = conInforme();
+        decidir(observada, "jefe", decision("Observada", "Falta el metrado"), 200);
+        long conforme = conInforme();
+        decidir(conforme, "jefe", decision("Conforme", ""), 200);
+        http.perform(
+                        get(BASE)
+                                .param("estado", Atencion.OBSERVADO)
+                                .with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(1))
+                .andExpect(jsonPath("$.results[0].id").value(observada));
+        http.perform(get(BASE).param("estado", Atencion.CONFORME).with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(1))
+                .andExpect(jsonPath("$.results[0].id").value(conforme));
+    }
+
     @Test
     void lasDecisionesDeConformidadSoloAdmitenInserciones() throws Exception {
         long id = conInforme();

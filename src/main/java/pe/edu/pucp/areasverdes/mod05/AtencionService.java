@@ -123,7 +123,7 @@ public class AtencionService {
                         "codigo",
                         "AT-" + UUID.randomUUID().toString().replace("-", ""),
                         "clase",
-                        "ProgramadaContrato",
+                        input.clase() == null ? Entradas.CLASE_PROGRAMADA : input.clase(),
                         "contrato_id",
                         input.contrato_id(),
                         "tipo_servicio_id",

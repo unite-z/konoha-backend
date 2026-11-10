@@ -196,7 +196,10 @@ public class DerivacionTercerizada {
                                 null,
                                 List.of(alcance),
                                 null,
-                                null),
+                                null,
+                                "Extraordinaria".equals(r.tipoAtencion())
+                                        ? Entradas.CLASE_EXTRAORDINARIA
+                                        : Entradas.CLASE_PROGRAMADA),
                         new Usuario(
                                 usuario.id(),
                                 "",
@@ -345,13 +348,16 @@ public class DerivacionTercerizada {
     }
 
     /**
-     * Requerimiento, orden de compra, informe del proveedor y conformidad. El primero sin hacer
-     * está en curso. El informe consta desde que se adjunta, aunque luego el jefe lo observe.
+     * Requerimiento, orden (de servicio si es extraordinaria, de compra si no), informe del
+     * proveedor y conformidad. El primero sin hacer está en curso. El informe consta desde que se
+     * adjunta, aunque luego el jefe lo observe.
      */
     private static List<Paso> pasos(Map<String, Object> a) {
-        String[] nombres = {
-            "Requerimiento", "Orden de compra", "Informe del proveedor", "Conformidad"
-        };
+        String orden =
+                "Extraordinaria".equals(a.get("tipo_atencion"))
+                        ? "Orden de servicio"
+                        : "Orden de compra";
+        String[] nombres = {"Requerimiento", orden, "Informe del proveedor", "Conformidad"};
         Object estadoAtencion = a.get("estado");
         boolean conInforme =
                 REPORTE.equals(estadoAtencion)
