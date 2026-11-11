@@ -45,6 +45,8 @@ class MatrizPermisosIaApiTest extends ApiGestion {
     static {
         recurso("priorizaciones", "{\"alcance\": \"Areas\", \"horizonte_dias\": 7}", true);
         recurso("inconsistencias", null, false);
+        // Sin Gemini, quien puede proponer recibe 503 (la IA se pide antes de leer).
+        recurso("cronogramas", "{\"desde\": \"2026-11-01\", \"hasta\": \"2026-11-30\"}", true);
         MATRIZ.add(
                 new Fila(
                         "POST",
@@ -64,7 +66,7 @@ class MatrizPermisosIaApiTest extends ApiGestion {
                         "POST",
                         base + "/{id:[0-9]+}/validar",
                         base + "/999999/validar/",
-                        "{\"por_elemento\": {}}",
+                        "{\"por_elemento\": {}, \"por_propuesta\": {}}",
                         VALIDAR));
         MATRIZ.add(
                 new Fila(
