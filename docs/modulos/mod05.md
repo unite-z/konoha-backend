@@ -101,7 +101,7 @@ POST  inicio/        {"fecha_hora_inicio":"2026-10-21T08:00:00-05:00"}
 POST  fin/           {"fecha_hora_fin":"2026-10-21T12:00:00-05:00"}
 ```
 
-En una atención extraordinaria el mismo paso registra su orden de servicio (RF-SER-008): el campo y el estado `OC referenciada` son los mismos y sin ella tampoco se inicia. Corregir OC exige motivo y solo se permite antes del inicio. No se emiten órdenes. El fin no precede al inicio. La marca de riesgo se hereda del catálogo o se activa al registrar; no puede desactivarse desde la petición. Iniciar atenciones de riesgo sigue bloqueado hasta integrar seguridad.
+En una atención extraordinaria el mismo paso registra su orden de servicio (RF-SER-008): el campo y el estado `OC referenciada` son los mismos y sin ella tampoco se inicia. Corregir OC exige motivo y solo se permite antes del inicio. No se emiten órdenes. El fin no precede al inicio. La marca de riesgo se hereda del catálogo o se activa al registrar; no puede desactivarse desde la petición. Iniciar atenciones de riesgo requiere la verificación de seguridad registrada por el jefe o el ingeniero.
 
 Clase opcional al registrar (`clase`): `ProgramadaContrato` (por defecto, según contrato) o `Extraordinaria` (fuera de programación, con orden de servicio); no se corrige después y exige igualmente un contrato vigente. La incidencia que MOD-03 deriva como extraordinaria se registra con esa clase. Origen obligatorio: `Demanda`, `ProgramacionEstacional`, `SolicitudUnidad`. Para solicitud de unidad, enviar exclusivamente `unidad_solicitante_id` o `unidad_provisional` (nombre). La creación/reutilización de la unidad provisional es atómica. Corregir origen requiere motivo y solo puede hacerse antes del inicio. Los demás orígenes no admiten unidad.
 
@@ -189,3 +189,9 @@ Las pruebas del MOD-06 corren en el mismo `./mvnw test` y usan la misma base `_t
 - Integrar catálogos, usuarios, incidencias y programación con los módulos propietarios sin duplicar IDs.
 - Integrar almacenamiento de objetos y seguridad para atenciones de riesgo.
 - Fuera de esta entrega: extraordinarias sin contrato, corregir la clase tras el registro, IA y nuevas pantallas frontend.
+
+### Verificación de seguridad (AV-377)
+
+POST `/api/v1/tercerizados/atenciones/{id}/seguridad/` recibe `medidas` (texto obligatorio, máximo 5000 caracteres) y `confirmado: true`. La matriz de acceso admite jefe de sección e ingeniero de campo (200); practicante y usuarios sin rol reciben 403, anónimos 401. Solo admite atenciones de riesgo antes del inicio (409 en otro caso). La prueba de integración cubre esta matriz.
+
+La ficha devuelve `verificaciones_seguridad`, ordenadas de antigua a reciente, con medidas, usuario y fecha. Cada corrección inserta una constancia y audita la atención bajo su bloqueo transaccional. Repetir las mismas medidas es idempotente. Una atención de riesgo requiere constancia para iniciar y conserva el flujo habitual hasta el cierre.
