@@ -42,9 +42,40 @@ class MatrizPermisosIaApiTest extends ApiGestion {
 
     static final List<Fila> MATRIZ = new ArrayList<>();
 
+    /** Cuerpo de validar bien formado para todos los recursos: la prueba mide permiso y 404. */
+    static final String CUERPO_VALIDAR =
+            "{\"por_elemento\": {}, \"por_propuesta\": {}, \"por_campo\": {}, \"acciones\": {},"
+                    + " \"confirmado\": {}}";
+
     static {
         recurso("priorizaciones", "{\"alcance\": \"Areas\", \"horizonte_dias\": 7}", true);
         recurso("inconsistencias", null, false);
+        // Clasificación y estimación: la incidencia o actividad 999999 no existe, así que quien
+        // puede solicitar recibe 404 antes de llamar a la IA.
+        recurso("clasificaciones-incidencia", null, false);
+        alta("clasificaciones-incidencia", "", "{\"incidencia_id\": 999999}", DETALLE);
+        alta(
+                "clasificaciones-incidencia",
+                "/manual",
+                "{\"incidencia_id\": 999999, \"valores\": {}}",
+                VALIDAR);
+        MATRIZ.add(
+                new Fila(
+                        "GET",
+                        "/api/v1/ia/clasificaciones-incidencia/pendientes",
+                        "/api/v1/ia/clasificaciones-incidencia/pendientes/",
+                        null,
+                        CONSULTA));
+        recurso("estimaciones", null, false);
+        alta("estimaciones", "", "{\"actividad_id\": 999999}", DETALLE);
+        alta("estimaciones", "/manual", "{\"actividad_id\": 999999, \"confirmado\": {}}", DETALLE);
+        MATRIZ.add(
+                new Fila(
+                        "GET",
+                        "/api/v1/ia/estimaciones/actividades-pendientes",
+                        "/api/v1/ia/estimaciones/actividades-pendientes/",
+                        null,
+                        CONSULTA));
         MATRIZ.add(
                 new Fila(
                         "POST",
@@ -52,6 +83,11 @@ class MatrizPermisosIaApiTest extends ApiGestion {
                         "/api/v1/ia/inconsistencias/analisis/",
                         "{\"conjunto\": \"Proveedores\"}",
                         PROPONER));
+    }
+
+    private static void alta(String nombre, String sufijo, String cuerpo, List<Integer> esperados) {
+        String ruta = "/api/v1/ia/" + nombre + sufijo;
+        MATRIZ.add(new Fila("POST", ruta, ruta + "/", cuerpo, esperados));
     }
 
     private static void recurso(String nombre, String solicitud, boolean conPostDeAlta) {
@@ -64,7 +100,7 @@ class MatrizPermisosIaApiTest extends ApiGestion {
                         "POST",
                         base + "/{id:[0-9]+}/validar",
                         base + "/999999/validar/",
-                        "{\"por_elemento\": {}}",
+                        CUERPO_VALIDAR,
                         VALIDAR));
         MATRIZ.add(
                 new Fila(
