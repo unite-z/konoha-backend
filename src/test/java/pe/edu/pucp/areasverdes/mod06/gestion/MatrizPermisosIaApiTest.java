@@ -50,6 +50,8 @@ class MatrizPermisosIaApiTest extends ApiGestion {
     static {
         recurso("priorizaciones", "{\"alcance\": \"Areas\", \"horizonte_dias\": 7}", true);
         recurso("inconsistencias", null, false);
+        // Sin Gemini, quien puede proponer recibe 503 (la IA se pide antes de leer).
+        recurso("cronogramas", "{\"desde\": \"2026-11-01\", \"hasta\": \"2026-11-30\"}", true);
         // Clasificación y estimación: la incidencia o actividad 999999 no existe, así que quien
         // puede solicitar recibe 404 antes de llamar a la IA.
         recurso("clasificaciones-incidencia", null, false);
