@@ -181,6 +181,15 @@ public class OperacionCampoController {
         return service.guardarEncargo(id, body, user);
     }
 
+    @PostMapping({"/encargos/{id}/estado", "/encargos/{id}/estado/"})
+    @Operation(summary = "Actualizar el estado de un encargo propio o cancelarlo como jefe")
+    public Map<String, Object> cambiarEstadoEncargo(
+            @PathVariable long id,
+            @Valid @RequestBody Entradas.CambioEstadoEncargo body,
+            @AuthenticationPrincipal Usuario user) {
+        return service.cambiarEstadoEncargo(id, body, user);
+    }
+
     @GetMapping({"/encargos/{id}", "/encargos/{id}/"})
     @Operation(summary = "Consultar encargo")
     public Map<String, Object> encargo(
