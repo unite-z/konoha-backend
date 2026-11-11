@@ -1261,6 +1261,45 @@ class Mod04IntegrationTest {
     }
 
     @Test
+    void materialReenviadoDesdeLaColaNoSeDuplicaYLaClaveDuraUnMes() throws Exception {
+        long equipo = cuadrilla(c1, o1), act = actividad(equipo);
+        var body = values("material_id", 1, "cantidad", 4, "unidad_medida_id", 1);
+        String clave = UUID.randomUUID().toString();
+        for (int intento = 0; intento < 2; intento++) {
+            http.perform(
+                            post(BASE + "/actividades/" + act + "/materiales/")
+                                    .with(httpBasic("capataz1", PASSWORD))
+                                    .header("Idempotency-Key", clave)
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(json.writeValueAsBytes(body)))
+                    .andExpect(status().isCreated());
+        }
+        assertEquals(
+                1,
+                repo.rows(
+                                "SELECT id FROM mod04_material_actividad WHERE actividad_id=:a",
+                                Map.of("a", act))
+                        .size());
+        assertEquals(
+                Boolean.TRUE,
+                repo.jdbc()
+                        .queryForObject(
+                                "SELECT caduca > now() + interval '29 days' FROM"
+                                        + " mod04_idempotencia WHERE clave=:c",
+                                Map.of("c", UUID.fromString(clave)),
+                                Boolean.class));
+        body.put("cantidad", 5);
+        http.perform(
+                        post(BASE + "/actividades/" + act + "/materiales/")
+                                .with(httpBasic("capataz1", PASSWORD))
+                                .header("Idempotency-Key", clave)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(json.writeValueAsBytes(body)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("idempotency-key-reutilizada"));
+    }
+
+    @Test
     void registraOperariosSinCuentaYExigeCuentaParaElCapataz() throws Exception {
         var cuerpo =
                 values("nombres", "Personal", "apellidos", "Nuevo", "tipo_personal", "Capataz");

@@ -8,6 +8,7 @@ import java.util.HexFormat;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,18 +16,27 @@ import pe.edu.pucp.areasverdes.mod04.datos.Mod04Repository;
 import pe.edu.pucp.areasverdes.mod05.ApiError;
 import pe.edu.pucp.areasverdes.mod05.Usuario;
 
-/** Evita duplicar altas de campo cuando se reenvía la misma operación. */
+/**
+ * Evita duplicar altas de campo cuando se reenvía la misma operación. La clave dura lo bastante
+ * para la cola sin conexión de la PWA (RF-T-012, AV-226): un parte guardado sin red puede enviarse
+ * días después.
+ */
 @Service
 public class IdempotenciaCampo {
     private final Mod04Repository repo;
     private final OperacionCampoService acceso;
     private final ObjectMapper json;
+    private final int diasValidez;
 
     public IdempotenciaCampo(
-            Mod04Repository repo, OperacionCampoService acceso, ObjectMapper json) {
+            Mod04Repository repo,
+            OperacionCampoService acceso,
+            ObjectMapper json,
+            @Value("${mod04.idempotencia.dias:30}") int diasValidez) {
         this.repo = repo;
         this.acceso = acceso;
         this.json = json;
+        this.diasValidez = diasValidez;
     }
 
     @Scheduled(cron = "0 30 2 * * *", zone = "America/Lima")
@@ -84,10 +94,12 @@ public class IdempotenciaCampo {
             var respuesta = alta.get();
             var guardar = new java.util.HashMap<>(parametros);
             guardar.put("respuesta", json.writeValueAsString(respuesta));
+            guardar.put("dias", diasValidez);
             repo.jdbc()
                     .update(
-                            "INSERT INTO mod04_idempotencia(usuario_id,clave,hash,respuesta) VALUES"
-                                    + " (:usuario,:clave,:hash,cast(:respuesta AS jsonb))",
+                            "INSERT INTO mod04_idempotencia(usuario_id,clave,hash,respuesta,caduca)"
+                                    + " VALUES (:usuario,:clave,:hash,cast(:respuesta AS jsonb),"
+                                    + " now()+make_interval(days=>:dias))",
                             guardar);
             return respuesta;
         } catch (ApiError e) {
