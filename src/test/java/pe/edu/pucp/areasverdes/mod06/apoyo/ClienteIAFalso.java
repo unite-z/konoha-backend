@@ -9,8 +9,8 @@ import pe.edu.pucp.areasverdes.mod06.ia.ClienteGemini;
 import pe.edu.pucp.areasverdes.mod06.ia.ClienteIA;
 
 /**
- * Doble del cliente de IA ({@code ClienteIAFalso} de {@code conftest.py}): {@code propuesta} fija o {@code error}
- * para simular un fallo. <b>Ninguna prueba llama a Gemini.</b>
+ * Doble del cliente de IA ({@code ClienteIAFalso} de {@code conftest.py}): {@code propuesta} fija o
+ * {@code error} para simular un fallo. <b>Ninguna prueba llama a Gemini.</b>
  */
 public class ClienteIAFalso implements ClienteIA {
 
@@ -47,8 +47,20 @@ public class ClienteIAFalso implements ClienteIA {
     }
 
     @Override
-    public Map<String, Object> extraerJson(byte[] pdf, Map<String, Object> esquema, String instruccion) {
+    public Map<String, Object> extraerJson(
+            byte[] pdf, Map<String, Object> esquema, String instruccion) {
         llamadas.add(new Llamada(pdf, esquema, instruccion));
+        if (error != null) throw error;
+        return Py.copia(propuesta);
+    }
+
+    /** Llamadas de las funciones de IA de S12: datos enviados, imágenes y esquema. */
+    public final List<Object[]> generaciones = new ArrayList<>();
+
+    @Override
+    public Map<String, Object> generarJson(
+            String datos, List<Imagen> imagenes, Map<String, Object> esquema, String instruccion) {
+        generaciones.add(new Object[] {datos, imagenes, esquema, instruccion});
         if (error != null) throw error;
         return Py.copia(propuesta);
     }
