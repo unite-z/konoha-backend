@@ -334,7 +334,10 @@ public final class Serializadores {
                     .campo("usuario_creacion_id", entero().nulo())
                     .campo("usuario_creacion_nombre", texto().nulo())
                     .campo("fecha_modificacion", fechaHora().nulo())
-                    .campo("usuario_modificacion_id", entero().nulo());
+                    .campo("usuario_modificacion_id", entero().nulo())
+                    // AV-355: atención e informe de MOD-05 de la propuesta (null si no se leyeron).
+                    .campo("atencion", talCual().nulo())
+                    .campo("informe", talCual().nulo());
 
     /** Métricas de la función de IA. */
     public static final Serializador METRICAS_IA =
