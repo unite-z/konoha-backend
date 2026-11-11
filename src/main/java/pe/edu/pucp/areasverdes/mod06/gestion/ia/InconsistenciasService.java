@@ -30,7 +30,7 @@ public class InconsistenciasService {
     static final List<String> TIPOS_HALLAZGO =
             List.of("Duplicado", "ValorAtipico", "CamposIncompatibles", "NombreNoNormalizado");
     static final int MAXIMO_HALLAZGOS = 30;
-    static final String RUTA_INSTRUCCION = "prompts/inconsistencias_datos.md";
+    static final String RUTA_INSTRUCCION = "prompts/inconsistencias-datos.md";
 
     private static final Map<String, Object> ESQUEMA =
             PriorizacionesService.esquema(

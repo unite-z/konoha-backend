@@ -34,7 +34,7 @@ public class PriorizacionesService {
 
     public static final String TIPO = "Priorizacion";
     static final int MAXIMO_ELEMENTOS = 40;
-    static final String RUTA_INSTRUCCION = "prompts/priorizacion_atenciones.md";
+    static final String RUTA_INSTRUCCION = "prompts/priorizacion-atenciones.md";
     static final List<String> PRIORIDADES = List.of("Alta", "Media", "Baja");
     static final List<Integer> HORIZONTES = List.of(7, 15, 30);
 
