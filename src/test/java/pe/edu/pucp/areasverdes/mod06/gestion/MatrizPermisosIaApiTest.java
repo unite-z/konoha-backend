@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 import java.util.ArrayList;
@@ -18,6 +19,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockPart;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
@@ -40,6 +42,9 @@ class MatrizPermisosIaApiTest extends ApiGestion {
     /** Fila: método, patrón registrado, URL de ejemplo, cuerpo y esperados por usuario. */
     record Fila(String metodo, String patron, String url, String cuerpo, List<Integer> esperados) {}
 
+    /** Marca de cuerpo multipart (solo la parte «datos», sin fotos). */
+    static final String MULTIPART = "multipart";
+
     static final List<Fila> MATRIZ = new ArrayList<>();
 
     /** Cuerpo de validar bien formado para todos los recursos: la prueba mide permiso y 404. */
@@ -50,6 +55,30 @@ class MatrizPermisosIaApiTest extends ApiGestion {
     static {
         recurso("priorizaciones", "{\"alcance\": \"Areas\", \"horizonte_dias\": 7}", true);
         recurso("inconsistencias", null, false);
+        // Evidencia: el alta es multipart; sin fotos, quien puede proponer recibe 400 antes de la
+        // IA.
+        recurso("evidencias-fitosanitarias", null, false);
+        MATRIZ.add(
+                new Fila(
+                        "POST",
+                        "/api/v1/ia/evidencias-fitosanitarias",
+                        "/api/v1/ia/evidencias-fitosanitarias/",
+                        MULTIPART,
+                        List.of(401, 400, 400, 400, 403, 401)));
+        MATRIZ.add(
+                new Fila(
+                        "POST",
+                        "/api/v1/ia/evidencias-fitosanitarias/manual",
+                        "/api/v1/ia/evidencias-fitosanitarias/manual/",
+                        "{\"ejemplar_id\": 999999, \"resultado\": \"NoConcluyente\"}",
+                        VALIDAR));
+        MATRIZ.add(
+                new Fila(
+                        "GET",
+                        "/api/v1/ia/evidencias-fitosanitarias/{id:[0-9]+}/fotografias/{archivo:[0-9]+}",
+                        "/api/v1/ia/evidencias-fitosanitarias/999999/fotografias/1/",
+                        null,
+                        DETALLE));
         // Sin Gemini, quien puede proponer recibe 503 (la IA se pide antes de leer).
         recurso("cronogramas", "{\"desde\": \"2026-11-01\", \"hasta\": \"2026-11-30\"}", true);
         // Clasificación y estimación: la incidencia o actividad 999999 no existe, así que quien
@@ -137,12 +166,16 @@ class MatrizPermisosIaApiTest extends ApiGestion {
     void cadaRolRecibeLoQueDiceLaMatriz(String endpoint, Fila fila, String usuario, int esperado)
             throws Exception {
         MockHttpServletRequestBuilder peticion =
-                fila.metodo().equals("POST")
-                        ? post(fila.url())
+                MULTIPART.equals(fila.cuerpo())
+                        ? multipart(fila.url())
+                                .part(new MockPart("datos", "{\"ejemplar_id\": 1}".getBytes()))
                                 .with(csrf())
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(fila.cuerpo())
-                        : get(fila.url());
+                        : fila.metodo().equals("POST")
+                                ? post(fila.url())
+                                        .with(csrf())
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(fila.cuerpo())
+                                : get(fila.url());
         if (!usuario.equals("anónimo")) peticion = peticion.cookie(sesion(usuario));
         int estado = http.perform(peticion).andReturn().getResponse().getStatus();
         assertEquals(esperado, estado, endpoint + " como " + usuario);
