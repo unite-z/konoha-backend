@@ -406,6 +406,64 @@ class Mod05IntegrationTest {
                                 jefe));
     }
 
+    JsonNode verificar(long id, String usuario, String medidas, boolean confirmado, int esperado)
+            throws Exception {
+        return cuerpo(
+                http.perform(
+                                post("/api/v1/tercerizados/atenciones/" + id + "/seguridad/")
+                                        .with(httpBasic(usuario, PASSWORD))
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(
+                                                json.writeValueAsBytes(
+                                                        values(
+                                                                "medidas",
+                                                                medidas,
+                                                                "confirmado",
+                                                                confirmado))))
+                        .andExpect(status().is(esperado)));
+    }
+
+    @Test
+    void seguridadPorRolConservaCorreccionesYPermiteCompletarElCiclo() throws Exception {
+        long normal = create().get("id").asLong();
+        verificar(normal, "jefe", "EPP", true, 409);
+        repo.update("tiposervicio", 1, values("es_riesgo", true));
+        long id = create().get("id").asLong();
+        http.perform(
+                        post("/api/v1/tercerizados/atenciones/" + id + "/seguridad/")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        json.writeValueAsBytes(
+                                                values("medidas", "EPP", "confirmado", true))))
+                .andExpect(status().isUnauthorized());
+        verificar(id, "practicante", "EPP", true, 403);
+        verificar(id, "sinrol", "EPP", true, 403);
+        verificar(id, "jefe", " ", true, 400);
+        verificar(id, "ingeniero", "Casco", false, 400);
+        verificar(id, "jefe", "Casco y guantes", true, 200);
+        verificar(id, "jefe", "Casco y guantes", true, 200);
+        assertEquals(1, count("verificacionseguridad"));
+        var corregida = verificar(id, "ingeniero", "Casco, guantes y delimitación", true, 200);
+        assertEquals(2, corregida.get("verificaciones_seguridad").size());
+        assertEquals(
+                "Casco y guantes", corregida.at("/verificaciones_seguridad/0/medidas").asText());
+        assertEquals(
+                "Nombre ingeniero",
+                corregida.at("/verificaciones_seguridad/1/usuario_nombre").asText());
+        service.orden(id, new Entradas.Orden("OC-R", null), jefe);
+        service.inicio(id, new Entradas.Inicio(OffsetDateTime.now().minusHours(1)), jefe);
+        verificar(id, "jefe", "Cambio tardío", true, 409);
+        service.fin(id, new Entradas.Fin(OffsetDateTime.now()), jefe);
+        enviar("jefe", id, informes(), "Informe", hoy(), pdf("informe.pdf", "A"))
+                .andExpect(status().isCreated());
+        decidir(id, "jefe", decision("Observada", "Corregir metrado"), 200);
+        enviar("ingeniero", id, informes(), "Metrado corregido", hoy(), pdf("informe.pdf", "B"))
+                .andExpect(status().isCreated());
+        var cerrada = decidir(id, "jefe", decision("Conforme", ""), 200);
+        assertEquals(Atencion.CONFORME, cerrada.get("estado").asText());
+        assertEquals(2, cerrada.get("verificaciones_seguridad").size());
+    }
+
     @Test
     void origenYAcuerdoNoCierranAtencion() throws Exception {
         long id = create().get("id").asLong();

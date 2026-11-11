@@ -36,8 +36,21 @@ public class Seguridad {
      * mantiene para las pruebas y el smoke test del despliegue. Sin credenciales responde 401.
      */
     @Bean
+    @org.springframework.core.annotation.Order(0)
+    SecurityFilterChain seguridadVersionada(
+            HttpSecurity http, ObjectMapper mapper, SesionCompartida sesion) throws Exception {
+        http.securityMatcher("/api/v1/tercerizados/**");
+        return configurar(http, mapper, sesion);
+    }
+
+    @Bean
     SecurityFilterChain security(HttpSecurity http, ObjectMapper mapper, SesionCompartida sesion)
             throws Exception {
+        return configurar(http, mapper, sesion);
+    }
+
+    private SecurityFilterChain configurar(
+            HttpSecurity http, ObjectMapper mapper, SesionCompartida sesion) throws Exception {
         http.csrf(
                         c ->
                                 c.csrfTokenRepository(SesionCompartida.tokensCsrf())
