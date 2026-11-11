@@ -160,11 +160,22 @@ public class ExtraccionReportesService {
     private final SelectorFuenteReportesProveedor selectorReportes;
     private final AlmacenSugerencias almacen;
     private final CatalogoFormatos formatos;
+    private final ContextoExtracciones contexto;
 
     /** Para pruebas unitarias: todas las operaciones reciben una {@code FuenteDatos} explícita. */
     public ExtraccionReportesService(
             SelectorFuenteDatos selector, FabricaClienteIA fabricaCliente, Clock reloj) {
-        this(selector, fabricaCliente, reloj, null, null, null);
+        this(selector, fabricaCliente, reloj, null, null, null, null);
+    }
+
+    public ExtraccionReportesService(
+            SelectorFuenteDatos selector,
+            FabricaClienteIA fabricaCliente,
+            Clock reloj,
+            SelectorFuenteReportesProveedor selectorReportes,
+            AlmacenSugerencias almacen,
+            CatalogoFormatos formatos) {
+        this(selector, fabricaCliente, reloj, selectorReportes, almacen, formatos, null);
     }
 
     @Autowired
@@ -174,13 +185,44 @@ public class ExtraccionReportesService {
             Clock reloj,
             SelectorFuenteReportesProveedor selectorReportes,
             AlmacenSugerencias almacen,
-            CatalogoFormatos formatos) {
+            CatalogoFormatos formatos,
+            ContextoExtracciones contexto) {
         this.selector = selector;
         this.fabricaCliente = fabricaCliente;
         this.reloj = reloj;
         this.selectorReportes = selectorReportes;
         this.almacen = almacen;
         this.formatos = formatos;
+        this.contexto = contexto;
+    }
+
+    /**
+     * AV-355: añade a cada propuesta su {@code atencion} y su {@code informe} de MOD-05, en una
+     * sola consulta. Solo con la base real (sin {@code FuenteDatos} explícita de prueba).
+     */
+    private List<Map<String, Object>> conContexto(
+            List<Map<String, Object>> sugerencias, FuenteDatos explicita) {
+        if (explicita != null || contexto == null || sugerencias.isEmpty()) return sugerencias;
+        Map<Long, Long> archivoPorReporte = new LinkedHashMap<>();
+        for (Map<String, Object> s : sugerencias) {
+            if (s.get("registro_id") instanceof Number r) {
+                archivoPorReporte.put(
+                        r.longValue(),
+                        s.get("archivo_id") instanceof Number a ? a.longValue() : -1L);
+            }
+        }
+        Map<Long, ContextoExtracciones.Contexto> porReporte =
+                contexto.porReporte(archivoPorReporte.keySet(), archivoPorReporte);
+        List<Map<String, Object>> r = new ArrayList<>();
+        for (Map<String, Object> s : sugerencias) {
+            Map<String, Object> copia = new LinkedHashMap<>(s);
+            ContextoExtracciones.Contexto c =
+                    s.get("registro_id") instanceof Number n ? porReporte.get(n.longValue()) : null;
+            copia.put("atencion", c == null ? null : c.atencion());
+            copia.put("informe", c == null ? null : c.informe());
+            r.add(copia);
+        }
+        return r;
     }
 
     private FuenteDatos fuente(FuenteDatos fuente) {
@@ -361,7 +403,10 @@ public class ExtraccionReportesService {
 
     /** Detalle de una sugerencia de extracción. {@code RecursoNoEncontrado} si no existe. */
     public Map<String, Object> obtener(Object sugerenciaId, FuenteDatos fuente) {
-        return delTipo(sugerencias(fuente).obtener(idSugerencia(sugerenciaId)));
+        return conContexto(
+                        List.of(delTipo(sugerencias(fuente).obtener(idSugerencia(sugerenciaId)))),
+                        fuente)
+                .get(0);
     }
 
     /**
@@ -395,12 +440,14 @@ public class ExtraccionReportesService {
             if (id < 0) return List.of();
             reporte = id;
         }
-        return sugerencias(fuente)
-                .listar(
-                        TIPO_EXTRACCION,
-                        estado == null ? null : Py.str(estado),
-                        reporte == null ? null : ENTIDAD_REPORTE,
-                        reporte);
+        return conContexto(
+                sugerencias(fuente)
+                        .listar(
+                                TIPO_EXTRACCION,
+                                estado == null ? null : Py.str(estado),
+                                reporte == null ? null : ENTIDAD_REPORTE,
+                                reporte),
+                fuente);
     }
 
     /**
