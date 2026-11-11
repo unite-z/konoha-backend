@@ -5,6 +5,7 @@ import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -17,8 +18,6 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.ResultActions;
-import pe.edu.pucp.areasverdes.mod06.gestion.datos.FuenteOperacionCampoNoDisponible;
-import pe.edu.pucp.areasverdes.mod06.gestion.datos.FuenteTiposUsoNoDisponible;
 import pe.edu.pucp.areasverdes.mod06.gestion.datos.FuenteUbicacionesNoDisponible;
 import pe.edu.pucp.areasverdes.mod06.gestion.servicios.MapaAtencionesService;
 
@@ -64,7 +63,7 @@ class MapaAtencionesApiTest extends ApiGestion {
                 .andExpect(jsonPath("$.mapa.features", hasSize(0)))
                 .andExpect(jsonPath("$.sin_coordenadas.length()").value(6))
                 .andExpect(jsonPath("$.sin_datos").value(false))
-                .andExpect(jsonPath("$.notas", hasItem(FuenteUbicacionesNoDisponible.MOTIVO)))
+                .andExpect(jsonPath("$.notas", not(hasItem(FuenteUbicacionesNoDisponible.MOTIVO))))
                 .andExpect(jsonPath("$.indicador.codigo").value("RF-REP-007"))
                 .andExpect(
                         jsonPath(
@@ -136,13 +135,15 @@ class MapaAtencionesApiTest extends ApiGestion {
                                 contains("AT-006", "AT-001", "AT-001")));
     }
 
+    /**
+     * Los espacios del escenario no tienen área equivalente en MOD-02: el filtro los deja fuera.
+     */
     @Test
-    void elTipoDeUsoTodaviaNoEstaDisponible() throws Exception {
+    void elTipoDeUsoSoloDejaEspaciosConAreaEnMod02() throws Exception {
         mapa("&tipo_uso_id=1")
-                .andExpect(jsonPath("$.sin_datos").value(true))
-                .andExpect(jsonPath("$.mensaje_sin_datos").value(FuenteTiposUsoNoDisponible.MOTIVO))
-                .andExpect(jsonPath("$.sin_coordenadas", hasSize(0)))
-                .andExpect(jsonPath("$.totales_por_tipo", hasSize(0)));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mapa.features", hasSize(0)))
+                .andExpect(jsonPath("$.sin_coordenadas", hasSize(0)));
     }
 
     @Test
@@ -151,7 +152,7 @@ class MapaAtencionesApiTest extends ApiGestion {
                 .andExpect(jsonPath("$.sin_datos").value(true))
                 .andExpect(
                         jsonPath("$.mensaje_sin_datos")
-                                .value(FuenteOperacionCampoNoDisponible.MOTIVO));
+                                .value(MapaAtencionesService.MENSAJE_SIN_DATOS));
     }
 
     @Test

@@ -10,6 +10,9 @@ import java.util.List;
 public final class Entradas {
     private Entradas() {}
 
+    public record VerificacionSeguridad(
+            @NotBlank @Size(max = 5000) String medidas, @AssertTrue boolean confirmado) {}
+
     public static final String ORIGEN = "Demanda|ProgramacionEstacional|SolicitudUnidad";
     public static final String CLASE_PROGRAMADA = "ProgramadaContrato";
     public static final String CLASE_EXTRAORDINARIA = "Extraordinaria";

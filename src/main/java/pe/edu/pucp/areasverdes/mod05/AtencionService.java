@@ -260,14 +260,60 @@ public class AtencionService {
     }
 
     @Transactional
+    public Map<String, Object> verificarSeguridad(
+            long id, Entradas.VerificacionSeguridad input, Usuario user) {
+        user.exigir(false);
+        if (!user.roles().contains(Usuario.JEFE) && !user.roles().contains("Ingeniero de campo"))
+            throw new ApiError(
+                    403, "SinPermiso", "Solo el jefe o el ingeniero pueden verificar la seguridad");
+        var antes = repo.lock("atenciontercerizada", id);
+        var a = Atencion.from(antes);
+        a.exigir(REQUERIMIENTO, OC);
+        if (!a.esRiesgo()) throw ApiError.conflict("La atención no está marcada como de riesgo");
+        var ultimas =
+                repo.rows(
+                        "SELECT medidas FROM mod05_verificacionseguridad WHERE atencion_id=:id"
+                                + " ORDER BY id DESC LIMIT 1",
+                        Map.of("id", id));
+        String medidas = input.medidas().strip();
+        if (!ultimas.isEmpty() && medidas.equals(ultimas.getFirst().get("medidas")))
+            return repo.atencion(id);
+        long verificacion =
+                repo.insert(
+                        "verificacionseguridad",
+                        values(
+                                "atencion_id",
+                                id,
+                                "medidas",
+                                medidas,
+                                "usuario_id",
+                                user.id(),
+                                "fecha_creacion",
+                                now()));
+        repo.audit(
+                "AtencionTercerizada",
+                id,
+                "Modificacion",
+                user,
+                antes,
+                repo.get("verificacionseguridad", verificacion),
+                "Verificación de seguridad");
+        return repo.atencion(id);
+    }
+
+    @Transactional
     public Map<String, Object> inicio(long id, Entradas.Inicio input, Usuario user) {
         user.exigir(false);
         var antes = repo.lock("atenciontercerizada", id);
         var a = Atencion.from(antes);
         a.exigir(OC);
-        if (a.esRiesgo())
+        if (a.esRiesgo()
+                && repo.rows(
+                                "SELECT id FROM mod05_verificacionseguridad WHERE atencion_id=:id",
+                                Map.of("id", id))
+                        .isEmpty())
             throw ApiError.conflict(
-                    "Atención de riesgo: falta integrar la validación de seguridad; no se permite"
+                    "Atención de riesgo: registra la verificación de seguridad antes de"
                             + " iniciar");
         return guardar(
                 id,

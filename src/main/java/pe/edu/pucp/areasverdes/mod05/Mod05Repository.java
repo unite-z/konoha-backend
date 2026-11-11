@@ -222,6 +222,14 @@ public class Mod05Repository {
                         WHERE c.atencion_id=:id ORDER BY c.fecha_creacion,c.id
                         """,
                         Map.of("id", id)));
+        a.put(
+                "verificaciones_seguridad",
+                rows(
+                        "SELECT v.id,v.medidas,v.usuario_id,u.nombre"
+                            + " usuario_nombre,v.fecha_creacion FROM mod05_verificacionseguridad v"
+                            + " JOIN mod05_usuario u ON u.id=v.usuario_id WHERE v.atencion_id=:id"
+                            + " ORDER BY v.id",
+                        Map.of("id", id)));
         return a;
     }
 
