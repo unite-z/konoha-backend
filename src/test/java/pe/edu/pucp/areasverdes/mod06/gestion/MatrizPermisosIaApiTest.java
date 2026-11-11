@@ -44,7 +44,8 @@ class MatrizPermisosIaApiTest extends ApiGestion {
 
     /** Cuerpo de validar bien formado para todos los recursos: la prueba mide permiso y 404. */
     static final String CUERPO_VALIDAR =
-            "{\"por_elemento\": {}, \"por_campo\": {}, \"acciones\": {}, \"confirmado\": {}}";
+            "{\"por_elemento\": {}, \"por_propuesta\": {}, \"por_campo\": {}, \"acciones\": {},"
+                    + " \"confirmado\": {}}";
 
     static {
         recurso("priorizaciones", "{\"alcance\": \"Areas\", \"horizonte_dias\": 7}", true);
