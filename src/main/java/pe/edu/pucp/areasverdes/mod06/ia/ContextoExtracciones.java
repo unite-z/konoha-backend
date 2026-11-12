@@ -15,7 +15,7 @@ import org.springframework.stereotype.Repository;
  *
  * <p>Forma: {@code atencion = {id, codigo, estado, tipo_servicio_id, tipo_servicio, proveedor}} e
  * {@code informe = {id, revision, fecha_recepcion, resumen, documento}}, con {@code documento =
- * {archivo_id, nombre, categoria}} o {@code null}: el archivo que analizó la IA.
+ * {id, archivo_id, nombre, categoria}} o {@code null}: el archivo que analizó la IA.
  */
 @Repository
 public class ContextoExtracciones {
@@ -70,7 +70,7 @@ public class ContextoExtracciones {
         if (!archivoPorReporte.isEmpty()) {
             jdbc.query(
                     """
-                    SELECT x.reporte_id, x.archivo_id, f.nombre_original AS nombre, x.categoria
+                    SELECT x.id, x.reporte_id, x.archivo_id, f.nombre_original AS nombre, x.categoria
                     FROM mod05_archivoasociado x JOIN mod05_archivo f ON f.id = x.archivo_id
                     WHERE x.reporte_id IN (:ids)
                     """,
@@ -83,6 +83,8 @@ public class ContextoExtracciones {
                                 || !Long.valueOf(archivo).equals(archivoPorReporte.get(reporte)))
                             return;
                         Map<String, Object> documento = new LinkedHashMap<>();
+                        // id del documento asociado: es el que pide la descarga de MOD-05.
+                        documento.put("id", rs.getLong("id"));
                         documento.put("archivo_id", archivo);
                         documento.put("nombre", rs.getString("nombre"));
                         documento.put("categoria", rs.getString("categoria"));

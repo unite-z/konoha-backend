@@ -33,6 +33,7 @@ class ContextoExtraccionesApiTest extends ApiGestion {
         assertEquals("2026-10-06", r.informe().get("fecha_recepcion"));
         Map<?, ?> documento = (Map<?, ?>) r.informe().get("documento");
         assertEquals("informe.pdf", documento.get("nombre"));
+        assertEquals(1L, documento.get("id"));
         assertEquals("InformeFinal", documento.get("categoria"));
     }
 
