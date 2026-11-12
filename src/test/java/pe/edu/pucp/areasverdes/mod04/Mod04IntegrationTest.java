@@ -919,6 +919,86 @@ class Mod04IntegrationTest {
     }
 
     @Test
+    void soloJefeCancelaUnEncargoAbiertoConMotivo() throws Exception {
+        long equipo = cuadrilla(c1, o1);
+        var creado = postJson("/encargos/", encargo(equipo, "Semanal", 7), "jefe", 201);
+        long id = creado.path("id").asLong();
+        String ruta = "/encargos/" + id + "/estado/";
+        var cancelar = values("estado_anterior", "Por completar", "estado", "Cancelado");
+        postJson(ruta, cancelar, "jefe", 400);
+        cancelar.put("observaciones", "Cierre temporal del espacio");
+        postJson(ruta, cancelar, "capataz1", 403);
+        var cancelado = postJson(ruta, cancelar, "jefe", 200);
+        assertEquals("Cancelado", cancelado.path("estado").asText());
+        var cambio = cancelado.path("historial_estados").get(0);
+        assertEquals("Cierre temporal del espacio", cambio.path("observaciones").asText());
+        assertTrue(cambio.hasNonNull("usuario_id"));
+        assertTrue(cambio.hasNonNull("fecha"));
+        postJson(
+                ruta,
+                values("estado_anterior", "Cancelado", "estado", "En curso"),
+                "capataz1",
+                409);
+        postJson(ruta, cancelar, "jefe", 409);
+    }
+
+    @Test
+    void encargoDirectoConservaHistorialYRestringeCambiosAlCapatazResponsable() throws Exception {
+        long equipo = cuadrilla(c1, o1);
+        var directo =
+                values(
+                        "cuadrilla_id",
+                        equipo,
+                        "tipo_actividad_id",
+                        tipo,
+                        "area_verde_id",
+                        area,
+                        "descripcion",
+                        "Encargo directo",
+                        "periodicidad",
+                        "Directo",
+                        "plazo_previsto",
+                        HOY.plusDays(20).toString());
+        var creado = postJson("/encargos/", directo, "jefe", 201);
+        assertEquals("Directo", creado.path("periodicidad").asText());
+        assertTrue(creado.path("fecha_reunion").isNull());
+        assertEquals("Por completar", creado.path("estado").asText());
+        var ruta = "/encargos/" + creado.path("id").asLong() + "/estado/";
+        postJson(
+                ruta,
+                values("estado_anterior", "Por completar", "estado", "Completado"),
+                "capataz1",
+                409);
+        var iniciar = values("estado_anterior", "Por completar", "estado", "En curso");
+        postJson(ruta, iniciar, "capataz2", 403);
+        postJson(ruta, iniciar, "jefe", 403);
+        postJson(ruta, iniciar, "capataz1", 200);
+        postJson(ruta, iniciar, "capataz1", 409);
+        var observar = values("estado_anterior", "En curso", "estado", "Observado");
+        postJson(ruta, observar, "capataz1", 400);
+        observar.put("observaciones", "Falta material");
+        postJson(ruta, observar, "capataz1", 200);
+        postJson(
+                ruta,
+                values("estado_anterior", "Observado", "estado", "En curso"),
+                "capataz1",
+                200);
+        var cerrado =
+                postJson(
+                        ruta,
+                        values("estado_anterior", "En curso", "estado", "Completado"),
+                        "capataz1",
+                        200);
+        assertEquals("Completado", cerrado.path("estado").asText());
+        putJson("/encargos/" + creado.path("id").asLong(), directo, "jefe", 409);
+        var historial = cerrado.path("historial_estados");
+        assertEquals(4, historial.size());
+        assertEquals("Falta material", historial.get(2).path("observaciones").asText());
+        assertTrue(historial.get(2).hasNonNull("usuario_id"));
+        assertTrue(historial.get(2).hasNonNull("fecha"));
+    }
+
+    @Test
     void cadaCapatazSoloConsultaSusEncargosConPlazo() throws Exception {
         long propia = cuadrilla(c1, o1), ajena = cuadrilla(c2, o2);
         long idPropio =
@@ -938,7 +1018,7 @@ class Mod04IntegrationTest {
                 .andExpect(status().isForbidden());
         postJson("/encargos", encargo(propia, "Semanal", 7), "capataz1", 403);
         assertTrue(repo.encargo(idPropio).containsKey("estado"));
-        assertEquals(null, repo.encargo(idPropio).get("estado"));
+        assertEquals("Por completar", repo.encargo(idPropio).get("estado"));
     }
 
     String hashDemo() {
@@ -1260,6 +1340,13 @@ class Mod04IntegrationTest {
                                 false,
                                 true),
                         new Fila(
+                                "cambiarEstadoEncargo",
+                                "POST",
+                                "/encargos/" + enc + "/estado",
+                                values("estado_anterior", "Por completar", "estado", "En curso"),
+                                false,
+                                true),
+                        new Fila(
                                 "guardarParticipantes",
                                 "PUT",
                                 "/actividades/" + act + "/participantes",
@@ -1297,6 +1384,8 @@ class Mod04IntegrationTest {
                 boolean permitido =
                         !usuario.equals("sinrol")
                                 && (!fila.jefe() || usuario.equals("jefe"))
+                                && (!fila.nombre().equals("cambiarEstadoEncargo")
+                                        || usuario.equals("capataz1"))
                                 && (!fila.campo()
                                         || usuario.equals("jefe")
                                         || usuario.equals("capataz1"));

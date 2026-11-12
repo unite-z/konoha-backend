@@ -62,6 +62,7 @@ public class Mod04Repository {
                     "clase_actividad",
                     "material_actividad",
                     "encargo",
+                    "encargo_cambio_estado",
                     "parte_diario",
                     "actividad",
                     "participacion_actividad" ->
@@ -147,12 +148,24 @@ public class Mod04Repository {
     public Map<String, Object> encargo(long id) {
         return one(
                 """
-                SELECT e.*,NULL::text estado,c.nombre cuadrilla_nombre,COALESCE(u.nombre,concat_ws(' ',p.nombres,p.apellidos)) capataz_nombre,
+                SELECT e.*,c.nombre cuadrilla_nombre,COALESCE(u.nombre,concat_ws(' ',p.nombres,p.apellidos)) capataz_nombre,
                     t.nombre tipo_actividad_nombre,a.nombre area_verde_nombre
                 FROM mod04_encargo e JOIN mod04_cuadrilla c ON c.id=e.cuadrilla_id
                 JOIN mod04_personal p ON p.id=e.capataz_id JOIN mod04_tipo_actividad t ON t.id=e.tipo_actividad_id
                 LEFT JOIN core_usuario u ON u.id=p.usuario_id
                 JOIN mod05_areaverde a ON a.id=e.area_verde_id WHERE e.id=:id
+                """,
+                Map.of("id", id));
+    }
+
+    public List<Map<String, Object>> historialEncargo(long id) {
+        return rows(
+                """
+                SELECT h.id,h.estado_anterior,h.estado_nuevo,h.observaciones,h.fecha,
+                    h.usuario_id,u.nombre autor
+                FROM mod04_encargo_cambio_estado h
+                JOIN core_usuario u ON u.id=h.usuario_id
+                WHERE h.encargo_id=:id ORDER BY h.id DESC
                 """,
                 Map.of("id", id));
     }
