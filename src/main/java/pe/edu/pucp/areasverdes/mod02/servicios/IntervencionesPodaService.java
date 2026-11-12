@@ -45,11 +45,15 @@ public class IntervencionesPodaService {
                 t.nombre tipo_intervencion_nombre, i.fecha_ejecucion, i.reduccion_copa_pct,
                 i.ramas_laterales_cortadas, i.cantidad_solicitada, i.cantidad_ejecutada,
                 i.unidad_medida_id, u.simbolo unidad_medida_simbolo, i.prioridad,
-                CASE WHEN %s THEN 'Verificada' ELSE 'Incompleta' END estado
+                CASE WHEN %s THEN 'Verificada' WHEN i.fecha_ejecucion IS NULL THEN 'Solicitada'
+                    ELSE 'Incompleta' END estado,
+                i.motivo, i.altura_referencia_m, i.justificacion, at.codigo atencion_codigo,
+                at.estado atencion_estado
             FROM mod02_intervencion_arbolado i
             JOIN mod02_ejemplar e ON e.id = i.ejemplar_id
             LEFT JOIN mod02_tipo_intervencion t ON t.id = i.tipo_intervencion_id
             LEFT JOIN mod05_unidadmedida u ON u.id = i.unidad_medida_id
+            LEFT JOIN mod05_atenciontercerizada at ON at.id = i.atencion_id
             WHERE i.activo
             """
                     .formatted(TIENE_FOTO);
@@ -71,9 +75,19 @@ public class IntervencionesPodaService {
         Baja
     }
 
+    /** Solicitada: poda de altura a demanda aún sin fecha de ejecución (AV-312). */
     public enum EstadoIntervencion {
         Verificada,
-        Incompleta
+        Incompleta,
+        Solicitada
+    }
+
+    /** Motivo de la poda de altura a demanda (RF-POD-005). */
+    public enum MotivoPodaAltura {
+        Riesgo,
+        Obstruccion,
+        PlantaMuerta,
+        Reduccion
     }
 
     public record NuevaIntervencion(
@@ -129,7 +143,12 @@ public class IntervencionesPodaService {
             Long unidadMedidaId,
             String unidadMedidaSimbolo,
             Prioridad prioridad,
-            EstadoIntervencion estado) {}
+            EstadoIntervencion estado,
+            MotivoPodaAltura motivo,
+            @JsonFormat(shape = JsonFormat.Shape.STRING) BigDecimal alturaReferenciaM,
+            String justificacion,
+            String atencionCodigo,
+            String atencionEstado) {}
 
     public record OpcionCatalogo(long id, String nombre) {}
 
@@ -365,7 +384,7 @@ public class IntervencionesPodaService {
                 usuario.id());
     }
 
-    private Intervencion buscar(long id) {
+    Intervencion buscar(long id) {
         return jdbc
                 .query(
                         CONSULTA + " AND i.id = :id",
@@ -455,7 +474,7 @@ public class IntervencionesPodaService {
     }
 
     private void validarFechaNoFutura(LocalDate fecha) {
-        if (fecha.isAfter(LocalDate.now(reloj.withZone(LIMA)))) {
+        if (fecha != null && fecha.isAfter(LocalDate.now(reloj.withZone(LIMA)))) {
             throw new ErrorCoberturas(
                     400, "fecha-futura", "La fecha de ejecución no puede ser futura");
         }
@@ -498,7 +517,7 @@ public class IntervencionesPodaService {
         }
     }
 
-    private void validarIncidencia(Long incidenciaId, long ejemplarId) {
+    void validarIncidencia(Long incidenciaId, long ejemplarId) {
         if (incidenciaId == null) {
             return;
         }
@@ -530,7 +549,7 @@ public class IntervencionesPodaService {
         return prioridad == null ? null : prioridad.name();
     }
 
-    private static Map<String, Object> valores(Intervencion i) {
+    static Map<String, Object> valores(Intervencion i) {
         Map<String, Object> valores = new LinkedHashMap<>();
         valores.put("ejemplar_id", i.ejemplarId());
         valores.put("campana_id", i.campanaId());
@@ -544,6 +563,9 @@ public class IntervencionesPodaService {
         valores.put("cantidad_ejecutada", i.cantidadEjecutada());
         valores.put("unidad_medida_id", i.unidadMedidaId());
         valores.put("prioridad", nombre(i.prioridad()));
+        valores.put("motivo", i.motivo() == null ? null : i.motivo().name());
+        valores.put("altura_referencia_m", i.alturaReferenciaM());
+        valores.put("justificacion", i.justificacion());
         return valores;
     }
 }
