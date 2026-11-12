@@ -38,6 +38,12 @@ Cada endpoint tiene una fila en la matriz con el resultado esperado por rol: an�
 - Otra prueba ejecuta cada combinación de rol y endpoint y compara el código HTTP con el esperado.
 - La matriz vive en un único fichero de prueba por módulo, legible como tabla, para que quien revise el PR vea el cambio de permisos de un vistazo.
 
+`comun/ContratoRutasApiTest` aplica el contrato de rutas a todos los endpoints de Spring y falla indicando método, ruta y motivo si alguno:
+
+- no cuelga de `/api/v1/<modulo>/` (excepciones explícitas: `/api/tercerizados/**` y `/api/health`, anteriores al contrato);
+- no lleva `@Operation` (los handlers `@Hidden` no cuentan);
+- no figura en la matriz de su módulo. Cada matriz expone `endpointsCubiertos()` y se registra en esa prueba. `SIN_MATRIZ_AUN` lista los controladores con filas pendientes: es deuda, no admite controladores nuevos y la prueba exige quitar el que ya esté completo.
+
 Además, `comun/PermisosGlobalesApiTest` llama sin credenciales a todos los endpoints de todos los módulos y exige 401 o 403. Falla indicando método y ruta si alguno responde otra cosa. Las excepciones van en la lista `PUBLICOS` de esa prueba, cada una con su motivo.
 
 ## IA

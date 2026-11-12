@@ -10,11 +10,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import jakarta.servlet.http.Cookie;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockServletContext;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import pe.edu.pucp.areasverdes.mod01.config.SeguridadMod01;
 
@@ -22,7 +25,7 @@ import pe.edu.pucp.areasverdes.mod01.config.SeguridadMod01;
  * Matriz de permisos de MOD-03 con la sesión de MOD-01 (AV-252): los cuatro roles consultan y solo
  * el jefe escribe. Las escrituras llevan cuerpos válidos para que el 403 sea por permiso.
  */
-class MatrizPermisosApiTest extends ApiPlanificacion {
+public class MatrizPermisosApiTest extends ApiPlanificacion {
 
     static final String DOMINIO = "@mod03.prueba.pucp.edu.pe";
     static final String RUTA = "/api/v1/planificacion/";
@@ -114,6 +117,19 @@ class MatrizPermisosApiTest extends ApiPlanificacion {
                 post(RUTA + "alertas/1/motivo/")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"motivo\": \"Lluvia\"}"));
+    }
+
+    /** Endpoints de la matriz («MÉTODO url»), para la prueba global de contrato de rutas. */
+    public static List<String> endpointsCubiertos() {
+        List<String> cubiertos = new ArrayList<>();
+        CONSULTAS.forEach(c -> cubiertos.add("GET " + RUTA + c));
+        escrituras()
+                .forEach(
+                        e -> {
+                            MockHttpServletRequest r = e.buildRequest(new MockServletContext());
+                            cubiertos.add(r.getMethod() + " " + r.getRequestURI());
+                        });
+        return cubiertos;
     }
 
     @Test
