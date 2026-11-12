@@ -133,7 +133,8 @@ public class ConsultasCampoService {
                                         };
                                 case "date" -> date(raw);
                                 case "tipo" -> option(raw, List.of("Capataz", "Operario"));
-                                case "periodo" -> option(raw, List.of("Semanal", "Quincenal"));
+                                case "periodo" ->
+                                        option(raw, List.of("Semanal", "Quincenal", "Directo"));
                                 default -> throw new IllegalStateException();
                             };
                     where.append(" AND ").append(field).append("=:").append(field);

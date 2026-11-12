@@ -42,11 +42,16 @@ public final class Entradas {
             @NotNull @Positive Long tipoActividadId,
             @NotNull @Positive Long areaVerdeId,
             @NotBlank @Size(max = 1000) String descripcion,
-            @NotBlank @Pattern(regexp = "Semanal|Quincenal") String periodicidad,
-            @NotNull LocalDate fechaReunion,
-            @NotNull LocalDate fechaInicio,
-            @NotNull LocalDate fechaFin,
+            @NotBlank @Pattern(regexp = "Semanal|Quincenal|Directo") String periodicidad,
+            LocalDate fechaReunion,
+            LocalDate fechaInicio,
+            LocalDate fechaFin,
             @NotNull LocalDate plazoPrevisto) {}
+
+    public record CambioEstadoEncargo(
+            @NotBlank String estadoAnterior,
+            @NotBlank String estado,
+            @Size(max = 1000) String observaciones) {}
 
     public record Participantes(
             @NotNull @Size(max = 200) List<@NotNull @Positive Long> operarios) {}

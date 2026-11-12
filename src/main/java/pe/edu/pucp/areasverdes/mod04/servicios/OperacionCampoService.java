@@ -52,6 +52,9 @@ public class OperacionCampoService implements ConsultaCampo {
 
     public static final String ANULAR_PARTE = "CAM.PARTE.ANULAR";
 
+    /** Avanzar el estado de los encargos propios (capataz responsable). */
+    public static final String ACTUALIZAR_ESTADO_ENCARGO = "PLA.ENCARGO.ACTUALIZAR_ESTADO";
+
     public static boolean jefe(Usuario user) {
         return user != null && user.puede(GESTIONAR);
     }
@@ -107,7 +110,8 @@ public class OperacionCampoService implements ConsultaCampo {
                         """
                         SELECT e.id,e.descripcion FROM mod04_encargo e
                         JOIN mod04_personal p ON p.id=e.capataz_id
-                        WHERE p.usuario_id=:usuario AND e.fecha_fin>=:hoy ORDER BY e.id
+                        WHERE p.usuario_id=:usuario AND e.fecha_fin>=:hoy
+                            AND e.estado NOT IN ('Completado','Cancelado') ORDER BY e.id
                         """,
                         Map.of("usuario", usuarioId, "hoy", LocalDate.now(clock)),
                         (fila, indice) ->
@@ -324,16 +328,6 @@ public class OperacionCampoService implements ConsultaCampo {
     @Transactional
     public Map<String, Object> guardarEncargo(Long id, Entradas.Encargo body, Usuario user) {
         exigirJefe(user);
-        long days = ChronoUnit.DAYS.between(body.fechaInicio(), body.fechaFin()) + 1;
-        int max = body.periodicidad().equals("Semanal") ? 7 : 14;
-        if (days < 1 || days > max)
-            throw ApiError.invalid(
-                    "El periodo debe tener entre 1 y " + max + " días, incluidos inicio y fin");
-        if (body.plazoPrevisto().isBefore(body.fechaInicio())
-                || body.plazoPrevisto().isAfter(body.fechaFin()))
-            throw ApiError.invalid("El plazo debe estar dentro del periodo de planificación");
-        if (body.fechaReunion().isAfter(body.fechaFin()))
-            throw ApiError.invalid("La reunión no puede ser posterior al periodo");
         var squad = repo.get("cuadrilla", body.cuadrillaId(), true);
         if (!Boolean.TRUE.equals(squad.get("activa")))
             throw ApiError.conflict("La cuadrilla está inactiva");
@@ -342,10 +336,41 @@ public class OperacionCampoService implements ConsultaCampo {
         Map<String, Object> before = Map.of();
         if (id != null) {
             before = repo.get("encargo", id, true);
+            if ("Cancelado".equals(before.get("estado")))
+                throw ApiError.conflict("No se puede redefinir un encargo cancelado");
+            if ("Completado".equals(before.get("estado")))
+                throw ApiError.conflict("No se puede redefinir un encargo completado");
             if (!repo.rows("SELECT id FROM mod04_actividad WHERE encargo_id=:id", Map.of("id", id))
                     .isEmpty())
                 throw ApiError.conflict(
                         "El encargo ya tiene ejecución registrada y no puede redefinirse");
+        }
+        boolean directo = "Directo".equals(body.periodicidad());
+        LocalDate inicio = body.fechaInicio();
+        LocalDate fin = body.fechaFin();
+        LocalDate reunion = body.fechaReunion();
+        if (directo) {
+            if (inicio != null || fin != null || reunion != null)
+                throw ApiError.invalid("El encargo directo solo requiere el plazo previsto");
+            inicio =
+                    "Directo".equals(before.get("periodicidad"))
+                            ? (LocalDate) before.get("fecha_inicio")
+                            : LocalDate.now(clock);
+            fin = body.plazoPrevisto();
+            if (fin.isBefore(inicio))
+                throw ApiError.invalid("El plazo no puede ser anterior al inicio del encargo");
+        } else {
+            if (inicio == null || fin == null || reunion == null)
+                throw ApiError.invalid("Indica la reunión y el periodo de planificación");
+            long days = ChronoUnit.DAYS.between(inicio, fin) + 1;
+            int max = body.periodicidad().equals("Semanal") ? 7 : 14;
+            if (days < 1 || days > max)
+                throw ApiError.invalid(
+                        "El periodo debe tener entre 1 y " + max + " días, incluidos inicio y fin");
+            if (body.plazoPrevisto().isBefore(inicio) || body.plazoPrevisto().isAfter(fin))
+                throw ApiError.invalid("El plazo debe estar dentro del periodo de planificación");
+            if (reunion.isAfter(fin))
+                throw ApiError.invalid("La reunión no puede ser posterior al periodo");
         }
         var data =
                 values(
@@ -362,11 +387,11 @@ public class OperacionCampoService implements ConsultaCampo {
                         "periodicidad",
                         body.periodicidad(),
                         "fecha_reunion",
-                        body.fechaReunion(),
+                        reunion,
                         "fecha_inicio",
-                        body.fechaInicio(),
+                        inicio,
                         "fecha_fin",
-                        body.fechaFin(),
+                        fin,
                         "plazo_previsto",
                         body.plazoPrevisto(),
                         "fecha_modificacion",
@@ -388,9 +413,64 @@ public class OperacionCampoService implements ConsultaCampo {
         return result;
     }
 
+    @Transactional
+    public Map<String, Object> cambiarEstadoEncargo(
+            long id, Entradas.CambioEstadoEncargo body, Usuario user) {
+        exigirLectura(user);
+        boolean cancelar = "Cancelado".equals(body.estado());
+        if (cancelar ? !jefe(user) : !user.puede(ACTUALIZAR_ESTADO_ENCARGO)) throw forbidden();
+        var encargo = repo.get("encargo", id, true);
+        if (!cancelar && !Objects.equals(personalUsuario(user), number(encargo, "capataz_id")))
+            throw forbidden();
+        String anterior = (String) encargo.get("estado");
+        boolean permitida =
+                switch (anterior) {
+                    case "Por completar", "Observado" ->
+                            cancelar || "En curso".equals(body.estado());
+                    case "En curso" ->
+                            cancelar || Set.of("Completado", "Observado").contains(body.estado());
+                    default -> false;
+                };
+        if (!anterior.equals(body.estadoAnterior()) || !permitida)
+            throw ApiError.conflict("El cambio de estado no está permitido para este encargo");
+        String observaciones = Objects.toString(body.observaciones(), "").strip();
+        if (cancelar && observaciones.isEmpty())
+            throw ApiError.invalid("Indica el motivo de la cancelación");
+        if ("Observado".equals(body.estado()) && observaciones.isEmpty())
+            throw ApiError.invalid("Indica el motivo de la observación");
+        var fecha = OffsetDateTime.now(clock);
+        repo.update(
+                "encargo",
+                id,
+                values(
+                        "estado",
+                        body.estado(),
+                        "fecha_modificacion",
+                        fecha,
+                        "usuario_modificacion_id",
+                        user.id()));
+        repo.insert(
+                "encargo_cambio_estado",
+                values(
+                        "encargo_id",
+                        id,
+                        "estado_anterior",
+                        anterior,
+                        "estado_nuevo",
+                        body.estado(),
+                        "observaciones",
+                        observaciones,
+                        "usuario_id",
+                        user.id(),
+                        "fecha",
+                        fecha));
+        return encargo(id, user);
+    }
+
     public Map<String, Object> encargo(long id, Usuario user) {
         var result = repo.encargo(id);
         exigirCapataz(number(result, "capataz_id"), user, false);
+        result.put("historial_estados", repo.historialEncargo(id));
         return result;
     }
 
@@ -641,6 +721,8 @@ public class OperacionCampoService implements ConsultaCampo {
                         .isEmpty()) throw ApiError.invalid("La incidencia de origen no existe");
         if (body.encargoId() != null) {
             var task = repo.get("encargo", body.encargoId(), true);
+            if ("Cancelado".equals(task.get("estado")))
+                throw ApiError.conflict("No se puede registrar ejecución en un encargo cancelado");
             LocalDate day = (LocalDate) part.get("fecha");
             if (number(task, "cuadrilla_id") != number(part, "cuadrilla_id")
                     || number(task, "capataz_id") != number(part, "capataz_id")
