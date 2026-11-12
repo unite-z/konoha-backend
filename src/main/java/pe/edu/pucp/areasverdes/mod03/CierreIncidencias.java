@@ -23,22 +23,26 @@ public class CierreIncidencias {
     private final Incidencias incidencias;
     private final Avisos avisos;
     private final DerivacionTercerizada derivacion;
+    private final DerivacionInterna interna;
 
     public CierreIncidencias(
             NamedParameterJdbcTemplate jdbc,
             Incidencias incidencias,
             Avisos avisos,
-            DerivacionTercerizada derivacion) {
+            DerivacionTercerizada derivacion,
+            DerivacionInterna interna) {
         this.jdbc = jdbc;
         this.incidencias = incidencias;
         this.avisos = avisos;
         this.derivacion = derivacion;
+        this.interna = interna;
     }
 
     @Transactional
     public void cerrar(long id, Revision r, UsuarioPlanificacion usuario) {
         Acceso.gestionarIncidencias(usuario);
         derivacion.sincronizar();
+        interna.sincronizar();
         exigirAtendida(id, "cerrar");
         // Derivada a un proveedor, el informe adjunto en MOD-05 es la evidencia (AV-278).
         if (incidencias.evidencias(id).isEmpty() && !derivacion.conInforme(id)) {

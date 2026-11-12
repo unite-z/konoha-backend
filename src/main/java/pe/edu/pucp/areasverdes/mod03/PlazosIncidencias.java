@@ -2,8 +2,10 @@ package pe.edu.pucp.areasverdes.mod03;
 
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,8 +22,15 @@ public class PlazosIncidencias {
 
     public record Reasignacion(@NotNull(message = "Indica el capataz") Long capatazId) {}
 
-    /** Capataz activo de MOD-04 con su cuadrilla. La carga del día llega con AV-277. */
-    public record Capataz(long id, String nombre, String cuadrilla) {}
+    /**
+     * Encargos abiertos de la cuadrilla que cubren el día ({@code asignados}) frente a sus
+     * operarios asignados ese día ({@code capacidad}, al menos 1): libre si hay menos encargos que
+     * operarios (CU-022 3a, AV-277).
+     */
+    public record Carga(int asignados, int capacidad) {}
+
+    /** Capataz activo de MOD-04 con su cuadrilla y, si se pide un día, su carga. */
+    public record Capataz(long id, String nombre, String cuadrilla, Carga carga) {}
 
     private final NamedParameterJdbcTemplate jdbc;
     private final Avisos avisos;
@@ -46,20 +55,39 @@ public class PlazosIncidencias {
     }
 
     public List<Capataz> capataces(long id, UsuarioPlanificacion usuario) {
+        return capataces(id, null, usuario);
+    }
+
+    public List<Capataz> capataces(long id, LocalDate fecha, UsuarioPlanificacion usuario) {
         Acceso.gestionarIncidencias(usuario);
         return jdbc.query(
                 """
                 SELECT p.id, p.nombres || ' ' || left(p.apellidos, 1) || '.' nombre,
-                    min(c.nombre) cuadrilla
+                    min(c.nombre) cuadrilla,
+                    (SELECT count(*) FROM mod04_encargo e
+                        WHERE e.cuadrilla_id = min(c.id)
+                            AND e.estado NOT IN ('Completado', 'Cancelado')
+                            AND CAST(:fecha AS date) BETWEEN e.fecha_inicio AND e.fecha_fin)
+                        asignados,
+                    (SELECT count(*) FROM mod04_asignacion_cuadrilla s
+                        WHERE s.cuadrilla_id = min(c.id) AND s.fecha_inicio <= CAST(:fecha AS date)
+                            AND (s.fecha_fin IS NULL OR s.fecha_fin > CAST(:fecha AS date)))
+                        operarios
                 FROM mod04_personal p JOIN mod04_cuadrilla c ON c.capataz_id = p.id AND c.activa
                 WHERE p.activo AND p.tipo_personal = 'Capataz'
                 GROUP BY p.id, p.nombres, p.apellidos ORDER BY nombre
                 """,
+                new MapSqlParameterSource().addValue("fecha", fecha),
                 (rs, n) ->
                         new Capataz(
                                 rs.getLong("id"),
                                 rs.getString("nombre"),
-                                rs.getString("cuadrilla")));
+                                rs.getString("cuadrilla"),
+                                fecha == null
+                                        ? null
+                                        : new Carga(
+                                                rs.getInt("asignados"),
+                                                Math.max(1, rs.getInt("operarios")))));
     }
 
     @Transactional
