@@ -135,6 +135,7 @@ Los planes, notas y borradores de trabajo de personas y agentes van en `.notas/`
 | `docs/arranque-local.md` | Instalación paso a paso en macOS y Windows |
 | `docs/estandares/*.md` | Java, API, base de datos, pruebas y almacenamiento |
 | `docs/modulos/mod01.md` | Contrato de MOD-01: sesión, endpoints y códigos de permiso para los demás módulos |
+| `docs/modulos/mod03.md` | MOD-03: contrato, reglas y pruebas de la configuración de servicios periódicos (RF-PLA-001 y RF-PLA-002) |
 | `docs/modulos/mod05.md` | Documentación funcional de MOD-05 |
 | `mock-data/README.md` | Formato de los datos simulados |
 
