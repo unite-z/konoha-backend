@@ -32,7 +32,7 @@ import pe.edu.pucp.areasverdes.mod01.config.SeguridadMod01;
 /** Poda de altura a demanda vinculada al ejemplar (AV-312, HU-MOD02-024, RF-POD-005). */
 @SpringBootTest
 @AutoConfigureMockMvc
-class PodasAlturaApiTest {
+public class PodasAlturaApiTest {
 
     private static final String CLAVE = "prueba-integration-local";
     private static final String DOMINIO = "@altura.prueba.pucp.edu.pe";
@@ -56,6 +56,15 @@ class PodasAlturaApiTest {
     private long contrato;
     private long vencido;
     private Cookie jefe;
+
+    /**
+     * Matriz de permisos de {@code PodasAlturaController} para el contrato de rutas (AV-244): la
+     * cubre {@link #soloElJefeSolicitaYVeLosContratos()}, con los cuatro roles y sin sesión.
+     */
+    public static List<String> endpointsCubiertos() {
+        return List.of(
+                "POST " + RUTA, "GET " + RUTA + "contratos/", "GET " + RUTA + "ejemplares/1/");
+    }
 
     @BeforeEach
     void preparar() throws Exception {
@@ -243,6 +252,13 @@ class PodasAlturaApiTest {
                     .andExpect(status().isOk());
         }
         http.perform(get(RUTA + "contratos/")).andExpect(status().isUnauthorized());
+        http.perform(get(RUTA + "ejemplares/" + alto + "/")).andExpect(status().isUnauthorized());
+        http.perform(
+                        post(RUTA)
+                                .with(csrf())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(cuerpo(alto, "Riesgo", contrato, null)))
+                .andExpect(status().isUnauthorized());
     }
 
     private ResultActions solicitar(
