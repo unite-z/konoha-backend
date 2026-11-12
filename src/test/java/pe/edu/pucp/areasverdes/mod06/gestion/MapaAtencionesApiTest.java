@@ -175,6 +175,7 @@ class MapaAtencionesApiTest extends ApiGestion {
             SELECT 9701, 'Deshierbo 9701', id FROM mod04_clase_actividad WHERE nombre = 'Mantenimiento de jardines'
             UNION ALL
             SELECT 9702, 'Riego 9702', id FROM mod04_clase_actividad WHERE nombre = 'Riego'
+            ON CONFLICT (id) DO NOTHING
             """,
             """
             INSERT INTO mod04_actividad (id, parte_id, tipo_actividad_id, area_verde_id, fecha_hora_actividad,
