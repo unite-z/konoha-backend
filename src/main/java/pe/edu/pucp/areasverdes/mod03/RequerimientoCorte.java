@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -102,7 +103,8 @@ class RequerimientoCorte {
                                 usuario.nombre(),
                                 "",
                                 true,
-                                List.of(Usuario.JEFE)));
+                                List.of(Usuario.JEFE),
+                                Set.of(Usuario.GESTIONAR_ATENCION, Usuario.REGISTRAR_ATENCION)));
         jdbc.update(
                 "UPDATE mod03_programacion_servicio SET atencion_id = :atencion WHERE id = :id",
                 Map.of("atencion", atencion.get("id"), "id", programacion));

@@ -1,9 +1,7 @@
 package pe.edu.pucp.areasverdes.mod03;
 
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.MethodParameter;
@@ -59,16 +57,9 @@ class ResolutorUsuarioPlanificacion implements HandlerMethodArgumentResolver, We
         if (principal instanceof UsuarioPlanificacion u) {
             return u;
         }
+        // El principal de MOD-05 ya trae los permisos de MOD-01 (AV-382).
         if (principal instanceof Usuario m && m.activo()) {
-            Map<String, List<String>> porRol = roles.permisosPorRol();
-            Set<String> permisos = new HashSet<>();
-            for (String rol : m.roles()) {
-                String codigo = ROL_MOD01.get(rol);
-                if (codigo != null) {
-                    permisos.addAll(porRol.getOrDefault(codigo, List.of()));
-                }
-            }
-            return new UsuarioPlanificacion(m.id(), m.nombre(), permisos);
+            return new UsuarioPlanificacion(m.id(), m.nombre(), m.permisos());
         }
         return null;
     }

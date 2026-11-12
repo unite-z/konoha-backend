@@ -14,15 +14,21 @@ import org.springframework.stereotype.Repository;
 import pe.edu.pucp.areasverdes.mod06.gestion.RangoFechas;
 
 /**
- * Lecturas de MOD-05 (y de las especies de MOD-02) para RF-REP-008, en solo lectura y con SQL
- * parametrizado. Una atención es del periodo por su inicio o, si aún no empezó, por su fecha de
- * creación, en America/Lima (como el panel).
+ * Lecturas de MOD-05 (y de las especies de MOD-02 y las programaciones de MOD-03) para RF-REP-008,
+ * en solo lectura y con SQL parametrizado. Una atención es del periodo por su inicio o, si aún no
+ * empezó, por su fecha de creación, en America/Lima (como el panel).
  */
 @Repository
 public class ServiciosTercerizadosRepository {
 
     /**
      * Una atención del periodo con lo que el reporte necesita de su alcance, informe y decisión.
+     *
+     * @param metrado metrado previsto: la suma del alcance
+     * @param metradoReportado el campo «Metrado» de los datos del informe final (AV-320) en la
+     *     última revisión que lo declara, si es un número; {@code null} si el informe no lo trae
+     * @param finPrevisto fin previsto de la programación de MOD-03 que originó la atención; {@code
+     *     null} si la atención no viene de una programación (no tiene plazo)
      */
     public record AtencionServicio(
             long id,
@@ -35,7 +41,9 @@ public class ServiciosTercerizadosRepository {
             String espacio,
             String ejemplarCodigo,
             BigDecimal metrado,
+            BigDecimal metradoReportado,
             String unidad,
+            LocalDate finPrevisto,
             Integer ultimaRevision,
             Integer revisionDecidida,
             String resultadoDecidido,
@@ -102,6 +110,13 @@ public class ServiciosTercerizadosRepository {
                        (SELECT min(e.codigo) FROM mod05_alcanceatencion al
                           JOIN mod02_ejemplar e ON e.id = al.ejemplar_id WHERE al.atencion_id = a.id) AS ejemplar_codigo,
                        (SELECT sum(al.metrado) FROM mod05_alcanceatencion al WHERE al.atencion_id = a.id) AS metrado,
+                       (SELECT CASE WHEN d.valor ~ '^[0-9]+([.][0-9]+)?$' THEN d.valor::numeric END
+                          FROM mod05_reporteproveedor r
+                          CROSS JOIN LATERAL (SELECT btrim(e.value) AS valor FROM jsonb_each_text(r.datos_formato) e
+                                              WHERE lower(btrim(e.key)) = 'metrado' LIMIT 1) d
+                          WHERE r.atencion_id = a.id ORDER BY r.revision DESC LIMIT 1) AS metrado_reportado,
+                       (SELECT max(p.fecha_fin_prevista) FROM mod03_programacion_servicio p
+                          WHERE p.atencion_id = a.id AND p.estado <> 'Cancelada') AS fin_previsto,
                        (SELECT CASE WHEN count(DISTINCT u.simbolo) = 1 THEN min(u.simbolo) END
                           FROM mod05_alcanceatencion al JOIN mod05_unidadmedida u ON u.id = al.unidad_medida_id
                           WHERE al.atencion_id = a.id) AS unidad,

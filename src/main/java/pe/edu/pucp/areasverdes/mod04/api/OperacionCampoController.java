@@ -181,6 +181,15 @@ public class OperacionCampoController {
         return service.guardarEncargo(id, body, user);
     }
 
+    @PostMapping({"/encargos/{id}/estado", "/encargos/{id}/estado/"})
+    @Operation(summary = "Actualizar el estado de un encargo propio o cancelarlo como jefe")
+    public Map<String, Object> cambiarEstadoEncargo(
+            @PathVariable long id,
+            @Valid @RequestBody Entradas.CambioEstadoEncargo body,
+            @AuthenticationPrincipal Usuario user) {
+        return service.cambiarEstadoEncargo(id, body, user);
+    }
+
     @GetMapping({"/encargos/{id}", "/encargos/{id}/"})
     @Operation(summary = "Consultar encargo")
     public Map<String, Object> encargo(
@@ -246,8 +255,14 @@ public class OperacionCampoController {
     public Map<String, Object> crearMaterial(
             @PathVariable long id,
             @Valid @RequestBody Entradas.MaterialActividad body,
-            @AuthenticationPrincipal Usuario user) {
-        return materialesActividad.crear(id, body, user);
+            @AuthenticationPrincipal Usuario user,
+            @RequestHeader(value = "Idempotency-Key", required = false) UUID clave) {
+        return idempotencia.ejecutar(
+                clave,
+                user,
+                "crear-material:" + id,
+                body,
+                () -> materialesActividad.crear(id, body, user));
     }
 
     @GetMapping({

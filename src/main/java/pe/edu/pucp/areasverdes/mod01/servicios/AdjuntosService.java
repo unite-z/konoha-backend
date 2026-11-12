@@ -265,20 +265,14 @@ public class AdjuntosService {
 
     private void exigirConsulta(
             String entidad, long registroId, Destino destino, UsuarioSesion usuario) {
-        if ("actividad".equals(entidad)
-                && usuario != null
-                && UsuarioSesion.CAPATAZ.equals(usuario.rol())) {
-            autorizacion.exigir(usuario, destino.permisoRegistrar());
-            exigirActividadPropia(entidad, registroId, usuario);
-        } else {
-            autorizacion.exigir(usuario, destino.permisoConsultar());
-        }
+        autorizacion.exigir(usuario, destino.permisoConsultar());
+        exigirActividadPropia(entidad, registroId, usuario);
     }
 
     private void exigirActividadPropia(String entidad, long registroId, UsuarioSesion usuario) {
         if (!"actividad".equals(entidad)
                 || usuario == null
-                || !UsuarioSesion.CAPATAZ.equals(usuario.rol())) return;
+                || autorizacion.alcanceCuadrillas(usuario).isEmpty()) return;
         boolean propia =
                 Boolean.TRUE.equals(
                         jdbc.queryForObject(

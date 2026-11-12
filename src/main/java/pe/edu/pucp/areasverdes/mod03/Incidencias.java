@@ -34,6 +34,9 @@ public class Incidencias {
     static final Set<String> CANALES =
             Set.of("App", "Web", "Telefono", "WhatsApp", "Correo", "Presencial");
 
+    /** Margen para relojes del móvil algo adelantados al aceptar la hora original del reporte. */
+    static final Duration TOLERANCIA_RELOJ = Duration.ofMinutes(5);
+
     /** Quién la reporta: un usuario del sistema o una persona externa con nombre y contacto. */
     public record Reportante(
             Long usuarioId,
@@ -46,7 +49,23 @@ public class Incidencias {
             @NotNull(message = "Indica quién la reporta") @Valid Reportante reportadoPor,
             @NotBlank(message = "Indica el espacio") String espacio,
             String ejemplar,
-            @Size(max = 300, message = "Máximo 300 caracteres") String descripcion) {}
+            @Size(max = 300, message = "Máximo 300 caracteres") String descripcion,
+            OffsetDateTime reportadoEn) {
+
+        /**
+         * Sin la fecha original (antes de RF-T-012), igual que hasta ahora: se toma la del
+         * servidor.
+         */
+        public NuevaIncidencia(
+                String canal,
+                String tipo,
+                Reportante reportadoPor,
+                String espacio,
+                String ejemplar,
+                String descripcion) {
+            this(canal, tipo, reportadoPor, espacio, ejemplar, descripcion, null);
+        }
+    }
 
     /**
      * Fila de la bandeja y de «Mis incidencias». {@code responsable}: capataz o proveedor. {@code
@@ -209,15 +228,14 @@ public class Incidencias {
                         "SELECT nombre FROM mod03_tipo_incidencia WHERE activo ORDER BY id",
                         Map.of(),
                         String.class);
-        // Los ejemplares de MOD-02 aún apuntan al área de MOD-05: se cruzan por el nombre del área.
+        // Desde V67 cada ejemplar guarda su área de MOD-02 en area_verde_inventario_id (AV-274).
         List<Espacio> espacios =
                 jdbc.query(
                         """
                         SELECT a.nombre, coalesce(array_agg(e.codigo ORDER BY e.codigo)
                             FILTER (WHERE e.codigo IS NOT NULL), '{}') ejemplares
                         FROM mod02_area_verde a
-                        LEFT JOIN mod05_areaverde v ON v.nombre = a.nombre
-                        LEFT JOIN mod02_ejemplar e ON e.area_verde_inventario_id = v.id
+                        LEFT JOIN mod02_ejemplar e ON e.area_verde_inventario_id = a.id
                         WHERE a.activo GROUP BY a.id, a.nombre ORDER BY a.nombre
                         """,
                         (rs, n) ->
@@ -273,6 +291,12 @@ public class Incidencias {
             throw new ErrorPlanificacion(
                     400, "reportante-requerido", "Escribe el nombre de quien la reporta");
         }
+        // RF-T-012 (AV-226): un reporte guardado sin conexión conserva la hora en que se hizo.
+        if (nueva.reportadoEn() != null
+                && nueva.reportadoEn().isAfter(OffsetDateTime.now().plus(TOLERANCIA_RELOJ))) {
+            throw new ErrorPlanificacion(
+                    400, "fecha-futura", "La hora del reporte no puede ser posterior a la actual");
+        }
         if ("App".equals(nueva.canal()) && (foto == null || foto.isEmpty())) {
             throw new ErrorPlanificacion(400, "foto-obligatoria", "Añade una foto");
         }
@@ -293,17 +317,19 @@ public class Incidencias {
                                         ? r.contacto().trim()
                                         : null)
                         .addValue("usuario", usuario.id())
-                        .addValue("clave", clave);
+                        .addValue("clave", clave)
+                        .addValue("reportado", nueva.reportadoEn());
         long id =
                 jdbc.queryForObject(
                         """
                         INSERT INTO mod03_incidencia (codigo, tipo_incidencia_id, area_verde_id,
                             ejemplar_id, descripcion, canal, reportante_usuario_id, reportante_nombre,
-                            reportante_contacto, registrada_por_id, clave_idempotencia)
+                            reportante_contacto, registrada_por_id, clave_idempotencia, fecha_registro)
                         VALUES ('INC-' || to_char(now() AT TIME ZONE 'America/Lima', 'YYYY') || '-'
                                 || lpad(nextval('mod03_incidencia_numero_seq')::text, 3, '0'),
                             :tipo, :area, :ejemplar, :descripcion, :canal, :reportante, :nombre,
-                            :contacto, :usuario, :clave)
+                            :contacto, :usuario, :clave,
+                            coalesce(cast(:reportado AS timestamptz), now()))
                         RETURNING id
                         """,
                         datos,

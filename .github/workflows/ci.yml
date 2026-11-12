@@ -52,6 +52,8 @@ jobs:
         run: .github/scripts/comprobar-pr.sh
       - name: nombres, artefactos y marcas de no fusionar
         run: .github/scripts/comprobar-higiene.sh "${{ github.event.pull_request.base.sha }}"
+      - name: pruebas Spring y @JsonProperty en código nuevo
+        run: .github/scripts/comprobar-codigo-nuevo.sh "${{ github.event.pull_request.base.sha }}"
       - name: gitleaks en los commits del PR
         run: |
           .github/scripts/instalar-gitleaks.sh

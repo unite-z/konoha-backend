@@ -27,5 +27,5 @@ public record ReporteMaterialVegetal(
         List<TotalMaterial> propagado,
         List<TotalTraslado> trasladado,
         List<ComparacionMes> comparacion,
-        SeccionNoDisponible productosProveedor,
+        ProductosProveedor productosProveedor,
         List<String> notas) {}

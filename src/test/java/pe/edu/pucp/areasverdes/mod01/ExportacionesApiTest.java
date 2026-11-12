@@ -72,11 +72,24 @@ class ExportacionesApiTest extends ApiCore {
 
     @Test
     void cadaListadoExigeElPermisoDeSuEntidad() throws Exception {
-        assertEquals(403, exportar("actividades", "capataz").getStatus());
+        assertEquals(200, exportar("actividades", "capataz").getStatus());
         assertEquals(403, exportar("atenciones", "capataz").getStatus());
         assertEquals(200, exportar("ejemplares", "capataz").getStatus());
         assertEquals(200, exportar("actividades", "practicante").getStatus());
         assertEquals(200, exportar("atenciones", "jefe").getStatus());
+    }
+
+    @Test
+    void elCapatazSoloExportaActividadesDeSuCuadrilla() throws Exception {
+        long propia = actividadDeCuadrilla("Propia", ids.get("capataz"));
+        long otroUsuario = cuenta("otro-capataz", "capataz");
+        actividadDeCuadrilla("Ajena", otroUsuario);
+
+        List<Row> resultado = filas(exportar("actividades", "capataz").getContentAsByteArray());
+
+        assertEquals(2, resultado.size());
+        assertEquals(String.valueOf(propia), resultado.get(1).getCellText(0));
+        assertEquals("Cuadrilla Propia", resultado.get(1).getCellText(4));
     }
 
     @Test
@@ -101,5 +114,68 @@ class ExportacionesApiTest extends ApiCore {
         http.perform(get("/api/v1/core/exportaciones/usuarios/").cookie(sesion("jefe")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.codigo").value("tipo-desconocido"));
+    }
+
+    private long actividadDeCuadrilla(String sufijo, long usuarioCapataz) {
+        long capataz =
+                jdbc.queryForObject(
+                        """
+                        INSERT INTO mod04_personal
+                            (nombres, apellidos, tipo_personal, usuario_id)
+                        VALUES (:nombre, 'Prueba', 'Capataz', :usuario) RETURNING id
+                        """,
+                        Map.of("nombre", "Capataz " + sufijo, "usuario", usuarioCapataz),
+                        Long.class);
+        long cuadrilla =
+                jdbc.queryForObject(
+                        """
+                        INSERT INTO mod04_cuadrilla
+                            (nombre, capataz_id, usuario_creacion_id, usuario_modificacion_id)
+                        VALUES (:nombre, :capataz, :jefe, :jefe) RETURNING id
+                        """,
+                        Map.of(
+                                "nombre",
+                                "Cuadrilla " + sufijo,
+                                "capataz",
+                                capataz,
+                                "jefe",
+                                ids.get("jefe")),
+                        Long.class);
+        long tipo =
+                jdbc.queryForObject(
+                        "INSERT INTO mod04_tipo_actividad (nombre) VALUES (:nombre) RETURNING id",
+                        Map.of("nombre", "Actividad " + sufijo),
+                        Long.class);
+        long area =
+                jdbc.queryForObject(
+                        "INSERT INTO mod05_areaverde (nombre, activo) VALUES (:nombre, true)"
+                                + " RETURNING id",
+                        Map.of("nombre", "Área " + sufijo),
+                        Long.class);
+        long parte =
+                jdbc.queryForObject(
+                        """
+                        INSERT INTO mod04_parte_diario
+                            (cuadrilla_id, capataz_id, fecha, usuario_creacion_id)
+                        VALUES (:cuadrilla, :capataz, current_date, :usuario) RETURNING id
+                        """,
+                        Map.of(
+                                "cuadrilla", cuadrilla,
+                                "capataz", capataz,
+                                "usuario", usuarioCapataz),
+                        Long.class);
+        return jdbc.queryForObject(
+                """
+                INSERT INTO mod04_actividad
+                    (parte_id, tipo_actividad_id, area_verde_id, fecha_hora_actividad,
+                     usuario_creacion_id)
+                VALUES (:parte, :tipo, :area, now(), :usuario) RETURNING id
+                """,
+                Map.of(
+                        "parte", parte,
+                        "tipo", tipo,
+                        "area", area,
+                        "usuario", usuarioCapataz),
+                Long.class);
     }
 }

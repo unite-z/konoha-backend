@@ -96,6 +96,31 @@ public class Mod05Repository {
                         "SELECT rol FROM mod05_usuario_rol WHERE usuario_id=:id",
                         Map.of("id", id),
                         String.class);
+        // Rol de MOD-01 equivalente a cada rol de MOD-05 (AV-382): la autorización va por sus
+        // permisos.
+        List<String> codigos =
+                new java.util.ArrayList<>(
+                        pe.edu.pucp.areasverdes.mod01.config.SesionCompartida.ROL_MOD05
+                                .entrySet()
+                                .stream()
+                                .filter(e -> roles.contains(e.getValue()))
+                                .map(Map.Entry::getKey)
+                                .toList());
+        // El capataz no tiene rol en MOD-05, pero MOD-04 lo usa con HTTP Basic en sus pruebas.
+        if (roles.contains(Usuario.CAPATAZ)) codigos.add("capataz");
+        Set<String> permisos =
+                codigos.isEmpty()
+                        ? Set.of()
+                        : Set.copyOf(
+                                jdbc.queryForList(
+                                        """
+                                        SELECT DISTINCT p.codigo FROM core_rol_permiso rp
+                                        JOIN core_permiso p ON p.id = rp.permiso_id
+                                        JOIN core_rol r ON r.id = rp.rol_id
+                                        WHERE r.codigo IN (:codigos)
+                                        """,
+                                        Map.of("codigos", codigos),
+                                        String.class));
         return Optional.of(
                 new Usuario(
                         id,
@@ -103,7 +128,8 @@ public class Mod05Repository {
                         (String) u.get("nombre"),
                         (String) u.get("password_hash"),
                         (boolean) u.get("activo"),
-                        roles));
+                        roles,
+                        permisos));
     }
 
     public void audit(
@@ -249,7 +275,10 @@ public class Mod05Repository {
     public static final String REPORTES =
             """
             SELECT r.id,r.atencion_id,r.revision,r.fecha_recepcion,r.resumen,r.usuario_creacion_id,
-                u.nombre usuario_creacion_nombre,r.fecha_creacion
+                u.nombre usuario_creacion_nombre,r.fecha_creacion,r.formato_id,
+                (SELECT f.version FROM mod05_formato_reporte_servicio f WHERE f.id=r.formato_id)
+                    formato_version,
+                r.datos_formato::text datos_formato
             FROM mod05_reporteproveedor r JOIN mod05_usuario u ON u.id=r.usuario_creacion_id
             """;
 
@@ -279,6 +308,15 @@ public class Mod05Repository {
                                     Map.of("id", archivo)));
                 });
         reporte.put("documentos", docs);
+        // Datos del informe final (AV-320): jsonb leído como texto; null en las revisiones sin
+        // datos.
+        if (reporte.get("datos_formato") instanceof String datos) {
+            try {
+                reporte.put("datos_formato", json.readValue(datos, LinkedHashMap.class));
+            } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+                throw new IllegalStateException("Datos del informe final ilegibles", e);
+            }
+        }
         return reporte;
     }
 

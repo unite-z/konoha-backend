@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
 
 import jakarta.servlet.http.Cookie;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
@@ -27,7 +28,7 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
  * {@code 401}. Sin sesión, todo responde 401 salvo el inicio de sesión. La segunda prueba falla si
  * se añade un endpoint a {@code /api/v1/core/**} sin fila en esta tabla.
  */
-class Mod01PermisosApiTest extends ApiCore {
+public class Mod01PermisosApiTest extends ApiCore {
 
     record Fila(
             String metodo,
@@ -139,6 +140,33 @@ class Mod01PermisosApiTest extends ApiCore {
                     new Fila("GET", "/usuarios/{id}/rol", U + "/rol/", "ok", "403", "403", "403"),
                     new Fila("PUT", "/usuarios/{id}/rol", U + "/rol/", "ok", "403", "403", "403"),
                     new Fila("GET", "/roles", "/api/v1/core/roles/", "ok", "403", "403", "403"),
+                    // AV-381: el catálogo lo lee también el jefe; la matriz solo el
+                    // superadministrador,
+                    // rol oculto fuera de esta tabla (SuperadminApiTest).
+                    new Fila(
+                            "GET",
+                            "/permisos",
+                            "/api/v1/core/permisos/",
+                            "ok",
+                            "403",
+                            "403",
+                            "403"),
+                    new Fila(
+                            "GET",
+                            "/roles/{codigo}/permisos",
+                            "/api/v1/core/roles/capataz/permisos/",
+                            "403",
+                            "403",
+                            "403",
+                            "403"),
+                    new Fila(
+                            "PUT",
+                            "/roles/{codigo}/permisos",
+                            "/api/v1/core/roles/capataz/permisos/",
+                            "403",
+                            "403",
+                            "403",
+                            "403"),
                     new Fila("GET", "/accesos", "/api/v1/core/accesos/", "ok", "403", "403", "403"),
                     new Fila(
                             "GET",
@@ -228,6 +256,13 @@ class Mod01PermisosApiTest extends ApiCore {
 
     /** Endpoints públicos: solo el inicio de sesión. */
     static final Set<String> PUBLICOS = Set.of("POST /auth/login");
+
+    /** Endpoints de la matriz («MÉTODO url»), para la prueba global de contrato de rutas. */
+    public static List<String> endpointsCubiertos() {
+        List<String> cubiertos = new ArrayList<>(List.of("POST /api/v1/core/auth/login/"));
+        MATRIZ.forEach(f -> cubiertos.add(f.metodo() + " " + f.url()));
+        return cubiertos;
+    }
 
     @Autowired
     @Qualifier("requestMappingHandlerMapping")

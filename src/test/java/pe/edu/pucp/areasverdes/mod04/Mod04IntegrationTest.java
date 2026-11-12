@@ -219,8 +219,12 @@ class Mod04IntegrationTest {
     }
 
     long actividad(long squad) throws Exception {
+        return actividad(squad, "capataz1");
+    }
+
+    long actividad(long squad, String usuario) throws Exception {
         long part =
-                postJson("/partes", values("cuadrilla_id", squad, "fecha", HOY), "capataz1", 201)
+                postJson("/partes", values("cuadrilla_id", squad, "fecha", HOY), usuario, 201)
                         .path("id")
                         .asLong();
         return postJson(
@@ -234,7 +238,7 @@ class Mod04IntegrationTest {
                                 area,
                                 "fecha_hora_actividad",
                                 "2026-10-22T08:00:00-05:00"),
-                        "capataz1",
+                        usuario,
                         201)
                 .path("id")
                 .asLong();
@@ -915,6 +919,86 @@ class Mod04IntegrationTest {
     }
 
     @Test
+    void soloJefeCancelaUnEncargoAbiertoConMotivo() throws Exception {
+        long equipo = cuadrilla(c1, o1);
+        var creado = postJson("/encargos/", encargo(equipo, "Semanal", 7), "jefe", 201);
+        long id = creado.path("id").asLong();
+        String ruta = "/encargos/" + id + "/estado/";
+        var cancelar = values("estado_anterior", "Por completar", "estado", "Cancelado");
+        postJson(ruta, cancelar, "jefe", 400);
+        cancelar.put("observaciones", "Cierre temporal del espacio");
+        postJson(ruta, cancelar, "capataz1", 403);
+        var cancelado = postJson(ruta, cancelar, "jefe", 200);
+        assertEquals("Cancelado", cancelado.path("estado").asText());
+        var cambio = cancelado.path("historial_estados").get(0);
+        assertEquals("Cierre temporal del espacio", cambio.path("observaciones").asText());
+        assertTrue(cambio.hasNonNull("usuario_id"));
+        assertTrue(cambio.hasNonNull("fecha"));
+        postJson(
+                ruta,
+                values("estado_anterior", "Cancelado", "estado", "En curso"),
+                "capataz1",
+                409);
+        postJson(ruta, cancelar, "jefe", 409);
+    }
+
+    @Test
+    void encargoDirectoConservaHistorialYRestringeCambiosAlCapatazResponsable() throws Exception {
+        long equipo = cuadrilla(c1, o1);
+        var directo =
+                values(
+                        "cuadrilla_id",
+                        equipo,
+                        "tipo_actividad_id",
+                        tipo,
+                        "area_verde_id",
+                        area,
+                        "descripcion",
+                        "Encargo directo",
+                        "periodicidad",
+                        "Directo",
+                        "plazo_previsto",
+                        HOY.plusDays(20).toString());
+        var creado = postJson("/encargos/", directo, "jefe", 201);
+        assertEquals("Directo", creado.path("periodicidad").asText());
+        assertTrue(creado.path("fecha_reunion").isNull());
+        assertEquals("Por completar", creado.path("estado").asText());
+        var ruta = "/encargos/" + creado.path("id").asLong() + "/estado/";
+        postJson(
+                ruta,
+                values("estado_anterior", "Por completar", "estado", "Completado"),
+                "capataz1",
+                409);
+        var iniciar = values("estado_anterior", "Por completar", "estado", "En curso");
+        postJson(ruta, iniciar, "capataz2", 403);
+        postJson(ruta, iniciar, "jefe", 403);
+        postJson(ruta, iniciar, "capataz1", 200);
+        postJson(ruta, iniciar, "capataz1", 409);
+        var observar = values("estado_anterior", "En curso", "estado", "Observado");
+        postJson(ruta, observar, "capataz1", 400);
+        observar.put("observaciones", "Falta material");
+        postJson(ruta, observar, "capataz1", 200);
+        postJson(
+                ruta,
+                values("estado_anterior", "Observado", "estado", "En curso"),
+                "capataz1",
+                200);
+        var cerrado =
+                postJson(
+                        ruta,
+                        values("estado_anterior", "En curso", "estado", "Completado"),
+                        "capataz1",
+                        200);
+        assertEquals("Completado", cerrado.path("estado").asText());
+        putJson("/encargos/" + creado.path("id").asLong(), directo, "jefe", 409);
+        var historial = cerrado.path("historial_estados");
+        assertEquals(4, historial.size());
+        assertEquals("Falta material", historial.get(2).path("observaciones").asText());
+        assertTrue(historial.get(2).hasNonNull("usuario_id"));
+        assertTrue(historial.get(2).hasNonNull("fecha"));
+    }
+
+    @Test
     void cadaCapatazSoloConsultaSusEncargosConPlazo() throws Exception {
         long propia = cuadrilla(c1, o1), ajena = cuadrilla(c2, o2);
         long idPropio =
@@ -934,7 +1018,7 @@ class Mod04IntegrationTest {
                 .andExpect(status().isForbidden());
         postJson("/encargos", encargo(propia, "Semanal", 7), "capataz1", 403);
         assertTrue(repo.encargo(idPropio).containsKey("estado"));
-        assertEquals(null, repo.encargo(idPropio).get("estado"));
+        assertEquals("Por completar", repo.encargo(idPropio).get("estado"));
     }
 
     String hashDemo() {
@@ -997,6 +1081,99 @@ class Mod04IntegrationTest {
                         "UPDATE core_usuario SET activo=false WHERE nombre_usuario='capataz1'",
                         Map.of());
         http.perform(get(BASE + "/me/").cookie(sesion)).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void capatazTieneConsultaYRegistroSinPermisosDeJefatura() {
+        List<String> permisos =
+                repo.jdbc()
+                        .queryForList(
+                                """
+                                SELECT p.codigo FROM core_permiso p
+                                JOIN core_rol_permiso rp ON rp.permiso_id=p.id
+                                JOIN core_rol r ON r.id=rp.rol_id
+                                WHERE r.codigo='capataz' AND p.modulo='MOD-04'
+                                ORDER BY p.codigo
+                                """,
+                                Map.of(),
+                                String.class);
+
+        assertEquals(
+                List.of("CAM.CUADRILLA.CONSULTAR", "CAM.PARTE.CONSULTAR", "CAM.PARTE.REGISTRAR"),
+                permisos);
+    }
+
+    @Test
+    void cookieDeCapatazConsultaYRegistraSoloEnSuCuadrilla() throws Exception {
+        long propia = cuadrilla(c1, o1), ajena = cuadrilla(c2, o2);
+        long actividad = actividad(propia);
+        long actividadAjena = actividad(ajena, "capataz2");
+        postJson("/encargos", encargo(propia, "Semanal", 7), "jefe", 201);
+        Cookie sesion = sesionCore("capataz1");
+
+        for (String recurso : List.of("cuadrillas", "encargos", "partes", "actividades")) {
+            http.perform(get(BASE + "/" + recurso + "/").cookie(sesion))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.count").value(1));
+        }
+        http.perform(get(BASE + "/personal/").cookie(sesion))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(2))
+                .andExpect(jsonPath("$.results[?(@.id == " + c2 + ")]").isEmpty())
+                .andExpect(jsonPath("$.results[?(@.id == " + o2 + ")]").isEmpty());
+        http.perform(
+                        put(BASE + "/actividades/" + actividad + "/participantes/")
+                                .cookie(sesion)
+                                .with(csrf())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(json.writeValueAsBytes(values("operarios", List.of(o1)))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cantidad_operarios").value(1));
+        http.perform(get(BASE + "/cuadrillas/" + ajena).cookie(sesion))
+                .andExpect(status().isForbidden());
+        http.perform(
+                        get("/api/v1/core/adjuntos/")
+                                .param("entidad", "actividad")
+                                .param("registro_id", String.valueOf(actividad))
+                                .cookie(sesion))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+        http.perform(
+                        get("/api/v1/core/adjuntos/")
+                                .param("entidad", "actividad")
+                                .param("registro_id", String.valueOf(actividadAjena))
+                                .cookie(sesion))
+                .andExpect(status().isForbidden());
+        http.perform(
+                        post(BASE + "/cuadrillas/")
+                                .cookie(sesion)
+                                .with(csrf())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(json.writeValueAsBytes(squad(c1, o1))))
+                .andExpect(status().isForbidden());
+        http.perform(
+                        put(BASE + "/actividades/" + actividad + "/verificacion/")
+                                .cookie(sesion)
+                                .with(csrf())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        json.writeValueAsBytes(
+                                                values("observaciones", "No autorizado"))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void capatazSinFichaObtieneListadosVaciosSinAccederADatosAjenos() throws Exception {
+        cuadrilla(c1, o1);
+        cuenta("capataz-sin-ficha", "Capataz");
+        Cookie sesion = sesionCore("capataz-sin-ficha");
+
+        for (String recurso :
+                List.of("personal", "cuadrillas", "encargos", "partes", "actividades")) {
+            http.perform(get(BASE + "/" + recurso + "/").cookie(sesion))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.count").value(0));
+        }
     }
 
     @Autowired
@@ -1163,6 +1340,13 @@ class Mod04IntegrationTest {
                                 false,
                                 true),
                         new Fila(
+                                "cambiarEstadoEncargo",
+                                "POST",
+                                "/encargos/" + enc + "/estado",
+                                values("estado_anterior", "Por completar", "estado", "En curso"),
+                                false,
+                                true),
+                        new Fila(
                                 "guardarParticipantes",
                                 "PUT",
                                 "/actividades/" + act + "/participantes",
@@ -1200,6 +1384,8 @@ class Mod04IntegrationTest {
                 boolean permitido =
                         !usuario.equals("sinrol")
                                 && (!fila.jefe() || usuario.equals("jefe"))
+                                && (!fila.nombre().equals("cambiarEstadoEncargo")
+                                        || usuario.equals("capataz1"))
                                 && (!fila.campo()
                                         || usuario.equals("jefe")
                                         || usuario.equals("capataz1"));
@@ -1252,6 +1438,45 @@ class Mod04IntegrationTest {
         body.put("observaciones", "Otro contenido");
         http.perform(
                         post(BASE + "/actividades")
+                                .with(httpBasic("capataz1", PASSWORD))
+                                .header("Idempotency-Key", clave)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(json.writeValueAsBytes(body)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("idempotency-key-reutilizada"));
+    }
+
+    @Test
+    void materialReenviadoDesdeLaColaNoSeDuplicaYLaClaveDuraUnMes() throws Exception {
+        long equipo = cuadrilla(c1, o1), act = actividad(equipo);
+        var body = values("material_id", 1, "cantidad", 4, "unidad_medida_id", 1);
+        String clave = UUID.randomUUID().toString();
+        for (int intento = 0; intento < 2; intento++) {
+            http.perform(
+                            post(BASE + "/actividades/" + act + "/materiales/")
+                                    .with(httpBasic("capataz1", PASSWORD))
+                                    .header("Idempotency-Key", clave)
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .content(json.writeValueAsBytes(body)))
+                    .andExpect(status().isCreated());
+        }
+        assertEquals(
+                1,
+                repo.rows(
+                                "SELECT id FROM mod04_material_actividad WHERE actividad_id=:a",
+                                Map.of("a", act))
+                        .size());
+        assertEquals(
+                Boolean.TRUE,
+                repo.jdbc()
+                        .queryForObject(
+                                "SELECT caduca > now() + interval '29 days' FROM"
+                                        + " mod04_idempotencia WHERE clave=:c",
+                                Map.of("c", UUID.fromString(clave)),
+                                Boolean.class));
+        body.put("cantidad", 5);
+        http.perform(
+                        post(BASE + "/actividades/" + act + "/materiales/")
                                 .with(httpBasic("capataz1", PASSWORD))
                                 .header("Idempotency-Key", clave)
                                 .contentType(MediaType.APPLICATION_JSON)

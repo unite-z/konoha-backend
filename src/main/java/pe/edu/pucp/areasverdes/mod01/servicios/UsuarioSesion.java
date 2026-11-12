@@ -26,12 +26,22 @@ public record UsuarioSesion(
     public static final String JEFE = "jefe-seccion";
     public static final String CAPATAZ = "capataz";
 
+    /**
+     * Rol oculto con todos los permisos (AV-381). No se lista ni se asigna desde la API, y en los
+     * módulos que deciden por nombre de rol actúa como jefe de sección.
+     */
+    public static final String SUPERADMIN = "superadmin";
+
     public boolean tiene(String permiso) {
         return permisos.contains(permiso);
     }
 
     public boolean esJefe() {
         return JEFE.equals(rol);
+    }
+
+    public boolean esSuperadmin() {
+        return SUPERADMIN.equals(rol);
     }
 
     /** Autoridades de Spring: un permiso por código, más {@code ROL_<codigo>}. */
