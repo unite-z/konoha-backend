@@ -79,14 +79,17 @@ public class MapaAtencionesController {
                     String tipoAtencion,
             @Parameter(
                             description =
-                                    "Tipo de uso del espacio. Hoy responde sin_datos con su"
-                                            + " motivo: el tipo de uso aún no está en el sistema")
+                                    "Tipo de uso del espacio (catálogo de MOD-02): solo las"
+                                            + " atenciones de espacios de ese tipo")
                     @RequestParam(name = "tipo_uso_id", required = false)
                     Long tipoUsoId,
             @Parameter(description = "Espacio (área verde): también es el historial del espacio")
                     @RequestParam(name = "area_verde_id", required = false)
                     Long areaVerdeId,
-            @Parameter(description = "Tipo de servicio (actividad)")
+            @Parameter(
+                            description =
+                                    "Tipo de servicio (MOD-05); con él solo cuentan las atenciones"
+                                            + " tercerizadas")
                     @RequestParam(name = "tipo_servicio_id", required = false)
                     Long tipoServicioId,
             @Parameter(
