@@ -219,8 +219,12 @@ class Mod04IntegrationTest {
     }
 
     long actividad(long squad) throws Exception {
+        return actividad(squad, "capataz1");
+    }
+
+    long actividad(long squad, String usuario) throws Exception {
         long part =
-                postJson("/partes", values("cuadrilla_id", squad, "fecha", HOY), "capataz1", 201)
+                postJson("/partes", values("cuadrilla_id", squad, "fecha", HOY), usuario, 201)
                         .path("id")
                         .asLong();
         return postJson(
@@ -234,7 +238,7 @@ class Mod04IntegrationTest {
                                 area,
                                 "fecha_hora_actividad",
                                 "2026-10-22T08:00:00-05:00"),
-                        "capataz1",
+                        usuario,
                         201)
                 .path("id")
                 .asLong();
@@ -1023,6 +1027,7 @@ class Mod04IntegrationTest {
     void cookieDeCapatazConsultaYRegistraSoloEnSuCuadrilla() throws Exception {
         long propia = cuadrilla(c1, o1), ajena = cuadrilla(c2, o2);
         long actividad = actividad(propia);
+        long actividadAjena = actividad(ajena, "capataz2");
         postJson("/encargos", encargo(propia, "Semanal", 7), "jefe", 201);
         Cookie sesion = sesionCore("capataz1");
 
@@ -1031,6 +1036,11 @@ class Mod04IntegrationTest {
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.count").value(1));
         }
+        http.perform(get(BASE + "/personal/").cookie(sesion))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(2))
+                .andExpect(jsonPath("$.results[?(@.id == " + c2 + ")]").isEmpty())
+                .andExpect(jsonPath("$.results[?(@.id == " + o2 + ")]").isEmpty());
         http.perform(
                         put(BASE + "/actividades/" + actividad + "/participantes/")
                                 .cookie(sesion)
@@ -1040,6 +1050,19 @@ class Mod04IntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.cantidad_operarios").value(1));
         http.perform(get(BASE + "/cuadrillas/" + ajena).cookie(sesion))
+                .andExpect(status().isForbidden());
+        http.perform(
+                        get("/api/v1/core/adjuntos/")
+                                .param("entidad", "actividad")
+                                .param("registro_id", String.valueOf(actividad))
+                                .cookie(sesion))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+        http.perform(
+                        get("/api/v1/core/adjuntos/")
+                                .param("entidad", "actividad")
+                                .param("registro_id", String.valueOf(actividadAjena))
+                                .cookie(sesion))
                 .andExpect(status().isForbidden());
         http.perform(
                         post(BASE + "/cuadrillas/")
@@ -1065,7 +1088,8 @@ class Mod04IntegrationTest {
         cuenta("capataz-sin-ficha", "Capataz");
         Cookie sesion = sesionCore("capataz-sin-ficha");
 
-        for (String recurso : List.of("cuadrillas", "encargos", "partes", "actividades")) {
+        for (String recurso :
+                List.of("personal", "cuadrillas", "encargos", "partes", "actividades")) {
             http.perform(get(BASE + "/" + recurso + "/").cookie(sesion))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.count").value(0));

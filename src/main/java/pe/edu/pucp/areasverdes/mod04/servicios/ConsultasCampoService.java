@@ -38,7 +38,9 @@ public class ConsultasCampoService {
                     case "personal" ->
                             """
                             SELECT p.id,p.nombres,p.apellidos,p.tipo_personal,p.activo,p.usuario_id,
-                                a.cuadrilla_id,c.nombre cuadrilla_nombre,p.nombres||' '||p.apellidos texto
+                                a.cuadrilla_id,c.nombre cuadrilla_nombre,p.nombres||' '||p.apellidos texto,
+                                COALESCE(c.capataz_id, CASE WHEN p.tipo_personal='Capataz' THEN p.id END)
+                                    capataz_alcance_id
                             FROM mod04_personal p LEFT JOIN mod04_asignacion_cuadrilla a ON a.operario_id=p.id AND a.fecha_fin IS NULL
                             LEFT JOIN mod04_cuadrilla c ON c.id=a.cuadrilla_id
                             """;
@@ -130,11 +132,10 @@ public class ConsultasCampoService {
                     where.append(" AND ").append(field).append("=:").append(field);
                     args.put(field, value);
                 });
-        boolean soloCapataz =
-                !OperacionCampoService.jefe(user)
-                        && !user.puede(OperacionCampoService.CONSULTAR_PARTES);
+        boolean soloCapataz = OperacionCampoService.alcancePropio(user);
         if (soloCapataz
-                && Set.of("cuadrillas", "encargos", "partes", "actividades").contains(recurso)) {
+                && Set.of("personal", "cuadrillas", "encargos", "partes", "actividades")
+                        .contains(recurso)) {
             Long personal = service.personalUsuario(user);
             // Una cuenta de capataz todavía no vinculada no tiene alcance de campo. Los listados
             // deben quedar vacíos, no fallar con 403: el detalle y las escrituras siguen
@@ -142,7 +143,10 @@ public class ConsultasCampoService {
             if (personal == null) {
                 where.append(" AND false");
             } else {
-                where.append(" AND capataz_id=:propio");
+                where.append(
+                        recurso.equals("personal")
+                                ? " AND capataz_alcance_id=:propio"
+                                : " AND capataz_id=:propio");
                 args.put("propio", personal);
             }
         }
@@ -177,6 +181,7 @@ public class ConsultasCampoService {
                         .map(
                                 row -> {
                                     row.remove("texto");
+                                    row.remove("capataz_alcance_id");
                                     long id = number(row, "id");
                                     if (recurso.equals("cuadrillas")) return repo.cuadrilla(id);
                                     if (recurso.equals("encargos")) return repo.encargo(id);
