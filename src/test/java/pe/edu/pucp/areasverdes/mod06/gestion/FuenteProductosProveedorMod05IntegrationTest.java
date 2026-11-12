@@ -7,13 +7,7 @@ import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.annotation.Transactional;
-import pe.edu.pucp.areasverdes.comun.BaseDePruebas;
 import pe.edu.pucp.areasverdes.mod06.gestion.datos.FuenteProductosProveedorMod05;
 import pe.edu.pucp.areasverdes.mod06.gestion.datos.ProductoAplicado;
 
@@ -21,20 +15,16 @@ import pe.edu.pucp.areasverdes.mod06.gestion.datos.ProductoAplicado;
  * {@link FuenteProductosProveedorMod05}: los productos aplicados se leen de las tablas de MOD-05
  * con el proveedor del contrato, la fecha de inicio en America/Lima y el espacio del alcance. Ids
  * altos para no chocar con otros datos; cada prueba se revierte.
+ *
+ * <p>Hereda de {@link ApiGestion} para reutilizar su contexto de Spring (y su pool de 2
+ * conexiones): un contexto propio suma conexiones y en CI agota las de PostgreSQL ("too many
+ * clients already").
  */
-@SpringBootTest
 @Transactional
-class FuenteProductosProveedorMod05IntegrationTest {
+class FuenteProductosProveedorMod05IntegrationTest extends ApiGestion {
 
     static final RangoFechas OCTUBRE =
             new RangoFechas(LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 31));
-
-    @DynamicPropertySource
-    static void baseDeDatos(DynamicPropertyRegistry p) {
-        BaseDePruebas.registrar(p);
-    }
-
-    @Autowired NamedParameterJdbcTemplate jdbc;
 
     private FuenteProductosProveedorMod05 fuente;
 
