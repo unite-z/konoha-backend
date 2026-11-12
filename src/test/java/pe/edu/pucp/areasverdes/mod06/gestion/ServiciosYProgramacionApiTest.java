@@ -64,6 +64,7 @@ class ServiciosYProgramacionApiTest extends ApiGestion {
     /**
      * Metrado: AT-001 (ejecutada) y AT-004 (pendiente) prevén 100 m2 cada una; el informe de AT-001
      * declara 80. Plazo: AT-001 viene de la programación 901 (fin previsto 10/10); AT-004 no tiene.
+     * Al final, AT-004 se queda sin metrado: una atención sin metrado no es «otra unidad».
      */
     @Test
     void elMetradoEjecutadoSaleDelInformeYElPlazoDeLaProgramacion() throws Exception {
@@ -97,6 +98,20 @@ class ServiciosYProgramacionApiTest extends ApiGestion {
         como("jefe", "servicios-tercerizados/" + PERIODO + "&tipo_servicio_id=2")
                 .andExpect(jsonPath("$.rendimiento.atenciones_fuera_de_plazo").value(0))
                 .andExpect(jsonPath("$.rendimiento.rendimiento_por_hora").exists());
+
+        jdbc.getJdbcTemplate()
+                .update(
+                        "UPDATE mod05_alcanceatencion SET metrado = NULL, unidad_medida_id = NULL"
+                                + " WHERE id = 6");
+        como("jefe", "servicios-tercerizados/" + PERIODO + "&tipo_servicio_id=2")
+                .andExpect(jsonPath("$.avance.metrado_previsto").value("100"))
+                .andExpect(jsonPath("$.avance.metrado_ejecutado").value("80"))
+                .andExpect(jsonPath("$.avance.unidad_metrado").value("m2"))
+                .andExpect(
+                        jsonPath(
+                                "$.notas",
+                                org.hamcrest.Matchers.not(
+                                        hasItem(ReporteServicioService.NOTA_UNIDADES))));
     }
 
     @Test

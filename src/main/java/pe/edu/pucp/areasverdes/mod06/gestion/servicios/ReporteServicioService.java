@@ -188,9 +188,13 @@ public class ReporteServicioService {
         }
         int extraordinarias =
                 (int) atenciones.stream().filter(a -> "Extraordinaria".equals(a.clase())).count();
+        // Solo cuentan las unidades de las atenciones con metrado: una sin metrado no es otra
+        // unidad.
         Set<String> unidades = new LinkedHashSet<>();
-        atenciones.forEach(a -> unidades.add(a.unidad()));
-        boolean unaUnidad = unidades.size() == 1 && unidades.iterator().next() != null;
+        atenciones.stream()
+                .filter(a -> a.metrado() != null && a.unidad() != null)
+                .forEach(a -> unidades.add(a.unidad()));
+        boolean unaUnidad = unidades.size() == 1;
         if (unidades.size() > 1) notas.add(NOTA_UNIDADES);
         if (unaUnidad
                 && ejecutadas.stream()
