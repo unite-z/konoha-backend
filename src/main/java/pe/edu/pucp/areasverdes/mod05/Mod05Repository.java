@@ -130,14 +130,27 @@ public class Mod05Repository {
                             "usuario",
                             user.id(),
                             "antes",
-                            json.writeValueAsString(before),
+                            json.writeValueAsString(soloCambios(before, after)),
                             "despues",
-                            json.writeValueAsString(after),
+                            json.writeValueAsString(soloCambios(after, before)),
                             "motivo",
                             motivo));
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
             throw new IllegalStateException("No se pudo serializar la auditoría", e);
         }
+    }
+
+    /**
+     * Los campos de {@code valores} que no están en {@code otro}, o que valen distinto ahí: evita
+     * guardar en la auditoría toda la fila sin cambios (p. ej. «id: 2 → 2», «codigo: AT-1 → AT-1»).
+     * Con {@code otro} vacío (alta), se conservan todos.
+     */
+    static Map<String, Object> soloCambios(Map<String, Object> valores, Map<String, Object> otro) {
+        var resultado = new LinkedHashMap<String, Object>();
+        for (var clave : valores.keySet())
+            if (!otro.containsKey(clave) || !Objects.equals(valores.get(clave), otro.get(clave)))
+                resultado.put(clave, valores.get(clave));
+        return resultado;
     }
 
     public void history(long id, String before, String after, Usuario user) {

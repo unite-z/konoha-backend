@@ -398,9 +398,9 @@ public class EjemplaresService {
                 };
         return jdbc.query(
                 "SELECT evento.id, (evento.momento AT TIME ZONE 'America/Lima')::date fecha,"
-                        + " evento.momento, evento.tipo, evento.origen, evento.ejecutor,"
-                        + " evento.detalle, evidencia.id evidencia_id, documento.id documento_id,"
-                        + " documento.reporte_id FROM ("
+                        + " evento.momento, evento.tipo, evento.origen, evento.entidad,"
+                        + " evento.ejecutor, evento.detalle, evidencia.id evidencia_id,"
+                        + " documento.id documento_id, documento.reporte_id FROM ("
                         + consulta
                         + ") evento "
                         + """
@@ -599,6 +599,7 @@ public class EjemplaresService {
             OffsetDateTime momento,
             String tipo,
             String origen,
+            String entidad,
             String ejecutor,
             String detalle,
             Long evidenciaId,

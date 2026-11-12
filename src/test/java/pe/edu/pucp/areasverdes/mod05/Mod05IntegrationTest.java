@@ -71,7 +71,7 @@ class Mod05IntegrationTest {
                 .getJdbcTemplate()
                 .execute(
                         "TRUNCATE"
-                            + " mod05_usuario,mod05_proveedor,mod05_tiposervicio,mod05_areaverde,mod05_unidadmedida,mod05_unidadinstitucional,mod05_archivo"
+                            + " mod05_usuario,mod05_proveedor,mod05_tiposervicio,mod05_areaverde,mod05_unidadmedida,mod05_unidadinstitucional,mod05_archivo,mod05_producto_agronomico"
                             + " RESTART IDENTITY CASCADE");
         for (String name : List.of("jefe", "ingeniero", "practicante", "sinrol", "inactivo")) {
             long id =
@@ -269,6 +269,71 @@ class Mod05IntegrationTest {
                 .andExpect(jsonPath("$.historial.length()").value(5));
         http.perform(get(BASE + id + "/reportes/").with(httpBasic("jefe", PASSWORD)))
                 .andExpect(jsonPath("$.count").value(2));
+    }
+
+    // RF-FIT-004: productos aplicados (con dosis) y plagas controladas por atención.
+    @Test
+    void registraProductosYPlagasEnLaAtencionYSeLeenEnElDetalle() throws Exception {
+        long producto =
+                repo.insert(
+                        "producto_agronomico",
+                        values("nombre", "Fungicida RF-FIT-004", "activo", true));
+        long productoInactivo =
+                repo.insert(
+                        "producto_agronomico",
+                        values("nombre", "Fungicida inactivo RF-FIT-004", "activo", false));
+        long plaga =
+                repo.jdbc()
+                        .getJdbcTemplate()
+                        .queryForObject(
+                                "SELECT id FROM mod05_plaga WHERE nombre='Pulgón'", Long.class);
+
+        var cuerpo = input();
+        cuerpo.put("productos", List.of(values("producto_id", producto, "dosis", "2 L/ha")));
+        cuerpo.put("plagas_controladas", List.of(plaga));
+        var result =
+                http.perform(
+                                post(BASE)
+                                        .with(httpBasic("jefe", PASSWORD))
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(json.writeValueAsBytes(cuerpo)))
+                        .andExpect(status().isCreated())
+                        .andReturn();
+        var a = json.readTree(result.getResponse().getContentAsByteArray());
+        long id = a.get("id").asLong();
+        assertEquals("Fungicida RF-FIT-004", a.at("/productos/0/producto_nombre").asText());
+        assertEquals("2 L/ha", a.at("/productos/0/dosis").asText());
+        assertEquals("Pulgón", a.at("/plagas/0/plaga_nombre").asText());
+
+        http.perform(get(BASE + id + "/").with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(
+                        jsonPath("$.productos[0].producto_nombre").value("Fungicida RF-FIT-004"))
+                .andExpect(jsonPath("$.plagas[0].plaga_nombre").value("Pulgón"));
+
+        var productoRepetido = input();
+        productoRepetido.put(
+                "productos",
+                List.of(
+                        values("producto_id", producto, "dosis", "1 L/ha"),
+                        values("producto_id", producto, "dosis", "3 L/ha")));
+        http.perform(
+                        post(BASE)
+                                .with(httpBasic("jefe", PASSWORD))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(json.writeValueAsBytes(productoRepetido)))
+                .andExpect(status().isBadRequest());
+
+        var conProductoInactivo = input();
+        conProductoInactivo.put(
+                "productos",
+                List.of(values("producto_id", productoInactivo, "dosis", "1 L/ha")));
+        http.perform(
+                        post(BASE)
+                                .with(httpBasic("jefe", PASSWORD))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(json.writeValueAsBytes(conProductoInactivo)))
+                .andExpect(status().isBadRequest());
     }
 
     @ParameterizedTest

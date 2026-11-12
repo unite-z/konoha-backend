@@ -258,12 +258,20 @@ public class MaestrosService {
         detalle.put("contacto_correo", AtencionService.text(in.contacto_correo()));
         detalle.put("tipo", tipo);
         detalle.put("relacionado", in.proveedor_relacionado_id());
+        // Upsert: los proveedores de la precarga no tienen fila en mod05_proveedor_detalle, y un
+        // UPDATE simple no la crearía (0 filas afectadas, sin error, y el contacto no se guarda).
         repo.jdbc()
                 .update(
                         """
-                        UPDATE mod05_proveedor_detalle SET contacto_nombre=:contacto_nombre,contacto_telefono=:contacto_telefono,
-                            contacto_correo=:contacto_correo,tipo_vinculo=:tipo,proveedor_relacionado_id=:relacionado
-                        WHERE proveedor_id=:id
+                        INSERT INTO
+                            mod05_proveedor_detalle(proveedor_id,contacto_nombre,contacto_telefono,contacto_correo,tipo_vinculo,proveedor_relacionado_id)
+                            VALUES (:id,:contacto_nombre,:contacto_telefono,:contacto_correo,:tipo,:relacionado)
+                        ON CONFLICT (proveedor_id) DO UPDATE SET
+                            contacto_nombre=excluded.contacto_nombre,
+                            contacto_telefono=excluded.contacto_telefono,
+                            contacto_correo=excluded.contacto_correo,
+                            tipo_vinculo=excluded.tipo_vinculo,
+                            proveedor_relacionado_id=excluded.proveedor_relacionado_id
                         """,
                         detalle);
         var despues = repo.one(PROVEEDORES + " WHERE p.id=:id", Map.of("id", id));
@@ -397,12 +405,23 @@ public class MaestrosService {
         detalle.put("cantidad", frecuencia.cantidad());
         detalle.put("unidad", frecuencia.unidad());
         detalle.put("condiciones", AtencionService.text(in.condiciones()));
+        // Upsert: los contratos de la precarga no tienen fila en mod05_contrato_detalle, y un
+        // UPDATE simple no la crearía (0 filas afectadas, sin error, y la edición no se guarda).
+        detalle.put("fecha", OffsetDateTime.now(clock));
+        detalle.put("usuario", user.id());
         repo.jdbc()
                 .update(
                         """
-                        UPDATE mod05_contrato_detalle SET area_metrado_estimado=:area,monto_fijo=:monto,
-                            frecuencia_pactada=:frecuencia,frecuencia_cantidad=:cantidad,frecuencia_unidad=:unidad,condiciones=:condiciones
-                        WHERE contrato_id=:id
+                        INSERT INTO
+                            mod05_contrato_detalle(contrato_id,area_metrado_estimado,monto_fijo,frecuencia_pactada,frecuencia_cantidad,frecuencia_unidad,condiciones,fecha_creacion,usuario_creacion_id)
+                            VALUES (:id,:area,:monto,:frecuencia,:cantidad,:unidad,:condiciones,:fecha,:usuario)
+                        ON CONFLICT (contrato_id) DO UPDATE SET
+                            area_metrado_estimado=excluded.area_metrado_estimado,
+                            monto_fijo=excluded.monto_fijo,
+                            frecuencia_pactada=excluded.frecuencia_pactada,
+                            frecuencia_cantidad=excluded.frecuencia_cantidad,
+                            frecuencia_unidad=excluded.frecuencia_unidad,
+                            condiciones=excluded.condiciones
                         """,
                         detalle);
         var despues =

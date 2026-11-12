@@ -7,3 +7,4 @@ target/
 .notas/
 
 .env
+private-media/
