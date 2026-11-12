@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Valid;
 import jakarta.validation.Validator;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -42,6 +43,7 @@ public class IncidenciasController {
     private final CierreIncidencias cierre;
     private final PlazosIncidencias plazos;
     private final DerivacionTercerizada derivacion;
+    private final DerivacionInterna encargos;
     private final ObjectMapper json;
     private final Validator validador;
 
@@ -51,6 +53,7 @@ public class IncidenciasController {
             CierreIncidencias cierre,
             PlazosIncidencias plazos,
             DerivacionTercerizada derivacion,
+            DerivacionInterna encargos,
             ObjectMapper json,
             Validator validador) {
         this.incidencias = incidencias;
@@ -58,6 +61,7 @@ public class IncidenciasController {
         this.cierre = cierre;
         this.plazos = plazos;
         this.derivacion = derivacion;
+        this.encargos = encargos;
         this.json = json;
         this.validador = validador;
     }
@@ -210,11 +214,33 @@ public class IncidenciasController {
         plazos.anotarCausa(id, cuerpo, usuario);
     }
 
-    @Operation(summary = "Capataces a los que se puede reasignar la incidencia (jefe)")
+    @Operation(
+            summary =
+                    "Capataces a los que se puede reasignar o encargar la incidencia, con la carga"
+                            + " de su cuadrilla el día indicado (jefe)")
     @GetMapping({"/{id:\\d+}/capataces", "/{id:\\d+}/capataces/"})
     public List<PlazosIncidencias.Capataz> capataces(
-            UsuarioPlanificacion usuario, @PathVariable long id) {
-        return plazos.capataces(id, usuario);
+            UsuarioPlanificacion usuario,
+            @PathVariable long id,
+            @RequestParam(required = false) LocalDate fecha) {
+        return plazos.capataces(id, fecha, usuario);
+    }
+
+    @Operation(summary = "Actividades de campo que puede llevar un encargo (jefe)")
+    @GetMapping({"/actividades", "/actividades/"})
+    public List<String> actividades(UsuarioPlanificacion usuario) {
+        return encargos.actividades(usuario);
+    }
+
+    @Operation(
+            summary = "Deriva una incidencia clasificada a un encargo directo de un capataz (jefe)")
+    @PostMapping({"/{id:\\d+}/encargo", "/{id:\\d+}/encargo/"})
+    public Detalle encargo(
+            UsuarioPlanificacion usuario,
+            @PathVariable long id,
+            @Valid @RequestBody DerivacionInterna.NuevoEncargo cuerpo) {
+        encargos.derivar(id, cuerpo, usuario);
+        return incidencias.ficha(id);
     }
 
     @Operation(summary = "Reasigna el capataz responsable de la incidencia (jefe)")

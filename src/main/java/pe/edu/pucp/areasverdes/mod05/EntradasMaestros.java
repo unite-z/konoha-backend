@@ -70,6 +70,7 @@ public final class EntradasMaestros {
                     @Max(value = 2, message = "Son una o dos aplicaciones")
                     Integer aplicaciones_adicionales) {}
 
+    /** El motivo es obligatorio (AV-154): lo comprueba el servicio, después del permiso. */
     public record CancelarAtencionEspecial(
             @Size(max = 300, message = "El motivo admite hasta 300 caracteres") String motivo) {}
 

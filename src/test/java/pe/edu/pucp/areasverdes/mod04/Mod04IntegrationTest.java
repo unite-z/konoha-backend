@@ -60,7 +60,7 @@ import pe.edu.pucp.areasverdes.mod05.Mod05Repository;
 @AutoConfigureMockMvc
 class Mod04IntegrationTest {
     static final String BASE = "/api/v1/operacion-campo", PASSWORD = "prueba-mod04-local";
-    static final String HASH = new BCryptPasswordEncoder().encode(PASSWORD);
+    static final String HASH = new BCryptPasswordEncoder(4).encode(PASSWORD);
     static final LocalDate HOY = LocalDate.of(2026, 10, 22);
 
     @DynamicPropertySource
