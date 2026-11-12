@@ -34,6 +34,11 @@ public final class BaseDePruebas {
         p.add("spring.datasource.username", () -> USUARIO);
         p.add("spring.datasource.password", () -> CLAVE);
         p.add("spring.datasource.hikari.maximum-pool-size", () -> 5);
+        // Spring guarda en caché más de 25 contextos y cada uno tendría su pool lleno: en CI se
+        // superaba el máximo de conexiones de Postgres (100) y la suite que arrancaba entonces
+        // fallaba con «too many clients». Los contextos ociosos sueltan sus conexiones.
+        p.add("spring.datasource.hikari.minimum-idle", () -> 0);
+        p.add("spring.datasource.hikari.idle-timeout", () -> 10_000);
     }
 
     private static String variable(String nombre, String porDefecto) {
