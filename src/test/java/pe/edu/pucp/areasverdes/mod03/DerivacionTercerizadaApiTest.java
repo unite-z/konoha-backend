@@ -310,4 +310,80 @@ class DerivacionTercerizadaApiTest extends ApiPlanificacion {
                 .andExpect(jsonPath("$.requerimiento.pasos[2].estado").value("Hecho"))
                 .andExpect(jsonPath("$.requerimiento.pasos[3].estado").value("EnCurso"));
     }
+
+    // --- AV-312 (RF-POD-005): la derivación con crear_poda registra la poda de altura en MOD-02
+    // ---
+
+    @Test
+    void conCrearPodaSeRegistraLaPodaDeAlturaDelEjemplarConSuMotivo() throws Exception {
+        long id = clasificada();
+        accion(
+                        id,
+                        "requerimiento",
+                        ("{\"proveedor_id\": %d, \"contrato_id\": %d, \"tipo_atencion\":"
+                                        + " \"Extraordinaria\", \"crear_poda\": true,"
+                                        + " \"motivo_poda\": \"Obstruccion\"}")
+                                .formatted(proveedor, contrato))
+                .andExpect(status().isOk());
+        var poda =
+                jdbc.queryForMap(
+                        """
+                        SELECT i.categoria, i.motivo, i.fecha_ejecucion, i.atencion_id, e.codigo
+                        FROM mod02_intervencion_arbolado i
+                        JOIN mod02_ejemplar e ON e.id = i.ejemplar_id
+                        WHERE i.incidencia_id = :id
+                        """,
+                        Map.of("id", id));
+        assertThat(poda.get("categoria")).isEqualTo("AlturaDemanda");
+        assertThat(poda.get("motivo")).isEqualTo("Obstruccion");
+        assertThat(poda.get("fecha_ejecucion")).isNull();
+        assertThat(poda.get("codigo")).isEqualTo("T-0278");
+        assertThat(((Number) poda.get("atencion_id")).longValue())
+                .isEqualTo(
+                        jdbc.queryForObject(
+                                "SELECT atencion_id FROM mod03_requerimiento_incidencia"
+                                        + " WHERE incidencia_id = :id",
+                                Map.of("id", id),
+                                Long.class));
+    }
+
+    @Test
+    void sinMotivoLaPodaEsPorRiesgoYSinCrearPodaNoSeRegistra() throws Exception {
+        long conPoda = clasificada();
+        derivar(conPoda, proveedor, contrato).andExpect(status().isOk());
+        assertThat(motivosDePoda(conPoda)).containsExactly("Riesgo");
+
+        long sinPoda = clasificada();
+        accion(
+                        sinPoda,
+                        "requerimiento",
+                        ("{\"proveedor_id\": %d, \"contrato_id\": %d, \"tipo_atencion\":"
+                                        + " \"Extraordinaria\", \"crear_poda\": false}")
+                                .formatted(proveedor, contrato))
+                .andExpect(status().isOk());
+        assertThat(motivosDePoda(sinPoda)).isEmpty();
+    }
+
+    @Test
+    void sinEjemplarNoSePuedeCrearLaPodaYNoSeDeriva() throws Exception {
+        long id = clasificada();
+        jdbc.update(
+                "UPDATE mod03_incidencia SET ejemplar_id = NULL WHERE id = :id", Map.of("id", id));
+        derivar(id, proveedor, contrato)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("poda-sin-ejemplar"));
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT estado FROM mod03_incidencia WHERE id = :id",
+                                Map.of("id", id),
+                                String.class))
+                .isEqualTo("Clasificada");
+    }
+
+    private java.util.List<String> motivosDePoda(long incidencia) {
+        return jdbc.queryForList(
+                "SELECT motivo FROM mod02_intervencion_arbolado WHERE incidencia_id = :id",
+                Map.of("id", incidencia),
+                String.class);
+    }
 }

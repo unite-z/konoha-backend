@@ -16,6 +16,8 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import pe.edu.pucp.areasverdes.mod02.servicios.IntervencionesPodaService.MotivoPodaAltura;
+import pe.edu.pucp.areasverdes.mod02.servicios.PodasAlturaService;
 import pe.edu.pucp.areasverdes.mod05.AtencionService;
 import pe.edu.pucp.areasverdes.mod05.Entradas;
 import pe.edu.pucp.areasverdes.mod05.Usuario;
@@ -33,7 +35,8 @@ import pe.edu.pucp.areasverdes.mod05.Usuario;
  *   <li>la conformidad no condiciona la incidencia: pasa a Atendida («Sistema») cuando la atención
  *       llega a «Reporte adjunto», el informe del proveedor ({@link #sincronizar()}), y ese informe
  *       (también con la atención ya «Conforme / cerrado») vale como evidencia para cerrarla;
- *   <li>la poda del ejemplar de MOD-02 (RF-POD-005): {@code crear_poda} se acepta y no hace nada.
+ *   <li>con {@code crear_poda}, MOD-02 registra además la poda de altura del ejemplar con su motivo
+ *       (RF-POD-005, AV-312); sin ejemplar en la incidencia no se puede.
  * </ul>
  *
  * <p>Las condiciones de MOD-05 se comprueban antes de llamarlo, porque un error dentro de su
@@ -59,7 +62,9 @@ public class DerivacionTercerizada {
                             regexp = "Programada|Extraordinaria",
                             message = "El tipo de atención es Programada o Extraordinaria")
                     String tipoAtencion,
-            Boolean crearPoda) {}
+            Boolean crearPoda,
+            /** Motivo de la poda de altura con {@code crear_poda}; sin él, riesgo. */
+            MotivoPodaAltura motivoPoda) {}
 
     /** Un paso del avance en MOD-05: Hecho (con su fecha), EnCurso o Pendiente. */
     public record Paso(String nombre, String estado, LocalDate fecha) {}
@@ -78,12 +83,17 @@ public class DerivacionTercerizada {
 
     private final NamedParameterJdbcTemplate jdbc;
     private final AtencionService atenciones;
+    private final PodasAlturaService podasAltura;
     private final Clock reloj;
 
     public DerivacionTercerizada(
-            NamedParameterJdbcTemplate jdbc, AtencionService atenciones, Clock reloj) {
+            NamedParameterJdbcTemplate jdbc,
+            AtencionService atenciones,
+            PodasAlturaService podasAltura,
+            Clock reloj) {
         this.jdbc = jdbc;
         this.atenciones = atenciones;
+        this.podasAltura = podasAltura;
         this.reloj = reloj;
     }
 
@@ -175,6 +185,13 @@ public class DerivacionTercerizada {
             throw new ErrorPlanificacion(
                     400, "servicio-invalido", "El contrato no cubre " + r.servicio());
         }
+        boolean crearPoda = Boolean.TRUE.equals(r.crearPoda());
+        if (crearPoda && incidencia.get("ejemplar_id") == null) {
+            throw new ErrorPlanificacion(
+                    409,
+                    "poda-sin-ejemplar",
+                    "La poda de altura necesita el ejemplar: esta incidencia no tiene ninguno");
+        }
         Entradas.Alcance alcance = alcance(incidencia);
         String descripcion =
                 "Incidencia %s · %s en %s%s. Atención %s (derivada desde MOD-03)."
@@ -221,6 +238,15 @@ public class DerivacionTercerizada {
                         .addValue("proveedor", r.proveedorId())
                         .addValue("tipo", r.tipoAtencion())
                         .addValue("usuario", usuario.id()));
+        if (crearPoda) {
+            podasAltura.registrarDerivada(
+                    ((Number) incidencia.get("ejemplar_id")).longValue(),
+                    ((Number) atencion.get("id")).longValue(),
+                    id,
+                    (String) incidencia.get("codigo"),
+                    r.motivoPoda(),
+                    usuario.id());
+        }
         jdbc.update(
                 "UPDATE mod03_incidencia SET estado = 'DerivadaTercerizada', via = 'Tercerizada'"
                         + " WHERE id = :id",
