@@ -64,12 +64,53 @@ class ExportacionesReportesApiTest extends ApiGestion {
     }
 
     @Test
-    void losTiposDicenSusFormatosYLaMatrizNoDisponible() throws Exception {
+    void losTiposDicenSusFormatosYTodosEstanDisponibles() throws Exception {
         http.perform(get(RUTA + "tipos/").cookie(sesion("ingeniero")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(5))
-                .andExpect(jsonPath("$[?(@.tipo == 'MatrizIncidencias')].disponible").value(false))
+                .andExpect(jsonPath("$[?(@.tipo == 'MatrizIncidencias')].disponible").value(true))
+                .andExpect(
+                        jsonPath("$[?(@.tipo == 'MatrizIncidencias')].limite_filas.Excel")
+                                .value(50000))
                 .andExpect(jsonPath("$[?(@.tipo == 'GestionOSG')].limite_filas.PDF").value(5000));
+    }
+
+    /**
+     * Matriz de octubre: Jardín 9601 tiene dos «Rama caída» (Registrada y Cerrada) y un «Riego
+     * averiado» (Cerrada); la de noviembre no entra. Filas: 2 de espacio y tipo más la de totales.
+     */
+    @Test
+    void laMatrizDeIncidenciasCuentaPorEspacioTipoYEstado() throws Exception {
+        String[] sql = {
+            """
+            INSERT INTO mod02_area_verde (id, nombre, lugar, ubicacion, superficie_m2, usuario_creacion_id,
+                usuario_modificacion_id)
+            SELECT 9601, 'Jardín 9601', 'Campus', 'Frente al pabellón', 100, min(id), min(id) FROM core_usuario
+            """,
+            """
+            INSERT INTO mod03_incidencia (id, codigo, tipo_incidencia_id, area_verde_id, canal, reportante_nombre,
+                estado, registrada_por_id, fecha_registro)
+            SELECT v.id, v.codigo, t.id, 9601, 'Web', 'Vecino', v.estado, (SELECT min(id) FROM core_usuario),
+                   v.fecha::timestamptz
+            FROM (VALUES (9601, 'IN-9601', 'Rama caída', 'Registrada', '2026-10-02 09:00-05'),
+                         (9602, 'IN-9602', 'Rama caída', 'Cerrada', '2026-10-03 09:00-05'),
+                         (9603, 'IN-9603', 'Riego averiado', 'Cerrada', '2026-10-31 22:00-05'),
+                         (9604, 'IN-9604', 'Riego averiado', 'Cerrada', '2026-11-01 09:00-05'))
+                 AS v(id, codigo, tipo, estado, fecha)
+            JOIN mod03_tipo_incidencia t ON t.nombre = v.tipo
+            """,
+        };
+        for (String s : sql) jdbc.getJdbcTemplate().update(s);
+
+        exportar(
+                        "jefe",
+                        """
+                        {"tipo": "MatrizIncidencias", "formato": "Excel",
+                         "parametros": {"desde": "2026-10-01", "hasta": "2026-10-31"}}
+                        """)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.etiqueta_tipo").value("Matriz de incidencias"))
+                .andExpect(jsonPath("$.filas").value(3));
     }
 
     @Test
@@ -171,7 +212,7 @@ class ExportacionesReportesApiTest extends ApiGestion {
                         "{\"tipo\": \"MatrizIncidencias\", \"formato\": \"PDF\", \"parametros\":"
                                 + " {}}")
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.codigo").value("tipo-no-disponible"));
+                .andExpect(jsonPath("$.codigo").value("periodo-invalido"));
     }
 
     @Test

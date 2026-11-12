@@ -21,6 +21,7 @@ import org.springframework.web.util.pattern.PathPatternParser;
 import pe.edu.pucp.areasverdes.mod01.Mod01PermisosApiTest;
 import pe.edu.pucp.areasverdes.mod02.PodasAlturaApiTest;
 import pe.edu.pucp.areasverdes.mod03.MatrizPermisosApiTest;
+import pe.edu.pucp.areasverdes.mod05.MatrizPermisosMod05ApiTest;
 import pe.edu.pucp.areasverdes.mod06.gestion.MatrizPermisosGestionApiTest;
 import pe.edu.pucp.areasverdes.mod06.gestion.MatrizPermisosIaApiTest;
 import pe.edu.pucp.areasverdes.mod06.gestion.MatrizPermisosMod06ApiTest;
@@ -65,13 +66,6 @@ class ContratoRutasApiTest extends BasePruebaGlobal {
      */
     static final Set<String> SIN_MATRIZ_AUN =
             Set.of(
-                    // MOD-05: no tiene matriz
-                    "AtencionController",
-                    "AtencionEspecialController",
-                    "MaestrosController",
-                    "ObservacionPlagaController",
-                    "PlanFitosanitarioController",
-                    "VerificacionSeguridadController",
                     // MOD-02: no tiene matriz
                     "AreasController",
                     "CampanasPodaController",
@@ -92,6 +86,7 @@ class ContratoRutasApiTest extends BasePruebaGlobal {
         cubiertos.addAll(Mod01PermisosApiTest.endpointsCubiertos());
         cubiertos.addAll(PodasAlturaApiTest.endpointsCubiertos());
         cubiertos.addAll(MatrizPermisosApiTest.endpointsCubiertos());
+        cubiertos.addAll(MatrizPermisosMod05ApiTest.endpointsCubiertos());
         cubiertos.addAll(MatrizPermisosGestionApiTest.endpointsCubiertos());
         cubiertos.addAll(MatrizPermisosIaApiTest.endpointsCubiertos());
         cubiertos.addAll(MatrizPermisosMod06ApiTest.endpointsCubiertos());

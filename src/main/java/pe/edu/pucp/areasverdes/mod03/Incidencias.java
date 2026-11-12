@@ -228,15 +228,14 @@ public class Incidencias {
                         "SELECT nombre FROM mod03_tipo_incidencia WHERE activo ORDER BY id",
                         Map.of(),
                         String.class);
-        // Los ejemplares de MOD-02 aún apuntan al área de MOD-05: se cruzan por el nombre del área.
+        // Desde V67 cada ejemplar guarda su área de MOD-02 en area_verde_inventario_id (AV-274).
         List<Espacio> espacios =
                 jdbc.query(
                         """
                         SELECT a.nombre, coalesce(array_agg(e.codigo ORDER BY e.codigo)
                             FILTER (WHERE e.codigo IS NOT NULL), '{}') ejemplares
                         FROM mod02_area_verde a
-                        LEFT JOIN mod05_areaverde v ON v.nombre = a.nombre
-                        LEFT JOIN mod02_ejemplar e ON e.area_verde_inventario_id = v.id
+                        LEFT JOIN mod02_ejemplar e ON e.area_verde_inventario_id = a.id
                         WHERE a.activo GROUP BY a.id, a.nombre ORDER BY a.nombre
                         """,
                         (rs, n) ->

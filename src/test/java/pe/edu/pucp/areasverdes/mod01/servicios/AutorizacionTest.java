@@ -79,11 +79,12 @@ class AutorizacionTest {
 
     @Test
     void elCapatazNoRegistraEnLaCuadrillaDeOtro() {
-        var capataz = usuario("capataz", "CAM.PARTE.REGISTRAR");
+        var capataz =
+                usuario("capataz", Autorizacion.CONSULTAR_PARTES, Autorizacion.REGISTRAR_PARTE);
         assertDoesNotThrow(() -> autorizacion.exigirCuadrilla(capataz, 7));
         assertThrows(ErrorCore.class, () -> autorizacion.exigirCuadrilla(capataz, 8));
-        // Sin límite quien puede ver los partes de todas las cuadrillas (AV-382: por permiso, no
-        // por rol).
+        assertEquals(Set.of(7L), autorizacion.alcanceCuadrillas(capataz).orElseThrow());
+        // Sin límite quien consulta partes pero no registra trabajo de una cuadrilla propia.
         assertTrue(
                 autorizacion
                         .alcanceCuadrillas(

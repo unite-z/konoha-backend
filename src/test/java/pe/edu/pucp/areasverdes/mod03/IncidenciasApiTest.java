@@ -239,6 +239,21 @@ class IncidenciasApiTest extends ApiPlanificacion {
                 .andExpect(jsonPath("$.usuarios").isArray());
     }
 
+    @Test
+    void elCatalogoTraeLosEjemplaresDeCadaEspacioDeMod02() throws Exception {
+        // AV-274: el ejemplar se cruza con su área de MOD-02 (area_verde_inventario_id), no con la
+        // copia de MOD-05.
+        jdbc.getJdbcTemplate()
+                .update(
+                        "UPDATE mod02_ejemplar SET area_verde_inventario_id = (SELECT id FROM"
+                                + " mod02_area_verde WHERE nombre = 'Jardín de la Biblioteca')"
+                                + " WHERE codigo = 'T-0412'");
+        http.perform(get(RUTA + "catalogos-registro/").with(httpBasic("practicante", CLAVE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.espacios[0].nombre").value("Jardín de la Biblioteca"))
+                .andExpect(jsonPath("$.espacios[0].ejemplares").value(hasItem("T-0412")));
+    }
+
     long registrada() throws Exception {
         String ficha =
                 registrar("jefe", cuerpo("Telefono", "{\"nombre\": \"Ana\"}"))
