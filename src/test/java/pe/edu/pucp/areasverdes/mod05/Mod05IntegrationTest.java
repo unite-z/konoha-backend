@@ -1447,4 +1447,199 @@ class Mod05IntegrationTest {
         assertEquals(Atencion.CONFORME, respuesta.get("estado").asText());
         assertEquals(1, respuesta.get("conformidades").size());
     }
+
+    // --- RF-SER-009 (AV-320): datos del informe final según el formato estándar del servicio
+    // ---------------------------------------------------------------------------------------------
+
+    /**
+     * Formato vigente del tipo de servicio del contrato de prueba: un obligatorio de cada clase.
+     */
+    long formatoDePrueba(int version) {
+        long tipo =
+                repo.jdbc()
+                        .queryForObject(
+                                "SELECT tipo_servicio_id FROM mod05_contrato WHERE id=:id",
+                                Map.of("id", contrato),
+                                Long.class);
+        repo.jdbc()
+                .update(
+                        "UPDATE mod05_formato_reporte_servicio SET vigente=false WHERE"
+                                + " tipo_servicio_id=:tipo",
+                        Map.of("tipo", tipo));
+        long formato =
+                repo.jdbc()
+                        .queryForObject(
+                                "INSERT INTO mod05_formato_reporte_servicio"
+                                        + " (tipo_servicio_id, version, vigente) VALUES (:tipo,"
+                                        + " :version, true) RETURNING id",
+                                Map.of("tipo", tipo, "version", version),
+                                Long.class);
+        repo.jdbc()
+                .update(
+                        """
+                        INSERT INTO mod05_campo_formato_reporte
+                            (formato_id, orden, nombre_campo, tipo_dato, obligatorio, subcampos)
+                        VALUES (:f, 1, 'Metrado', 'Decimal', true, NULL),
+                            (:f, 2, 'Productos aplicados', 'JSON', true, CAST(:sub AS jsonb)),
+                            (:f, 3, 'Ruta recorrida', 'Texto largo', false, NULL)
+                        """,
+                        Map.of(
+                                "f",
+                                formato,
+                                "sub",
+                                "[{\"nombre\": \"producto\", \"tipo_dato\": \"Texto\","
+                                        + " \"descripcion\": \"Producto\"}, {\"nombre\":"
+                                        + " \"cantidad\", \"tipo_dato\": \"Decimal\","
+                                        + " \"descripcion\": \"Cantidad\"}]"));
+        return formato;
+    }
+
+    static final String DATOS =
+            "{\"Metrado\": \"120,5\", \"Productos aplicados\": [{\"producto\": \"Abamectina\","
+                    + " \"cantidad\": 2}, {}]}";
+
+    ResultActions enviarConDatos(String user, long id, String datos, String contenido)
+            throws Exception {
+        var request = multipart(BASE + id + "/reportes/");
+        request.file(pdf("informe.pdf", contenido))
+                .param("documentos", "[" + INFORME + "]")
+                .param("fecha_recepcion", hoy())
+                .param("datos_formato", datos);
+        if (user != null) request.with(httpBasic(user, PASSWORD));
+        return http.perform(request);
+    }
+
+    @Test
+    void sinFormatoVigenteElReporteSeAdjuntaComoAntes() throws Exception {
+        long id = create().get("id").asLong();
+        http.perform(get(BASE + id + "/formato-reporte/").with(httpBasic("practicante", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.formato").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.datos_anteriores").value(org.hamcrest.Matchers.nullValue()));
+        execute(id);
+        var reporte =
+                cuerpo(
+                        enviar("jefe", id, "[" + INFORME + "]", null, hoy(), pdf("a.pdf", "a"))
+                                .andExpect(status().isCreated()));
+        assertTrue(reporte.get("formato_id").isNull());
+        assertTrue(reporte.get("datos_formato").isNull());
+        // Enviar datos sin formato vigente es un error y no registra nada.
+        enviarConDatos("jefe", id, DATOS, "b")
+                .andExpect(status().isBadRequest())
+                .andExpect(
+                        jsonPath("$.detalle")
+                                .value(org.hamcrest.Matchers.containsString("no tiene formato")));
+        assertEquals(1, count("reporteproveedor"));
+    }
+
+    @Test
+    void elFormatoVigenteSeConsultaYLosDatosSeGuardanConSuVersion() throws Exception {
+        long formato = formatoDePrueba(1);
+        long id = create().get("id").asLong();
+        http.perform(get(BASE + id + "/formato-reporte/").with(httpBasic("ingeniero", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.formato.id").value(formato))
+                .andExpect(jsonPath("$.formato.version").value(1))
+                .andExpect(jsonPath("$.formato.tipo_servicio_nombre").value("Corte de césped"))
+                .andExpect(jsonPath("$.formato.campos[0].nombre_campo").value("Metrado"))
+                .andExpect(jsonPath("$.formato.campos[0].tipo_dato").value("Decimal"))
+                .andExpect(jsonPath("$.formato.campos[0].obligatorio").value(true))
+                .andExpect(jsonPath("$.formato.campos[1].subcampos[1].nombre").value("cantidad"))
+                .andExpect(jsonPath("$.formato.campos[1].subcampos[1].tipo_dato").value("Decimal"))
+                .andExpect(jsonPath("$.datos_anteriores").value(org.hamcrest.Matchers.nullValue()));
+        execute(id);
+        var reporte =
+                cuerpo(enviarConDatos("jefe", id, DATOS, "a").andExpect(status().isCreated()));
+        assertEquals(formato, reporte.get("formato_id").asLong());
+        assertEquals(1, reporte.get("formato_version").asInt());
+        assertEquals("120.5", reporte.at("/datos_formato/Metrado").asText());
+        assertEquals(1, reporte.at("/datos_formato/Productos aplicados").size());
+        assertEquals("2", reporte.at("/datos_formato/Productos aplicados/0/cantidad").asText());
+        assertTrue(reporte.at("/datos_formato/Ruta recorrida").isMissingNode());
+        long r = reporte.get("id").asLong();
+        http.perform(get(BASE + id + "/reportes/" + r + "/").with(httpBasic("jefe", PASSWORD)))
+                .andExpect(jsonPath("$.datos_formato.Metrado").value("120.5"));
+        http.perform(get(BASE + id + "/reportes/").with(httpBasic("jefe", PASSWORD)))
+                .andExpect(jsonPath("$.results[0].formato_version").value(1));
+        // La auditoría guarda los datos como objeto, no como el PGobject de jsonb.
+        String auditado =
+                repo.jdbc()
+                        .queryForObject(
+                                "SELECT valores_nuevos->'datos_formato'->>'Metrado' FROM"
+                                    + " mod05_registroauditoria WHERE entidad='ReporteProveedor'"
+                                    + " AND registro_id=:r",
+                                Map.of("r", r),
+                                String.class);
+        assertEquals("120.5", auditado);
+        // La siguiente revisión puede partir de estos datos.
+        http.perform(get(BASE + id + "/formato-reporte/").with(httpBasic("jefe", PASSWORD)))
+                .andExpect(jsonPath("$.datos_anteriores.revision").value(1))
+                .andExpect(jsonPath("$.datos_anteriores.datos.Metrado").value("120.5"));
+        // Con un formato nuevo, los datos anteriores ya no se proponen y el informe conserva el
+        // suyo.
+        formatoDePrueba(2);
+        http.perform(get(BASE + id + "/formato-reporte/").with(httpBasic("jefe", PASSWORD)))
+                .andExpect(jsonPath("$.formato.version").value(2))
+                .andExpect(jsonPath("$.datos_anteriores").value(org.hamcrest.Matchers.nullValue()));
+        http.perform(get(BASE + id + "/reportes/" + r + "/").with(httpBasic("jefe", PASSWORD)))
+                .andExpect(jsonPath("$.formato_version").value(1));
+    }
+
+    @Test
+    void faltarUnObligatorioRechazaElEnvioEnteroSinDejarRastro() throws Exception {
+        formatoDePrueba(1);
+        long id = create().get("id").asLong();
+        execute(id);
+        long enDisco = archivosEnDisco(), auditoria = count("registroauditoria");
+        enviarConDatos("jefe", id, "{\"Metrado\": \"3\"}", "a")
+                .andExpect(status().isBadRequest())
+                .andExpect(
+                        jsonPath("$.detalle")
+                                .value(
+                                        "Faltan datos obligatorios del informe final: Productos"
+                                                + " aplicados"));
+        enviarConDatos("jefe", id, "{\"Metrado\": \"3\", \"Otro\": 1}", "a")
+                .andExpect(status().isBadRequest());
+        enviarConDatos("jefe", id, "no es json", "a").andExpect(status().isBadRequest());
+        assertEquals(0, count("reporteproveedor"));
+        assertEquals(0, count("archivo"));
+        assertEquals(enDisco, archivosEnDisco());
+        assertEquals(auditoria, count("registroauditoria"));
+        assertEquals(Atencion.EJECUTADO, repo.get("atenciontercerizada", id).get("estado"));
+    }
+
+    @Test
+    void losDatosEntranEnLaHuellaDelReenvio() throws Exception {
+        formatoDePrueba(1);
+        long id = create().get("id").asLong();
+        execute(id);
+        var primero =
+                cuerpo(enviarConDatos("jefe", id, DATOS, "a").andExpect(status().isCreated()));
+        // Mismo contenido con las claves en otro orden: es el mismo envío.
+        String reordenado =
+                "{\"Productos aplicados\": [{\"cantidad\": \"2\", \"producto\": \"Abamectina\"}],"
+                        + " \"Metrado\": 120.5}";
+        var repetido =
+                cuerpo(enviarConDatos("ingeniero", id, reordenado, "a").andExpect(status().isOk()));
+        assertTrue(repetido.get("repetido").asBoolean());
+        assertEquals(primero.get("id").asLong(), repetido.get("id").asLong());
+        // Otro dato, o ninguno, es una revisión nueva.
+        enviarConDatos("jefe", id, DATOS.replace("120,5", "121"), "a")
+                .andExpect(status().isCreated());
+        enviar("jefe", id, "[" + INFORME + "]", null, hoy(), pdf("informe.pdf", "a"))
+                .andExpect(status().isCreated());
+        assertEquals(3, count("reporteproveedor"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"sinrol", "inactivo"})
+    void elFormatoExigeLosPermisosDelCicloDeAtencion(String user) throws Exception {
+        formatoDePrueba(1);
+        long id = create().get("id").asLong();
+        http.perform(get(BASE + id + "/formato-reporte/").with(httpBasic(user, PASSWORD)))
+                .andExpect(status().is(user.equals("inactivo") ? 401 : 403));
+        http.perform(get(BASE + id + "/formato-reporte/")).andExpect(status().isUnauthorized());
+        http.perform(get(BASE + "999999/formato-reporte/").with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isNotFound());
+    }
 }
