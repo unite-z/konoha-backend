@@ -7,6 +7,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,9 +22,10 @@ import pe.edu.pucp.areasverdes.mod06.comun.errores.ServicioIANoDisponible;
  * Cliente de DeepSeek (AV-395), alternativa a {@link ClienteGemini} cuando Gemini no responde.
  *
  * <p>Usa la API compatible con OpenAI ({@code POST /chat/completions}) con {@code response_format:
- * json_object}: el esquema va en la instrucción del sistema. DeepSeek solo trabaja con texto, así
- * que no analiza fotografías (evidencia fitosanitaria sigue con Gemini). Nunca se registra la clave
- * ({@code DEEPSEEK_API_KEY}) ni el contenido enviado (RNF-008).
+ * json_object}: el esquema va en la instrucción del sistema. Las fotografías van como bloques
+ * {@code image_url} en base64 (solo {@code deepseek-flash} las acepta: JPEG, PNG, GIF o WebP).
+ * DeepSeek no lee PDF. Nunca se registra la clave ({@code DEEPSEEK_API_KEY}) ni el contenido
+ * enviado (RNF-008).
  */
 public class ClienteDeepSeek implements ClienteIA {
 
@@ -31,8 +34,6 @@ public class ClienteDeepSeek implements ClienteIA {
 
     public static final String PROVEEDOR_IA = "DeepSeek";
     public static final String URL = "https://api.deepseek.com/chat/completions";
-    public static final String MENSAJE_SIN_IMAGENES =
-            "DeepSeek no analiza fotografías; este análisis necesita Gemini";
     public static final String MENSAJE_SIN_PDF =
             "DeepSeek aún no lee informes PDF; registra los datos manualmente o usa Gemini";
 
@@ -95,27 +96,47 @@ public class ClienteDeepSeek implements ClienteIA {
     @Override
     public Map<String, Object> generarJson(
             String datos, List<Imagen> imagenes, Map<String, Object> esquema, String instruccion) {
-        if (imagenes != null && !imagenes.isEmpty())
-            throw new ServicioIANoDisponible(MENSAJE_SIN_IMAGENES);
-        return pedir(cuerpo(modelo, esquema, instruccion, datos));
+        return pedir(cuerpo(modelo, esquema, instruccion, datos, imagenes));
     }
 
-    /** Cuerpo de {@code /chat/completions}: instrucción con el esquema, datos y salida JSON. */
+    /**
+     * Cuerpo de {@code /chat/completions}: instrucción con el esquema, datos (con las fotografías
+     * delante, si las hay) y salida JSON.
+     */
     static String cuerpo(
-            String modelo, Map<String, Object> esquema, String instruccion, String datos) {
+            String modelo,
+            Map<String, Object> esquema,
+            String instruccion,
+            String datos,
+            List<Imagen> imagenes) {
         try {
             String sistema =
                     (instruccion == null ? "" : instruccion)
                             + "\n\nResponde solo con un objeto JSON válido que siga este esquema"
                             + " JSON:\n"
                             + JSON.writeValueAsString(esquema);
+            String texto = datos == null ? "" : datos;
+            Object usuario = texto;
+            if (imagenes != null && !imagenes.isEmpty()) {
+                List<Map<String, Object>> bloques = new ArrayList<>();
+                for (Imagen imagen : imagenes) {
+                    String url =
+                            "data:"
+                                    + imagen.tipoMime()
+                                    + ";base64,"
+                                    + Base64.getEncoder().encodeToString(imagen.datos());
+                    bloques.add(Map.of("type", "image_url", "image_url", Map.of("url", url)));
+                }
+                bloques.add(Map.of("type", "text", "text", texto));
+                usuario = bloques;
+            }
             Map<String, Object> cuerpo = new LinkedHashMap<>();
             cuerpo.put("model", modelo);
             cuerpo.put(
                     "messages",
                     List.of(
                             Map.of("role", "system", "content", sistema),
-                            Map.of("role", "user", "content", datos == null ? "" : datos)));
+                            Map.of("role", "user", "content", usuario)));
             cuerpo.put("response_format", Map.of("type", "json_object"));
             cuerpo.put("stream", false);
             return JSON.writeValueAsString(cuerpo);

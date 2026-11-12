@@ -21,7 +21,7 @@ public record ProveedorIaPropiedades(String nombre, String deepseekApiKey, Strin
                         : nombre.strip().toLowerCase(Locale.ROOT);
         deepseekApiKey = deepseekApiKey == null ? "" : deepseekApiKey;
         deepseekModel =
-                deepseekModel == null || deepseekModel.isBlank() ? "deepseek-chat" : deepseekModel;
+                deepseekModel == null || deepseekModel.isBlank() ? "deepseek-flash" : deepseekModel;
     }
 
     @Override

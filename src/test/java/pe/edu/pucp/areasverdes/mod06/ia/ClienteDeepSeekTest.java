@@ -34,7 +34,7 @@ class ClienteDeepSeekTest {
         ClienteDeepSeek cliente =
                 new ClienteDeepSeek(
                         "clave",
-                        "deepseek-chat",
+                        "deepseek-flash",
                         cuerpo -> {
                             enviados.add(cuerpo);
                             return respuesta("{\"prioridad\": \"Alta\"}");
@@ -45,7 +45,7 @@ class ClienteDeepSeekTest {
                 cliente.generarJson("{\"x\": 1}", List.of(), ESQUEMA, "Clasifica"));
 
         JsonNode cuerpo = new ObjectMapper().readTree(enviados.get(0));
-        assertEquals("deepseek-chat", cuerpo.path("model").asText());
+        assertEquals("deepseek-flash", cuerpo.path("model").asText());
         assertEquals("json_object", cuerpo.path("response_format").path("type").asText());
         String sistema = cuerpo.path("messages").path(0).path("content").asText();
         assertTrue(sistema.startsWith("Clasifica") && sistema.contains("{\"type\":\"object\"}"));
@@ -54,24 +54,33 @@ class ClienteDeepSeekTest {
     }
 
     @Test
-    void conFotografiasNoLlamaYAvisaDeQueHaceFaltaGemini() {
+    void lasFotografiasVanComoBloquesImageUrlDelanteDelTexto() throws Exception {
+        List<String> enviados = new ArrayList<>();
         ClienteDeepSeek cliente =
                 new ClienteDeepSeek(
                         "clave",
-                        "deepseek-chat",
+                        "deepseek-flash",
                         cuerpo -> {
-                            throw new AssertionError("no debe llamar");
+                            enviados.add(cuerpo);
+                            return respuesta("{\"hipotesis\": []}");
                         });
-        ServicioIANoDisponible e =
-                assertThrows(
-                        ServicioIANoDisponible.class,
-                        () ->
-                                cliente.generarJson(
-                                        "",
-                                        List.of(new ClienteIA.Imagen(new byte[] {1}, "image/jpeg")),
-                                        ESQUEMA,
-                                        "x"));
-        assertEquals(ClienteDeepSeek.MENSAJE_SIN_IMAGENES, e.getMessage());
+        cliente.generarJson(
+                "Síntomas",
+                List.of(new ClienteIA.Imagen(new byte[] {1, 2}, "image/png")),
+                ESQUEMA,
+                "x");
+
+        JsonNode contenido =
+                new ObjectMapper()
+                        .readTree(enviados.get(0))
+                        .path("messages")
+                        .path(1)
+                        .path("content");
+        assertEquals("image_url", contenido.path(0).path("type").asText());
+        assertEquals(
+                "data:image/png;base64,AQI=",
+                contenido.path(0).path("image_url").path("url").asText());
+        assertEquals("Síntomas", contenido.path(1).path("text").asText());
     }
 
     @Test
@@ -84,7 +93,7 @@ class ClienteDeepSeekTest {
                         c -> respuesta(" "),
                         c -> respuesta("[1, 2]"),
                         c -> "no es json")) {
-            ClienteDeepSeek cliente = new ClienteDeepSeek("clave", "deepseek-chat", t);
+            ClienteDeepSeek cliente = new ClienteDeepSeek("clave", "deepseek-flash", t);
             ServicioIANoDisponible e =
                     assertThrows(
                             ServicioIANoDisponible.class,
@@ -98,7 +107,7 @@ class ClienteDeepSeekTest {
         ServicioIANoDisponible e =
                 assertThrows(
                         ServicioIANoDisponible.class,
-                        () -> new ClienteDeepSeek(" ", "deepseek-chat", null));
+                        () -> new ClienteDeepSeek(" ", "deepseek-flash", null));
         assertEquals(ClienteGemini.MENSAJE_IA_NO_CONFIGURADA, e.getMessage());
     }
 
@@ -110,7 +119,7 @@ class ClienteDeepSeekTest {
                 new FabricaClienteIA(mod06, new ProveedorIaPropiedades("DeepSeek", "clave", null));
         ClienteIA cliente = deepseek.obtenerClienteIa();
         assertInstanceOf(ClienteDeepSeek.class, cliente);
-        assertEquals("deepseek-chat", cliente.modelo());
+        assertEquals("deepseek-flash", cliente.modelo());
 
         assertInstanceOf(ClienteGemini.class, new FabricaClienteIA(mod06).obtenerClienteIa());
         FabricaClienteIA otro =
