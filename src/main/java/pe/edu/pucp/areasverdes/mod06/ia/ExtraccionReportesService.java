@@ -311,7 +311,7 @@ public class ExtraccionReportesService {
 
         // El cliente se obtiene antes de leer el archivo: si la IA no está configurada se informa
         // de inmediato.
-        ClienteIA c = cliente != null ? cliente : fabricaCliente.obtenerClienteIa();
+        ClienteIA c = cliente != null ? cliente : fabricaCliente.obtenerClienteIa("extraccion");
         byte[] pdf = r.leerContenidoArchivo(archivo);
         String instruccion = leerInstruccion();
 

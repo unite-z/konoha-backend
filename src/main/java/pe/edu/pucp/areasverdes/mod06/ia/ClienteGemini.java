@@ -82,6 +82,7 @@ public class ClienteGemini implements ClienteIA {
     private final String modelo;
     private final ThinkingLevel nivelRazonamiento;
     private final Sdk sdk;
+    private Uso ultimoUso;
 
     /**
      * Crea el cliente del SDK con la clave <b>explícita</b> ({@code GEMINI_API_KEY}) y el modelo
@@ -123,11 +124,14 @@ public class ClienteGemini implements ClienteIA {
         } else {
             Client cliente = Client.builder().apiKey(clave).build();
             this.sdk =
-                    parametros ->
-                            cliente.interactions
-                                    .create(CreateInteractionRequestBody.of(parametros))
-                                    .interaction()
-                                    .flatMap(ClienteGemini::textoDeSalida);
+                    parametros -> {
+                        Optional<Interaction> interaccion =
+                                cliente.interactions
+                                        .create(CreateInteractionRequestBody.of(parametros))
+                                        .interaction();
+                        interaccion.flatMap(Interaction::usage).ifPresent(u -> ultimoUso = uso(u));
+                        return interaccion.flatMap(ClienteGemini::textoDeSalida);
+                    };
         }
     }
 
@@ -147,6 +151,20 @@ public class ClienteGemini implements ClienteIA {
             }
         }
         return texto.isEmpty() ? Optional.empty() : Optional.of(texto.toString());
+    }
+
+    /** Tokens de la interacción: el razonamiento se factura como salida. */
+    static Uso uso(com.google.genai.gaos.models.interactions.Usage u) {
+        Integer salida = u.totalOutputTokens().orElse(null);
+        Integer razonamiento = u.totalThoughtTokens().orElse(null);
+        if (salida != null && razonamiento != null) salida += razonamiento;
+        return new Uso(
+                u.totalInputTokens().orElse(null), salida, u.totalCachedTokens().orElse(null));
+    }
+
+    @Override
+    public Uso ultimoUso() {
+        return ultimoUso;
     }
 
     @Override
