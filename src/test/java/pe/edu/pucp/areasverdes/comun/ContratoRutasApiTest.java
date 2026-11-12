@@ -64,12 +64,6 @@ class ContratoRutasApiTest extends BasePruebaGlobal {
      */
     static final Set<String> SIN_MATRIZ_AUN =
             Set.of(
-                    // MOD-03: faltan filas en MatrizPermisosApiTest
-                    "AvisosController",
-                    "CorteController",
-                    "IncidenciasController",
-                    "ProgramacionController",
-                    "ServiciosController",
                     // MOD-05: no tiene matriz
                     "AtencionController",
                     "AtencionEspecialController",
