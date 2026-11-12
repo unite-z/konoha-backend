@@ -186,4 +186,79 @@ class DerivacionInternaApiTest extends ApiPlanificacion {
         http.perform(get(RUTA + incidencia + "/").with(httpBasic("jefe", CLAVE)))
                 .andExpect(jsonPath("$.estado").value("Clasificada"));
     }
+
+    /** Deriva la incidencia a Marta y devuelve el id del encargo. */
+    long derivada() throws Exception {
+        encargar("jefe", cuerpo(marta, ACTIVIDAD, manana())).andExpect(status().isOk());
+        return jdbc.getJdbcTemplate()
+                .queryForObject(
+                        "SELECT max(encargo_id) FROM mod03_encargo_incidencia WHERE incidencia_id ="
+                                + " ?",
+                        Long.class,
+                        incidencia);
+    }
+
+    /** Lo que hace MOD-04 al cambiar el estado del encargo (AV-247). */
+    void encargoA(long encargo, String estado, String observaciones) {
+        var sql = jdbc.getJdbcTemplate();
+        String anterior =
+                sql.queryForObject(
+                        "SELECT estado FROM mod04_encargo WHERE id = ?", String.class, encargo);
+        sql.update("UPDATE mod04_encargo SET estado = ? WHERE id = ?", estado, encargo);
+        sql.update(
+                "INSERT INTO mod04_encargo_cambio_estado (encargo_id, estado_anterior,"
+                        + " estado_nuevo, observaciones, usuario_id, fecha) VALUES (?, ?, ?, ?, 1,"
+                        + " now())",
+                encargo,
+                anterior,
+                estado,
+                observaciones);
+    }
+
+    ResultActions ficha() throws Exception {
+        return http.perform(get(RUTA + incidencia + "/").with(httpBasic("jefe", CLAVE)));
+    }
+
+    @Test
+    void alCompletarseElEncargoLaIncidenciaQuedaAtendidaPorSistema() throws Exception {
+        long encargo = derivada();
+        encargoA(encargo, "En curso", "");
+        ficha().andExpect(jsonPath("$.estado").value("EnAtencion"));
+        encargoA(encargo, "Completado", "Rama retirada");
+        ficha().andExpect(jsonPath("$.estado").value("Atendida"))
+                .andExpect(jsonPath("$.atencion.atendida_por").value("Sistema"))
+                .andExpect(jsonPath("$.atencion.encargo_codigo").value("ENC-" + encargo))
+                .andExpect(jsonPath("$.encargo_cancelado").isEmpty());
+        // Consultar otra vez no repite la transición.
+        ficha().andExpect(jsonPath("$.estado").value("Atendida"));
+        assertEquals(
+                1,
+                jdbc.getJdbcTemplate()
+                        .queryForObject(
+                                "SELECT count(*) FROM mod03_historial_incidencia WHERE"
+                                        + " incidencia_id = ? AND estado = 'Atendida'",
+                                Integer.class,
+                                incidencia));
+    }
+
+    @Test
+    void alCancelarseVuelveAClasificadaConElMotivoYSePuedeDerivarDeNuevo() throws Exception {
+        long encargo = derivada();
+        encargoA(encargo, "Cancelado", "Sin acceso al jardín");
+        ficha().andExpect(jsonPath("$.estado").value("Clasificada"))
+                .andExpect(jsonPath("$.encargo_cancelado.codigo").value("ENC-" + encargo))
+                .andExpect(jsonPath("$.encargo_cancelado.motivo").value("Sin acceso al jardín"));
+        long otro = derivada();
+        ficha().andExpect(jsonPath("$.estado").value("DerivadaInterna"))
+                .andExpect(jsonPath("$.encargo_cancelado").isEmpty());
+        assertEquals(
+                2,
+                jdbc.getJdbcTemplate()
+                        .queryForObject(
+                                "SELECT count(*) FROM mod03_encargo_incidencia WHERE incidencia_id"
+                                        + " = ?",
+                                Integer.class,
+                                incidencia));
+        assertEquals(true, otro != encargo);
+    }
 }

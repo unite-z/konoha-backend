@@ -6,6 +6,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -23,6 +24,10 @@ import pe.edu.pucp.areasverdes.mod05.Usuario;
  * <p>Las condiciones de MOD-04 se comprueban antes de llamarlo, porque un error suyo desharía
  * también la derivación. El encargo apunta todavía a la copia de áreas de MOD-05: el espacio se
  * cruza por el nombre (deuda de V1, AV-287), como en {@link DerivacionTercerizada}.
+ *
+ * <p>El estado del último encargo manda en la incidencia ({@link #sincronizar()}, al consultarla):
+ * En curso u Observado la deja En atención; Completado, Atendida («Sistema»); Cancelado, otra vez
+ * Clasificada con el motivo del jefe, para derivarla de nuevo (el intento queda en el vínculo).
  */
 @Service
 public class DerivacionInterna {
@@ -52,6 +57,9 @@ public class DerivacionInterna {
         this.reloj = reloj;
     }
 
+    /** El último encargo se canceló: hay que derivarla de nuevo (Figma 390-8582). */
+    public record EncargoCancelado(String codigo, String motivo) {}
+
     /** «ENC-12»: MOD-04 no numera sus encargos. */
     static String codigo(long encargo) {
         return "ENC-" + encargo;
@@ -69,6 +77,7 @@ public class DerivacionInterna {
     @Transactional
     public void derivar(long id, NuevoEncargo e, UsuarioPlanificacion usuario) {
         Acceso.gestionarIncidencias(usuario);
+        sincronizar();
         if (!usuario.tiene(OperacionCampoService.GESTIONAR)) {
             throw new ErrorPlanificacion(
                     403, "sin-permiso", "Tu usuario no puede crear encargos en Operación de campo");
@@ -193,6 +202,84 @@ public class DerivacionInterna {
                     "incidencia",
                     id);
         }
+    }
+
+    /**
+     * Lleva a cada incidencia derivada el estado de su último encargo. Idempotente: solo cambia las
+     * que aún no lo reflejan, y deja la transición en el historial sin autor («Sistema»).
+     */
+    public void sincronizar() {
+        jdbc.update(
+                """
+                WITH ultimos AS (
+                    SELECT DISTINCT ON (v.incidencia_id) v.incidencia_id, v.encargo_id,
+                        e.estado encargo_estado
+                    FROM mod03_encargo_incidencia v JOIN mod04_encargo e ON e.id = v.encargo_id
+                    ORDER BY v.incidencia_id, v.id DESC
+                ), cambiadas AS (
+                    UPDATE mod03_incidencia i SET estado = CASE u.encargo_estado
+                            WHEN 'Completado' THEN 'Atendida'
+                            WHEN 'Cancelado' THEN 'Clasificada'
+                            ELSE 'EnAtencion' END
+                    FROM ultimos u
+                    WHERE i.id = u.incidencia_id AND (
+                        (u.encargo_estado IN ('Completado', 'Cancelado')
+                            AND i.estado IN ('DerivadaInterna', 'EnAtencion'))
+                        OR (u.encargo_estado IN ('En curso', 'Observado')
+                            AND i.estado = 'DerivadaInterna'))
+                    RETURNING i.id, i.estado, u.encargo_id, u.encargo_estado
+                )
+                INSERT INTO mod03_historial_incidencia (incidencia_id, estado, usuario_id, detalle)
+                SELECT c.id, c.estado, NULL, 'encargo ENC-' || c.encargo_id || CASE c.encargo_estado
+                    WHEN 'Completado' THEN ' completado en Operación de campo'
+                    WHEN 'Cancelado' THEN ' cancelado: ' || coalesce((
+                        SELECT h.observaciones FROM mod04_encargo_cambio_estado h
+                        WHERE h.encargo_id = c.encargo_id AND h.estado_nuevo = 'Cancelado'
+                        ORDER BY h.id DESC LIMIT 1), 'sin motivo')
+                    ELSE ' en curso' END
+                FROM cambiadas c
+                """,
+                Map.of());
+    }
+
+    /** El código del último encargo de la incidencia, o {@code null} si no tiene. */
+    String codigoEncargo(long incidencia) {
+        return ultimo(incidencia)
+                .map(f -> codigo(((Number) f.get("encargo_id")).longValue()))
+                .orElse(null);
+    }
+
+    /**
+     * El último encargo si está cancelado y la incidencia sigue Clasificada; si no, {@code null}.
+     */
+    EncargoCancelado encargoCancelado(long incidencia) {
+        return ultimo(incidencia)
+                .filter(f -> "Cancelado".equals(f.get("encargo_estado")))
+                .filter(f -> "Clasificada".equals(f.get("incidencia_estado")))
+                .map(
+                        f ->
+                                new EncargoCancelado(
+                                        codigo(((Number) f.get("encargo_id")).longValue()),
+                                        (String) f.get("motivo")))
+                .orElse(null);
+    }
+
+    private Optional<Map<String, Object>> ultimo(long incidencia) {
+        return jdbc
+                .queryForList(
+                        """
+                        SELECT v.encargo_id, e.estado encargo_estado, i.estado incidencia_estado,
+                            (SELECT h.observaciones FROM mod04_encargo_cambio_estado h
+                                WHERE h.encargo_id = e.id AND h.estado_nuevo = 'Cancelado'
+                                ORDER BY h.id DESC LIMIT 1) motivo
+                        FROM mod03_encargo_incidencia v
+                        JOIN mod04_encargo e ON e.id = v.encargo_id
+                        JOIN mod03_incidencia i ON i.id = v.incidencia_id
+                        WHERE v.incidencia_id = :id ORDER BY v.id DESC LIMIT 1
+                        """,
+                        Map.of("id", incidencia))
+                .stream()
+                .findFirst();
     }
 
     /**
