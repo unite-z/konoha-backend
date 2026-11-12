@@ -42,17 +42,40 @@ class ConstanciaProgramacionApiTest extends ApiPlanificacion {
     }
 
     @Test
-    void laProhibicionExigeConfirmacionExpresaConMotivo() throws Exception {
+    void laProhibicionBloqueaAunqueSeJustifiqueYSeConfirme() throws Exception {
+        int antes = programaciones();
         programar(1, 1, "")
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.codigo").value("restricciones-sin-justificar"));
-        programar(1, 1, ", \"justificacion\": \"Única ventana del proveedor\"")
-                .andExpect(jsonPath("$.codigo").value("confirmacion-requerida"));
+                .andExpect(jsonPath("$.codigo").value("fecha-prohibida"));
         programar(
                         1,
                         1,
                         ", \"justificacion\": \"Única ventana del proveedor\","
                                 + " \"confirmar_prohibicion\": true")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("fecha-prohibida"));
+        assertEquals(antes, programaciones());
+    }
+
+    int programaciones() {
+        return jdbc.getJdbcTemplate()
+                .queryForObject("SELECT count(*) FROM mod03_programacion_servicio", Integer.class);
+    }
+
+    @Test
+    void unAvisoSeGuardaConMotivoComoConstancia() throws Exception {
+        jdbc.getJdbcTemplate()
+                .update(
+                        "INSERT INTO mod03_restriccion_calendario (tipo_restriccion_id,"
+                            + " fecha_inicio, fecha_fin, usuario_creacion_id,"
+                            + " usuario_modificacion_id) SELECT id, ?, ?, 1, 1 FROM"
+                            + " mod03_tipo_restriccion WHERE nombre = 'Actividad extracurricular'",
+                        HOY.plusDays(5),
+                        HOY.plusDays(5));
+        programar(1, 5, "")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("restricciones-sin-justificar"));
+        programar(1, 5, ", \"justificacion\": \"Única ventana del proveedor\"")
                 .andExpect(status().isCreated());
         assertEquals(
                 "Única ventana del proveedor",
@@ -60,6 +83,32 @@ class ConstanciaProgramacionApiTest extends ApiPlanificacion {
                         .queryForObject(
                                 "SELECT justificacion FROM mod03_confirmacion_restriccion",
                                 String.class));
+    }
+
+    void restriccion(String tipo, int desde) {
+        jdbc.getJdbcTemplate()
+                .update(
+                        "INSERT INTO mod03_restriccion_calendario (tipo_restriccion_id,"
+                                + " fecha_inicio, fecha_fin, usuario_creacion_id,"
+                                + " usuario_modificacion_id) SELECT id, ?, ?, 1, 1 FROM"
+                                + " mod03_tipo_restriccion WHERE nombre = ?",
+                        HOY.plusDays(desde),
+                        HOY.plusDays(desde),
+                        tipo);
+    }
+
+    @Test
+    void enUnFeriadoSeProgramaSinConflictoYElEventoMasivoEsAviso() throws Exception {
+        restriccion("Feriado", 10);
+        restriccion("Paro", 10);
+        restriccion("Cierre del campus", 10);
+        programar(1, 10, "").andExpect(status().isCreated());
+        restriccion("Evento masivo", 20);
+        programar(1, 20, "")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("restricciones-sin-justificar"));
+        programar(1, 20, ", \"justificacion\": \"Única ventana del proveedor\"")
+                .andExpect(status().isCreated());
     }
 
     @Test

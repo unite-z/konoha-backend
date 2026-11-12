@@ -8,6 +8,7 @@ import static pe.edu.pucp.areasverdes.mod05.AtencionService.values;
 
 import com.fasterxml.jackson.databind.*;
 import java.nio.file.*;
+import java.security.MessageDigest;
 import java.time.*;
 import java.util.*;
 import java.util.concurrent.*;
@@ -24,8 +25,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import pe.edu.pucp.areasverdes.comun.BaseDePruebas;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -44,24 +47,7 @@ class Mod05IntegrationTest {
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry p) {
-        String url =
-                System.getenv()
-                        .getOrDefault(
-                                "MOD05_TEST_DB_URL",
-                                "jdbc:postgresql://127.0.0.1:55432/mod05_spring_test");
-        if (!url.endsWith("_test"))
-            throw new IllegalStateException(
-                    "Las pruebas requieren una base exclusiva terminada en _test");
-        p.add("spring.datasource.url", () -> url);
-        p.add(
-                "spring.datasource.username",
-                () ->
-                        System.getenv()
-                                .getOrDefault(
-                                        "MOD05_TEST_DB_USER", System.getProperty("user.name")));
-        p.add(
-                "spring.datasource.password",
-                () -> System.getenv().getOrDefault("MOD05_TEST_DB_PASSWORD", ""));
+        BaseDePruebas.registrar(p);
         p.add("mod05.archivos", () -> FILES.toString());
         p.add("mod05.max-archivo-bytes", () -> 1024);
     }
@@ -272,7 +258,7 @@ class Mod05IntegrationTest {
                         + "/documentos/"
                         + r1.at("/documentos/0/id").asLong()
                         + "/descarga/";
-        http.perform(get(download)).andExpect(status().isForbidden());
+        http.perform(get(download)).andExpect(status().isUnauthorized());
         http.perform(get(download).with(httpBasic("jefe", PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Cache-Control", "private, no-store"))
@@ -420,6 +406,64 @@ class Mod05IntegrationTest {
                                 jefe));
     }
 
+    JsonNode verificar(long id, String usuario, String medidas, boolean confirmado, int esperado)
+            throws Exception {
+        return cuerpo(
+                http.perform(
+                                post("/api/v1/tercerizados/atenciones/" + id + "/seguridad/")
+                                        .with(httpBasic(usuario, PASSWORD))
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(
+                                                json.writeValueAsBytes(
+                                                        values(
+                                                                "medidas",
+                                                                medidas,
+                                                                "confirmado",
+                                                                confirmado))))
+                        .andExpect(status().is(esperado)));
+    }
+
+    @Test
+    void seguridadPorRolConservaCorreccionesYPermiteCompletarElCiclo() throws Exception {
+        long normal = create().get("id").asLong();
+        verificar(normal, "jefe", "EPP", true, 409);
+        repo.update("tiposervicio", 1, values("es_riesgo", true));
+        long id = create().get("id").asLong();
+        http.perform(
+                        post("/api/v1/tercerizados/atenciones/" + id + "/seguridad/")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        json.writeValueAsBytes(
+                                                values("medidas", "EPP", "confirmado", true))))
+                .andExpect(status().isUnauthorized());
+        verificar(id, "practicante", "EPP", true, 403);
+        verificar(id, "sinrol", "EPP", true, 403);
+        verificar(id, "jefe", " ", true, 400);
+        verificar(id, "ingeniero", "Casco", false, 400);
+        verificar(id, "jefe", "Casco y guantes", true, 200);
+        verificar(id, "jefe", "Casco y guantes", true, 200);
+        assertEquals(1, count("verificacionseguridad"));
+        var corregida = verificar(id, "ingeniero", "Casco, guantes y delimitación", true, 200);
+        assertEquals(2, corregida.get("verificaciones_seguridad").size());
+        assertEquals(
+                "Casco y guantes", corregida.at("/verificaciones_seguridad/0/medidas").asText());
+        assertEquals(
+                "Nombre ingeniero",
+                corregida.at("/verificaciones_seguridad/1/usuario_nombre").asText());
+        service.orden(id, new Entradas.Orden("OC-R", null), jefe);
+        service.inicio(id, new Entradas.Inicio(OffsetDateTime.now().minusHours(1)), jefe);
+        verificar(id, "jefe", "Cambio tardío", true, 409);
+        service.fin(id, new Entradas.Fin(OffsetDateTime.now()), jefe);
+        enviar("jefe", id, informes(), "Informe", hoy(), pdf("informe.pdf", "A"))
+                .andExpect(status().isCreated());
+        decidir(id, "jefe", decision("Observada", "Corregir metrado"), 200);
+        enviar("ingeniero", id, informes(), "Metrado corregido", hoy(), pdf("informe.pdf", "B"))
+                .andExpect(status().isCreated());
+        var cerrada = decidir(id, "jefe", decision("Conforme", ""), 200);
+        assertEquals(Atencion.CONFORME, cerrada.get("estado").asText());
+        assertEquals(2, cerrada.get("verificaciones_seguridad").size());
+    }
+
     @Test
     void origenYAcuerdoNoCierranAtencion() throws Exception {
         long id = create().get("id").asLong();
@@ -474,22 +518,30 @@ class Mod05IntegrationTest {
     @ValueSource(strings = {"jefe", "ingeniero", "practicante", "sinrol", "inactivo"})
     void permisosYMe(String user) throws Exception {
         http.perform(get("/api/tercerizados/me/").with(httpBasic(user, PASSWORD)))
-                .andExpect(status().is(user.equals("inactivo") ? 403 : 200));
+                .andExpect(status().is(user.equals("inactivo") ? 401 : 200));
         http.perform(get(BASE).with(httpBasic(user, PASSWORD)))
-                .andExpect(status().is(Set.of("sinrol", "inactivo").contains(user) ? 403 : 200));
+                .andExpect(
+                        status().is(
+                                        user.equals("inactivo")
+                                                ? 401
+                                                : user.equals("sinrol") ? 403 : 200));
         http.perform(
                         post(BASE)
                                 .with(httpBasic(user, PASSWORD))
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(json.writeValueAsBytes(input())))
-                .andExpect(status().is(user.equals("jefe") ? 201 : 403));
+                .andExpect(
+                        status().is(
+                                        user.equals("jefe")
+                                                ? 201
+                                                : user.equals("inactivo") ? 401 : 403));
     }
 
     @Test
     void anonimoCredencialInvalidaYJerarquia() throws Exception {
-        http.perform(get(BASE)).andExpect(status().isForbidden());
+        http.perform(get(BASE)).andExpect(status().isUnauthorized());
         http.perform(get(BASE).with(httpBasic("jefe", "incorrecta")))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
         repo.jdbc()
                 .update(
                         "INSERT INTO mod05_usuario_rol VALUES (:id,:rol)",
@@ -662,6 +714,8 @@ class Mod05IntegrationTest {
         }
         service.fin(id, new Entradas.Fin(OffsetDateTime.now().minusHours(1)), jefe);
         try (var pool = Executors.newFixedThreadPool(2)) {
+            // Contenidos distintos: con el mismo contenido el segundo envío sería un reintento.
+            var numero = new java.util.concurrent.atomic.AtomicInteger();
             Callable<Integer> upload =
                     () -> {
                         barrier.await(10, TimeUnit.SECONDS);
@@ -676,7 +730,8 @@ class Mod05IntegrationTest {
                                                         "archivos",
                                                         "reporte.pdf",
                                                         "application/pdf",
-                                                        "%PDF-1.7".getBytes())),
+                                                        ("%PDF-1.7 " + numero.incrementAndGet())
+                                                                .getBytes())),
                                         jefe);
                         return ((Number) r.get("revision")).intValue();
                     };
@@ -707,6 +762,14 @@ class Mod05IntegrationTest {
                             + " mod05_usuario,mod05_proveedor,mod05_tiposervicio,mod05_areaverde,mod05_unidadmedida,mod05_unidadinstitucional,mod05_archivo"
                             + " RESTART IDENTITY CASCADE");
         seed.cargar(mocks, PASSWORD);
+        Map<String, Object> ejemplarTrasPrecarga =
+                repo.jdbc()
+                        .getJdbcTemplate()
+                        .queryForMap(
+                                "INSERT INTO mod02_ejemplar (area_verde_id) VALUES (NULL)"
+                                        + " RETURNING id, codigo");
+        assertTrue(((Number) ejemplarTrasPrecarga.get("id")).longValue() > 3);
+        assertEquals("EJ-00734", ejemplarTrasPrecarga.get("codigo"));
         long providers = count("proveedor");
         String hash = repo.usuario("mod05_jefe").orElseThrow().passwordHash();
         seed.cargar(mocks, "otra-clave-no-sobrescribe");
@@ -723,5 +786,860 @@ class Mod05IntegrationTest {
         http.perform(get("/api/tercerizados/schema"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.openapi").exists());
+    }
+
+    // --- RF-SER-006: permisos, descarga e idempotencia de los reportes del proveedor
+    // ---------------------------------------------------------------------------------------------
+
+    static final String INFORME = "{\"categoria\":\"InformeFinal\"}";
+
+    String hoy() {
+        return LocalDate.now(Mod05Application.LIMA).toString();
+    }
+
+    MockMultipartFile pdf(String nombre, String contenido) {
+        return new MockMultipartFile(
+                "archivos", nombre, "application/pdf", ("%PDF-1.7 " + contenido).getBytes());
+    }
+
+    /** Envío multipart; con `user` nulo va sin credenciales. */
+    ResultActions enviar(
+            String user,
+            long id,
+            String docs,
+            String resumen,
+            String fecha,
+            MockMultipartFile... files)
+            throws Exception {
+        var request = multipart(BASE + id + "/reportes/");
+        for (var file : files) request.file(file);
+        request.param("documentos", docs).param("fecha_recepcion", fecha);
+        if (resumen != null) request.param("resumen", resumen);
+        if (user != null) request.with(httpBasic(user, PASSWORD));
+        return http.perform(request);
+    }
+
+    JsonNode cuerpo(ResultActions result) throws Exception {
+        return json.readTree(result.andReturn().getResponse().getContentAsByteArray());
+    }
+
+    long archivosEnDisco() throws Exception {
+        try (var paths = Files.walk(FILES)) {
+            return paths.filter(Files::isRegularFile).count();
+        }
+    }
+
+    long alcanceDe(long atencion, String funcion) {
+        return repo.jdbc()
+                .queryForObject(
+                        "SELECT "
+                                + funcion
+                                + "(id) FROM mod05_alcanceatencion WHERE atencion_id=:id",
+                        Map.of("id", atencion),
+                        Long.class);
+    }
+
+    String sha256(String contenido) throws Exception {
+        return HexFormat.of()
+                .formatHex(
+                        MessageDigest.getInstance("SHA-256")
+                                .digest(("%PDF-1.7 " + contenido).getBytes()));
+    }
+
+    @SafeVarargs
+    private String documentos(Map<String, Object>... docs) throws Exception {
+        return json.writeValueAsString(List.of(docs));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"jefe", "ingeniero", "practicante", "sinrol", "inactivo"})
+    void permisosDeReportesPorRol(String user) throws Exception {
+        long id = create().get("id").asLong();
+        execute(id);
+        int escritura = user.equals("inactivo") ? 401 : user.equals("sinrol") ? 403 : 201;
+        enviar(user, id, "[" + INFORME + "]", null, hoy(), pdf("propio.pdf", user))
+                .andExpect(status().is(escritura));
+        // Un reporte del jefe para que cada usuario intente consultarlo y descargarlo.
+        var base =
+                reports.adjuntar(
+                        id,
+                        LocalDate.now(Mod05Application.LIMA),
+                        "",
+                        List.of(new Entradas.Documento("InformeFinal", null, "")),
+                        List.of(pdf("base.pdf", "base de " + user)),
+                        jefe);
+        long reporte = ((Number) base.get("id")).longValue();
+        long documento =
+                repo.jdbc()
+                        .queryForObject(
+                                "SELECT min(id) FROM mod05_archivoasociado WHERE reporte_id=:r",
+                                Map.of("r", reporte),
+                                Long.class);
+        int lectura = user.equals("inactivo") ? 401 : user.equals("sinrol") ? 403 : 200;
+        String detalle = BASE + id + "/reportes/" + reporte + "/";
+        http.perform(get(BASE + id + "/reportes/").with(httpBasic(user, PASSWORD)))
+                .andExpect(status().is(lectura));
+        http.perform(get(detalle).with(httpBasic(user, PASSWORD))).andExpect(status().is(lectura));
+        var descarga =
+                http.perform(
+                                get(detalle + "documentos/" + documento + "/descarga/")
+                                        .with(httpBasic(user, PASSWORD)))
+                        .andExpect(status().is(lectura));
+        if (lectura == 200)
+            descarga.andExpect(content().bytes(("%PDF-1.7 base de " + user).getBytes()));
+    }
+
+    @Test
+    void reportesYDescargaExigenCredenciales() throws Exception {
+        long id = create().get("id").asLong();
+        execute(id);
+        var r = upload(id, "[" + INFORME + "]", "%PDF-1.7 reporte".getBytes(), 201);
+        enviar(null, id, "[" + INFORME + "]", null, hoy(), pdf("sin-credenciales.pdf", "x"))
+                .andExpect(status().isUnauthorized());
+        enviar("jefe", id, "[" + INFORME + "]", null, hoy(), pdf("valida.pdf", "x"))
+                .andExpect(status().isCreated());
+        String detalle = BASE + id + "/reportes/" + r.get("id").asLong() + "/";
+        http.perform(get(BASE + id + "/reportes/")).andExpect(status().isUnauthorized());
+        http.perform(get(detalle)).andExpect(status().isUnauthorized());
+        http.perform(
+                        get(
+                                detalle
+                                        + "documentos/"
+                                        + r.at("/documentos/0/id").asLong()
+                                        + "/descarga/"))
+                .andExpect(status().isUnauthorized());
+        assertEquals(2, count("reporteproveedor"));
+    }
+
+    @Test
+    void descargaNoCruzaAtencionesYFallaSiFaltaElArchivo() throws Exception {
+        long id = create().get("id").asLong(), otra = create().get("id").asLong();
+        execute(id);
+        var r = upload(id, "[" + INFORME + "]", "%PDF-1.7 reporte".getBytes(), 201);
+        String ruta =
+                BASE
+                        + "%d/reportes/"
+                        + r.get("id").asLong()
+                        + "/documentos/"
+                        + r.at("/documentos/0/id").asLong()
+                        + "/descarga/";
+        // La misma ruta con otra atención no encuentra el documento.
+        http.perform(get(ruta.formatted(otra)).with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isNotFound());
+        // Si el archivo desapareció del almacenamiento, responde 404 y no un error genérico.
+        String almacenado =
+                repo.jdbc()
+                        .queryForObject(
+                                "SELECT ruta_almacenamiento FROM mod05_archivo",
+                                Map.of(),
+                                String.class);
+        Files.delete(FILES.resolve(almacenado));
+        http.perform(get(ruta.formatted(id)).with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void reenvioIdenticoDevuelveLaUltimaRevisionSinCrearNada() throws Exception {
+        long id = create().get("id").asLong();
+        execute(id);
+        String docs = "[{\"categoria\":\"InformeFinal\",\"descripcion\":\"Informe\"}]";
+        var primero =
+                cuerpo(
+                        enviar("jefe", id, docs, "Resumen", hoy(), pdf("informe.pdf", "A"))
+                                .andExpect(status().isCreated()));
+        long enDisco = archivosEnDisco(),
+                auditoria = count("registroauditoria"),
+                historial = count("historialestado");
+        // Lo reintenta otro usuario, como tras perder la conexión: mismo contenido, misma revisión.
+        var segundo =
+                cuerpo(
+                        enviar("ingeniero", id, docs, "Resumen", hoy(), pdf("informe.pdf", "A"))
+                                .andExpect(status().isOk()));
+        assertFalse(primero.get("repetido").asBoolean());
+        assertTrue(segundo.get("repetido").asBoolean());
+        assertEquals(primero.get("id").asLong(), segundo.get("id").asLong());
+        assertEquals(1, segundo.get("revision").asInt());
+        assertEquals(sha256("A"), segundo.at("/documentos/0/archivo/hash_contenido").asText());
+        assertEquals(1, count("reporteproveedor"));
+        assertEquals(1, count("archivoasociado"));
+        assertEquals(1, count("archivo"));
+        assertEquals(enDisco, archivosEnDisco());
+        assertEquals(auditoria, count("registroauditoria"));
+        assertEquals(historial, count("historialestado"));
+        http.perform(get(BASE + id + "/reportes/").with(httpBasic("jefe", PASSWORD)))
+                .andExpect(jsonPath("$.count").value(1));
+    }
+
+    @Test
+    void laHuellaNoDependeDelOrdenNiDelNombreDeLosArchivos() throws Exception {
+        long id = create().get("id").asLong();
+        execute(id);
+        var informe = values("categoria", "InformeFinal");
+        var metrado = values("categoria", "Metrado");
+        var primero =
+                cuerpo(
+                        enviar(
+                                        "jefe",
+                                        id,
+                                        documentos(informe, metrado),
+                                        null,
+                                        hoy(),
+                                        pdf("informe.pdf", "A"),
+                                        pdf("metrado.pdf", "B"))
+                                .andExpect(status().isCreated()));
+        // Mismos documentos en otro orden y con otros nombres de archivo.
+        var segundo =
+                cuerpo(
+                        enviar(
+                                        "jefe",
+                                        id,
+                                        documentos(metrado, informe),
+                                        null,
+                                        hoy(),
+                                        pdf("copia-b.pdf", "B"),
+                                        pdf("copia-a.pdf", "A"))
+                                .andExpect(status().isOk()));
+        assertTrue(segundo.get("repetido").asBoolean());
+        assertEquals(primero.get("id").asLong(), segundo.get("id").asLong());
+        assertEquals(1, count("reporteproveedor"));
+        assertEquals(2, count("archivo"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "contenido",
+                "categoria",
+                "alcance",
+                "descripcion",
+                "resumen",
+                "fecha",
+                "documento_extra"
+            })
+    void cualquierCambioCreaUnaRevisionNueva(String cambio) throws Exception {
+        long id = create().get("id").asLong();
+        execute(id);
+        long alcance = alcanceDe(id, "min"), otroAlcance = alcanceDe(id, "max");
+        String categoria = "EvidenciaEspacio",
+                descripcion = "Foto",
+                contenido = "foto",
+                resumen = "Resumen",
+                fecha = hoy();
+        long alcanceFoto = alcance;
+        boolean extra = false;
+        var informe = values("categoria", "InformeFinal");
+        enviar(
+                        "jefe",
+                        id,
+                        documentos(
+                                informe,
+                                values(
+                                        "categoria",
+                                        categoria,
+                                        "alcance_id",
+                                        alcanceFoto,
+                                        "descripcion",
+                                        descripcion)),
+                        resumen,
+                        fecha,
+                        pdf("informe.pdf", "informe"),
+                        pdf("foto.pdf", contenido))
+                .andExpect(status().isCreated());
+        switch (cambio) {
+            case "contenido" -> contenido = "foto-corregida";
+            case "categoria" -> categoria = "RutaRecorrida";
+            case "alcance" -> alcanceFoto = otroAlcance;
+            case "descripcion" -> descripcion = "Foto del acceso";
+            case "resumen" -> resumen = "Resumen corregido";
+            case "fecha" -> fecha = LocalDate.now(Mod05Application.LIMA).plusDays(1).toString();
+            case "documento_extra" -> extra = true;
+        }
+        var foto =
+                values(
+                        "categoria",
+                        categoria,
+                        "alcance_id",
+                        alcanceFoto,
+                        "descripcion",
+                        descripcion);
+        var nueva =
+                extra
+                        ? cuerpo(
+                                enviar(
+                                                "jefe",
+                                                id,
+                                                documentos(
+                                                        informe,
+                                                        foto,
+                                                        values("categoria", "Metrado")),
+                                                resumen,
+                                                fecha,
+                                                pdf("informe.pdf", "informe"),
+                                                pdf("foto.pdf", contenido),
+                                                pdf("metrado.pdf", "metrado"))
+                                        .andExpect(status().isCreated()))
+                        : cuerpo(
+                                enviar(
+                                                "jefe",
+                                                id,
+                                                documentos(informe, foto),
+                                                resumen,
+                                                fecha,
+                                                pdf("informe.pdf", "informe"),
+                                                pdf("foto.pdf", contenido))
+                                        .andExpect(status().isCreated()));
+        assertEquals(2, nueva.get("revision").asInt());
+        assertFalse(nueva.get("repetido").asBoolean());
+        assertEquals(2, count("reporteproveedor"));
+    }
+
+    @Test
+    void volverAUnContenidoAnteriorEsUnaRevisionNuevaYSoloSeComparaConLaUltima() throws Exception {
+        long id = create().get("id").asLong();
+        execute(id);
+        String docs = "[" + INFORME + "]";
+        int[] esperado = {1, 2, 3};
+        String[] contenidos = {"A", "B", "A"};
+        for (int i = 0; i < contenidos.length; i++) {
+            var r =
+                    cuerpo(
+                            enviar("jefe", id, docs, null, hoy(), pdf("r.pdf", contenidos[i]))
+                                    .andExpect(status().isCreated()));
+            assertEquals(esperado[i], r.get("revision").asInt());
+        }
+        // El reintento de la última (A) ya no crea otra.
+        var repetido =
+                cuerpo(
+                        enviar("jefe", id, docs, null, hoy(), pdf("r.pdf", "A"))
+                                .andExpect(status().isOk()));
+        assertEquals(3, repetido.get("revision").asInt());
+        assertEquals(3, count("reporteproveedor"));
+    }
+
+    @Test
+    void elReenvioRepetidoSigueExigiendoLasValidaciones() throws Exception {
+        long id = create().get("id").asLong();
+        execute(id);
+        String docs = "[" + INFORME + "]";
+        enviar("jefe", id, docs, null, hoy(), pdf("r.pdf", "A")).andExpect(status().isCreated());
+        // Aunque el contenido sea el mismo, un envío inválido sigue siendo inválido.
+        enviar("jefe", id, "[{\"categoria\":\"Metrado\"}]", null, hoy(), pdf("r.pdf", "A"))
+                .andExpect(status().isBadRequest());
+        enviar("jefe", id, docs, null, "2000-01-01", pdf("r.pdf", "A"))
+                .andExpect(status().isBadRequest());
+        assertEquals(1, count("reporteproveedor"));
+    }
+
+    @Test
+    void enviosIdenticosSimultaneosCreanUnaSolaRevision() throws Exception {
+        long id = create().get("id").asLong();
+        execute(id);
+        var barrier = new CyclicBarrier(2);
+        try (var pool = Executors.newFixedThreadPool(2)) {
+            Callable<Boolean> envio =
+                    () -> {
+                        barrier.await(10, TimeUnit.SECONDS);
+                        var r =
+                                reports.adjuntar(
+                                        id,
+                                        LocalDate.now(Mod05Application.LIMA),
+                                        "",
+                                        List.of(new Entradas.Documento("InformeFinal", null, "")),
+                                        List.of(pdf("r.pdf", "igual")),
+                                        jefe);
+                        return (Boolean) r.get("repetido");
+                    };
+            var resultados = pool.invokeAll(List.of(envio, envio));
+            assertEquals(
+                    Set.of(true, false), Set.of(resultados.get(0).get(), resultados.get(1).get()));
+        }
+        assertEquals(1, count("reporteproveedor"));
+        assertEquals(1, count("archivo"));
+        assertEquals(
+                1,
+                repo.jdbc()
+                        .queryForObject(
+                                "SELECT count(*) FROM mod05_historialestado WHERE"
+                                        + " estado_nuevo=:estado",
+                                Map.of("estado", Atencion.REPORTE),
+                                Integer.class));
+    }
+
+    // --- Conformidad u observación del informe (RF-SER-007) ---
+
+    String informes() {
+        return "[" + INFORME + "]";
+    }
+
+    Map<String, Object> decision(String resultado, String comentarios) {
+        return values(
+                "resultado", resultado, "fecha_conformidad", hoy(), "comentarios", comentarios);
+    }
+
+    JsonNode decidir(long id, String user, Object body, int esperado) throws Exception {
+        return cuerpo(
+                http.perform(
+                                post(BASE + id + "/conformidad/")
+                                        .with(httpBasic(user, PASSWORD))
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(json.writeValueAsBytes(body)))
+                        .andExpect(status().is(esperado)));
+    }
+
+    /** Atención ejecutada y con la revisión 1 del informe: lista para decidir. */
+    long conInforme() throws Exception {
+        long id = create().get("id").asLong();
+        execute(id);
+        enviar("jefe", id, informes(), "Resumen", hoy(), pdf("informe.pdf", "A"))
+                .andExpect(status().isCreated());
+        return id;
+    }
+
+    @Test
+    void laConformidadExigeElInformeYSoloLaDaElJefe() throws Exception {
+        long id = create().get("id").asLong();
+        decidir(id, "jefe", decision("Conforme", ""), 409);
+        execute(id);
+        // RN-007: ejecutada pero sin informe adjunto.
+        decidir(id, "jefe", decision("Conforme", ""), 409);
+        enviar("jefe", id, informes(), "Resumen", hoy(), pdf("informe.pdf", "A"))
+                .andExpect(status().isCreated());
+        http.perform(get(BASE + id + "/").with(httpBasic("jefe", PASSWORD)))
+                .andExpect(jsonPath("$.conformidades").isArray())
+                .andExpect(jsonPath("$.conformidades.length()").value(0));
+        decidir(id, "ingeniero", decision("Conforme", ""), 403);
+        decidir(id, "practicante", decision("Conforme", ""), 403);
+        decidir(id, "sinrol", decision("Conforme", ""), 403);
+        assertEquals(0, count("conformidad"));
+
+        var cerrada = decidir(id, "jefe", decision("Conforme", ""), 200);
+        assertEquals(Atencion.CONFORME, cerrada.get("estado").asText());
+        assertEquals(1, cerrada.get("conformidades").size());
+        assertEquals("Conforme", cerrada.at("/conformidades/0/resultado").asText());
+        assertEquals(1, cerrada.at("/conformidades/0/revision").asInt());
+        assertEquals("Nombre jefe", cerrada.at("/conformidades/0/usuario_nombre").asText());
+        var historial = cerrada.get("historial");
+        assertEquals(
+                Atencion.CONFORME,
+                historial.get(historial.size() - 1).get("estado_nuevo").asText());
+        // Cerrada: ni otra decisión ni más revisiones.
+        decidir(id, "jefe", decision("Conforme", ""), 409);
+        enviar("jefe", id, informes(), "Resumen", hoy(), pdf("informe.pdf", "B"))
+                .andExpect(status().isConflict());
+        assertEquals(1, count("reporteproveedor"));
+    }
+
+    @Test
+    void laDecisionSeValidaAntesDeRegistrarse() throws Exception {
+        long id = conInforme();
+        decidir(id, "jefe", decision("Observada", "   "), 400);
+        decidir(id, "jefe", decision("Quizá", ""), 400);
+        decidir(id, "jefe", values("resultado", "Conforme", "comentarios", ""), 400);
+        decidir(
+                id,
+                "jefe",
+                values(
+                        "resultado",
+                        "Conforme",
+                        "fecha_conformidad",
+                        LocalDate.now(Mod05Application.LIMA).minusDays(1).toString()),
+                400);
+        assertEquals(0, count("conformidad"));
+        assertEquals(Atencion.REPORTE, repo.atencion(id).get("estado"));
+    }
+
+    @Test
+    void observarDejaLaAtencionObservadaYUnaNuevaRevisionPermiteDecidirDeNuevo() throws Exception {
+        long id = conInforme();
+        var observada = decidir(id, "jefe", decision("Observada", " Falta el metrado "), 200);
+        assertEquals(Atencion.OBSERVADO, observada.get("estado").asText());
+        assertEquals("Observada", observada.at("/conformidades/0/resultado").asText());
+        assertEquals("Falta el metrado", observada.at("/conformidades/0/comentarios").asText());
+        // Observada: espera otra revisión, no se puede decidir sobre la misma.
+        decidir(id, "jefe", decision("Conforme", ""), 409);
+        // El mismo informe no subsana: se reconoce como repetido y la atención sigue observada.
+        enviar("jefe", id, informes(), "Resumen", hoy(), pdf("informe.pdf", "A"))
+                .andExpect(status().isOk());
+        assertEquals(Atencion.OBSERVADO, repo.atencion(id).get("estado"));
+        // Una revisión distinta es la subsanación y devuelve la atención a «Reporte adjunto».
+        enviar("sinrol", id, informes(), "Metrado corregido", hoy(), pdf("informe.pdf", "B"))
+                .andExpect(status().isForbidden());
+        enviar("ingeniero", id, informes(), "   ", hoy(), pdf("informe.pdf", "B"))
+                .andExpect(status().isBadRequest());
+        var segunda =
+                cuerpo(
+                        enviar(
+                                        "ingeniero",
+                                        id,
+                                        informes(),
+                                        "Metrado corregido",
+                                        hoy(),
+                                        pdf("informe.pdf", "B"))
+                                .andExpect(status().isCreated()));
+        assertEquals(2, segunda.get("revision").asInt());
+        assertEquals(Atencion.REPORTE, repo.atencion(id).get("estado"));
+
+        assertEquals("Metrado corregido", segunda.get("resumen").asText());
+        decidir(id, "ingeniero", decision("Conforme", ""), 403);
+        decidir(id, "jefe", decision("Observada", "Falta el plano"), 200);
+        decidir(id, "jefe", decision("Conforme", ""), 409);
+        var tercera =
+                cuerpo(
+                        enviar(
+                                        "ingeniero",
+                                        id,
+                                        informes(),
+                                        "Adjunto plano",
+                                        hoy(),
+                                        pdf("plano.pdf", "C"))
+                                .andExpect(status().isCreated()));
+        assertEquals(3, tercera.get("revision").asInt());
+        var conforme = decidir(id, "jefe", decision("Conforme", ""), 200);
+        assertEquals(Atencion.CONFORME, conforme.get("estado").asText());
+        assertEquals(3, conforme.get("conformidades").size());
+        assertEquals("Falta el metrado", conforme.at("/conformidades/0/comentarios").asText());
+        assertEquals("Falta el plano", conforme.at("/conformidades/1/comentarios").asText());
+        assertEquals(2, conforme.at("/conformidades/1/revision").asInt());
+        assertEquals("Conforme", conforme.at("/conformidades/2/resultado").asText());
+        assertEquals(3, conforme.at("/conformidades/2/revision").asInt());
+    }
+
+    // --- Atenciones programadas y extraordinarias (RF-SER-008) ---
+
+    JsonNode crearComo(String clase, int esperado) throws Exception {
+        var cuerpo = input();
+        if (clase != null) cuerpo.put("clase", clase);
+        return cuerpo(
+                http.perform(
+                                post(BASE)
+                                        .with(httpBasic("jefe", PASSWORD))
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content(json.writeValueAsBytes(cuerpo)))
+                        .andExpect(status().is(esperado)));
+    }
+
+    @Test
+    void laClaseDeLaAtencionSeGuardaSeFiltraYSeValida() throws Exception {
+        assertEquals("ProgramadaContrato", crearComo(null, 201).get("clase").asText());
+        assertEquals(
+                "ProgramadaContrato", crearComo("ProgramadaContrato", 201).get("clase").asText());
+        long extraordinaria = crearComo("Extraordinaria", 201).get("id").asLong();
+        crearComo("Otra", 400);
+        crearComo("", 400);
+        http.perform(get(BASE).param("clase", "Extraordinaria").with(httpBasic("jefe", PASSWORD)))
+                .andExpect(jsonPath("$.count").value(1))
+                .andExpect(jsonPath("$.results[0].id").value(extraordinaria))
+                .andExpect(jsonPath("$.results[0].clase").value("Extraordinaria"));
+        http.perform(
+                        get(BASE)
+                                .param("clase", "ProgramadaContrato")
+                                .with(httpBasic("jefe", PASSWORD)))
+                .andExpect(jsonPath("$.count").value(2));
+        http.perform(get(BASE).param("clase", "Otra").with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void laExtraordinariaNoIniciaSinSuOrdenDeServicio() throws Exception {
+        long id = crearComo("Extraordinaria", 201).get("id").asLong();
+        var inicio = values("fecha_hora_inicio", OffsetDateTime.now().minusHours(1).toString());
+        http.perform(
+                        post(BASE + id + "/inicio/")
+                                .with(httpBasic("jefe", PASSWORD))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(json.writeValueAsBytes(inicio)))
+                .andExpect(status().isConflict());
+        var conOrden =
+                patchAction(
+                        id,
+                        "orden-compra",
+                        Map.of("numero_orden_compra", "OS-2026-001"),
+                        "jefe",
+                        200);
+        assertEquals(Atencion.OC, conOrden.get("estado").asText());
+        assertEquals("OS-2026-001", conOrden.get("numero_orden_compra").asText());
+        assertEquals("Extraordinaria", conOrden.get("clase").asText());
+        http.perform(
+                        post(BASE + id + "/inicio/")
+                                .with(httpBasic("jefe", PASSWORD))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(json.writeValueAsBytes(inicio)))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void laBandejaFiltraPorLosEstadosDeLaConformidad() throws Exception {
+        long observada = conInforme();
+        decidir(observada, "jefe", decision("Observada", "Falta el metrado"), 200);
+        long conforme = conInforme();
+        decidir(conforme, "jefe", decision("Conforme", ""), 200);
+        http.perform(
+                        get(BASE)
+                                .param("estado", Atencion.OBSERVADO)
+                                .with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(1))
+                .andExpect(jsonPath("$.results[0].id").value(observada));
+        http.perform(get(BASE).param("estado", Atencion.CONFORME).with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(1))
+                .andExpect(jsonPath("$.results[0].id").value(conforme));
+    }
+
+    @Test
+    void lasDecisionesDeConformidadSoloAdmitenInserciones() throws Exception {
+        long id = conInforme();
+        decidir(id, "jefe", decision("Conforme", ""), 200);
+        assertThrows(
+                DataAccessException.class,
+                () ->
+                        repo.jdbc()
+                                .getJdbcTemplate()
+                                .update("UPDATE mod05_conformidad SET comentarios='alterado'"));
+        assertThrows(
+                DataAccessException.class,
+                () -> repo.jdbc().getJdbcTemplate().update("DELETE FROM mod05_conformidad"));
+        assertEquals(1, count("conformidad"));
+        // Cada decisión deja auditoría.
+        assertEquals(
+                1,
+                repo.jdbc()
+                        .queryForObject(
+                                "SELECT count(*) FROM mod05_registroauditoria"
+                                        + " WHERE entidad='Conformidad'",
+                                Map.of(),
+                                Integer.class));
+    }
+
+    @Test
+    void elAcuerdoDeLaUnidadSigueSiendoPosibleTrasLaConformidad() throws Exception {
+        long id = create().get("id").asLong();
+        patchAction(
+                id,
+                "origen",
+                Map.of(
+                        "origen",
+                        "SolicitudUnidad",
+                        "unidad_provisional",
+                        "Facultad X",
+                        "motivo",
+                        "Solicitud recibida"),
+                "jefe",
+                200);
+        execute(id);
+        enviar("jefe", id, informes(), "Resumen", hoy(), pdf("informe.pdf", "A"))
+                .andExpect(status().isCreated());
+        decidir(id, "jefe", decision("Conforme", ""), 200);
+        var respuesta =
+                patchAction(
+                        id,
+                        "acuerdo-unidad",
+                        values(
+                                "acuerdo_unidad",
+                                false,
+                                "fecha_acuerdo_unidad",
+                                LocalDate.now(Mod05Application.LIMA),
+                                "comentarios_acuerdo_unidad",
+                                "Respuesta posterior"),
+                        "jefe",
+                        200);
+        // El acuerdo no reabre ni cambia la decisión del jefe.
+        assertEquals(Atencion.CONFORME, respuesta.get("estado").asText());
+        assertEquals(1, respuesta.get("conformidades").size());
+    }
+
+    // --- RF-SER-009 (AV-320): datos del informe final según el formato estándar del servicio
+    // ---------------------------------------------------------------------------------------------
+
+    /**
+     * Formato vigente del tipo de servicio del contrato de prueba: un obligatorio de cada clase.
+     */
+    long formatoDePrueba(int version) {
+        long tipo =
+                repo.jdbc()
+                        .queryForObject(
+                                "SELECT tipo_servicio_id FROM mod05_contrato WHERE id=:id",
+                                Map.of("id", contrato),
+                                Long.class);
+        repo.jdbc()
+                .update(
+                        "UPDATE mod05_formato_reporte_servicio SET vigente=false WHERE"
+                                + " tipo_servicio_id=:tipo",
+                        Map.of("tipo", tipo));
+        long formato =
+                repo.jdbc()
+                        .queryForObject(
+                                "INSERT INTO mod05_formato_reporte_servicio"
+                                        + " (tipo_servicio_id, version, vigente) VALUES (:tipo,"
+                                        + " :version, true) RETURNING id",
+                                Map.of("tipo", tipo, "version", version),
+                                Long.class);
+        repo.jdbc()
+                .update(
+                        """
+                        INSERT INTO mod05_campo_formato_reporte
+                            (formato_id, orden, nombre_campo, tipo_dato, obligatorio, subcampos)
+                        VALUES (:f, 1, 'Metrado', 'Decimal', true, NULL),
+                            (:f, 2, 'Productos aplicados', 'JSON', true, CAST(:sub AS jsonb)),
+                            (:f, 3, 'Ruta recorrida', 'Texto largo', false, NULL)
+                        """,
+                        Map.of(
+                                "f",
+                                formato,
+                                "sub",
+                                "[{\"nombre\": \"producto\", \"tipo_dato\": \"Texto\","
+                                        + " \"descripcion\": \"Producto\"}, {\"nombre\":"
+                                        + " \"cantidad\", \"tipo_dato\": \"Decimal\","
+                                        + " \"descripcion\": \"Cantidad\"}]"));
+        return formato;
+    }
+
+    static final String DATOS =
+            "{\"Metrado\": \"120,5\", \"Productos aplicados\": [{\"producto\": \"Abamectina\","
+                    + " \"cantidad\": 2}, {}]}";
+
+    ResultActions enviarConDatos(String user, long id, String datos, String contenido)
+            throws Exception {
+        var request = multipart(BASE + id + "/reportes/");
+        request.file(pdf("informe.pdf", contenido))
+                .param("documentos", "[" + INFORME + "]")
+                .param("fecha_recepcion", hoy())
+                .param("datos_formato", datos);
+        if (user != null) request.with(httpBasic(user, PASSWORD));
+        return http.perform(request);
+    }
+
+    @Test
+    void sinFormatoVigenteElReporteSeAdjuntaComoAntes() throws Exception {
+        long id = create().get("id").asLong();
+        http.perform(get(BASE + id + "/formato-reporte/").with(httpBasic("practicante", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.formato").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.datos_anteriores").value(org.hamcrest.Matchers.nullValue()));
+        execute(id);
+        var reporte =
+                cuerpo(
+                        enviar("jefe", id, "[" + INFORME + "]", null, hoy(), pdf("a.pdf", "a"))
+                                .andExpect(status().isCreated()));
+        assertTrue(reporte.get("formato_id").isNull());
+        assertTrue(reporte.get("datos_formato").isNull());
+        // Enviar datos sin formato vigente es un error y no registra nada.
+        enviarConDatos("jefe", id, DATOS, "b")
+                .andExpect(status().isBadRequest())
+                .andExpect(
+                        jsonPath("$.detalle")
+                                .value(org.hamcrest.Matchers.containsString("no tiene formato")));
+        assertEquals(1, count("reporteproveedor"));
+    }
+
+    @Test
+    void elFormatoVigenteSeConsultaYLosDatosSeGuardanConSuVersion() throws Exception {
+        long formato = formatoDePrueba(1);
+        long id = create().get("id").asLong();
+        http.perform(get(BASE + id + "/formato-reporte/").with(httpBasic("ingeniero", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.formato.id").value(formato))
+                .andExpect(jsonPath("$.formato.version").value(1))
+                .andExpect(jsonPath("$.formato.tipo_servicio_nombre").value("Corte de césped"))
+                .andExpect(jsonPath("$.formato.campos[0].nombre_campo").value("Metrado"))
+                .andExpect(jsonPath("$.formato.campos[0].tipo_dato").value("Decimal"))
+                .andExpect(jsonPath("$.formato.campos[0].obligatorio").value(true))
+                .andExpect(jsonPath("$.formato.campos[1].subcampos[1].nombre").value("cantidad"))
+                .andExpect(jsonPath("$.formato.campos[1].subcampos[1].tipo_dato").value("Decimal"))
+                .andExpect(jsonPath("$.datos_anteriores").value(org.hamcrest.Matchers.nullValue()));
+        execute(id);
+        var reporte =
+                cuerpo(enviarConDatos("jefe", id, DATOS, "a").andExpect(status().isCreated()));
+        assertEquals(formato, reporte.get("formato_id").asLong());
+        assertEquals(1, reporte.get("formato_version").asInt());
+        assertEquals("120.5", reporte.at("/datos_formato/Metrado").asText());
+        assertEquals(1, reporte.at("/datos_formato/Productos aplicados").size());
+        assertEquals("2", reporte.at("/datos_formato/Productos aplicados/0/cantidad").asText());
+        assertTrue(reporte.at("/datos_formato/Ruta recorrida").isMissingNode());
+        long r = reporte.get("id").asLong();
+        http.perform(get(BASE + id + "/reportes/" + r + "/").with(httpBasic("jefe", PASSWORD)))
+                .andExpect(jsonPath("$.datos_formato.Metrado").value("120.5"));
+        http.perform(get(BASE + id + "/reportes/").with(httpBasic("jefe", PASSWORD)))
+                .andExpect(jsonPath("$.results[0].formato_version").value(1));
+        // La auditoría guarda los datos como objeto, no como el PGobject de jsonb.
+        String auditado =
+                repo.jdbc()
+                        .queryForObject(
+                                "SELECT valores_nuevos->'datos_formato'->>'Metrado' FROM"
+                                    + " mod05_registroauditoria WHERE entidad='ReporteProveedor'"
+                                    + " AND registro_id=:r",
+                                Map.of("r", r),
+                                String.class);
+        assertEquals("120.5", auditado);
+        // La siguiente revisión puede partir de estos datos.
+        http.perform(get(BASE + id + "/formato-reporte/").with(httpBasic("jefe", PASSWORD)))
+                .andExpect(jsonPath("$.datos_anteriores.revision").value(1))
+                .andExpect(jsonPath("$.datos_anteriores.datos.Metrado").value("120.5"));
+        // Con un formato nuevo, los datos anteriores ya no se proponen y el informe conserva el
+        // suyo.
+        formatoDePrueba(2);
+        http.perform(get(BASE + id + "/formato-reporte/").with(httpBasic("jefe", PASSWORD)))
+                .andExpect(jsonPath("$.formato.version").value(2))
+                .andExpect(jsonPath("$.datos_anteriores").value(org.hamcrest.Matchers.nullValue()));
+        http.perform(get(BASE + id + "/reportes/" + r + "/").with(httpBasic("jefe", PASSWORD)))
+                .andExpect(jsonPath("$.formato_version").value(1));
+    }
+
+    @Test
+    void faltarUnObligatorioRechazaElEnvioEnteroSinDejarRastro() throws Exception {
+        formatoDePrueba(1);
+        long id = create().get("id").asLong();
+        execute(id);
+        long enDisco = archivosEnDisco(), auditoria = count("registroauditoria");
+        enviarConDatos("jefe", id, "{\"Metrado\": \"3\"}", "a")
+                .andExpect(status().isBadRequest())
+                .andExpect(
+                        jsonPath("$.detalle")
+                                .value(
+                                        "Faltan datos obligatorios del informe final: Productos"
+                                                + " aplicados"));
+        enviarConDatos("jefe", id, "{\"Metrado\": \"3\", \"Otro\": 1}", "a")
+                .andExpect(status().isBadRequest());
+        enviarConDatos("jefe", id, "no es json", "a").andExpect(status().isBadRequest());
+        assertEquals(0, count("reporteproveedor"));
+        assertEquals(0, count("archivo"));
+        assertEquals(enDisco, archivosEnDisco());
+        assertEquals(auditoria, count("registroauditoria"));
+        assertEquals(Atencion.EJECUTADO, repo.get("atenciontercerizada", id).get("estado"));
+    }
+
+    @Test
+    void losDatosEntranEnLaHuellaDelReenvio() throws Exception {
+        formatoDePrueba(1);
+        long id = create().get("id").asLong();
+        execute(id);
+        var primero =
+                cuerpo(enviarConDatos("jefe", id, DATOS, "a").andExpect(status().isCreated()));
+        // Mismo contenido con las claves en otro orden: es el mismo envío.
+        String reordenado =
+                "{\"Productos aplicados\": [{\"cantidad\": \"2\", \"producto\": \"Abamectina\"}],"
+                        + " \"Metrado\": 120.5}";
+        var repetido =
+                cuerpo(enviarConDatos("ingeniero", id, reordenado, "a").andExpect(status().isOk()));
+        assertTrue(repetido.get("repetido").asBoolean());
+        assertEquals(primero.get("id").asLong(), repetido.get("id").asLong());
+        // Otro dato, o ninguno, es una revisión nueva.
+        enviarConDatos("jefe", id, DATOS.replace("120,5", "121"), "a")
+                .andExpect(status().isCreated());
+        enviar("jefe", id, "[" + INFORME + "]", null, hoy(), pdf("informe.pdf", "a"))
+                .andExpect(status().isCreated());
+        assertEquals(3, count("reporteproveedor"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"sinrol", "inactivo"})
+    void elFormatoExigeLosPermisosDelCicloDeAtencion(String user) throws Exception {
+        formatoDePrueba(1);
+        long id = create().get("id").asLong();
+        http.perform(get(BASE + id + "/formato-reporte/").with(httpBasic(user, PASSWORD)))
+                .andExpect(status().is(user.equals("inactivo") ? 401 : 403));
+        http.perform(get(BASE + id + "/formato-reporte/")).andExpect(status().isUnauthorized());
+        http.perform(get(BASE + "999999/formato-reporte/").with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isNotFound());
     }
 }

@@ -1,5 +1,5 @@
 -- Pruebas de programación: corte (ruidoso) y fitosanitario cerrados hace 30 días, 30 + 3 + 1 días;
--- poda mayor sin configurar; evento masivo mañana.
+-- poda mayor sin configurar; examen de admisión (prohibición para ruidosos) mañana.
 TRUNCATE mod05_tiposervicio RESTART IDENTITY CASCADE;
 INSERT INTO mod05_tiposervicio (nombre, ejecutor, es_riesgo, activo, es_periodico, es_ruidoso) VALUES
     ('Corte de césped', 'Tercerizado', false, true, true, true),
@@ -20,4 +20,4 @@ INSERT INTO mod03_restriccion_calendario (tipo_restriccion_id, fecha_inicio, fec
     usuario_creacion_id, usuario_modificacion_id)
 SELECT t.id, hoy + 1, hoy + 1, 1, 1
 FROM mod03_tipo_restriccion t, (SELECT (now() AT TIME ZONE 'America/Lima')::date hoy) h
-WHERE t.nombre = 'Evento masivo';
+WHERE t.nombre = 'Examen de admisión';

@@ -1,88 +1,256 @@
 package pe.edu.pucp.areasverdes.mod05;
 
-import java.util.*;
-import java.time.LocalDate;
+import static pe.edu.pucp.areasverdes.mod05.AtencionService.values;
+
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.validation.Valid;
-import jakarta.validation.Validator;
-import jakarta.servlet.http.HttpServletRequest;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.http.*;
-import org.springframework.core.io.Resource;
-import org.springframework.web.multipart.MultipartFile;
-import org.springframework.format.annotation.DateTimeFormat;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import static pe.edu.pucp.areasverdes.mod05.AtencionService.values;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
+import jakarta.validation.Validator;
+import java.time.LocalDate;
+import java.util.*;
+import org.springframework.core.io.Resource;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.*;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/tercerizados")
-@Tag(name="MOD-05")
-@SecurityRequirement(name="basicAuth")
+@Tag(name = "MOD-05")
+@SecurityRequirement(name = "basicAuth")
 public class AtencionController {
-    final AtencionService service; final ReporteService reports; final Mod05Repository repo;
-    final ConsultasService queries; final ArchivoStorage storage; final ObjectMapper json; final Validator validator;
-    public AtencionController(AtencionService service,ReporteService reports,Mod05Repository repo,ConsultasService queries,
-                              ArchivoStorage storage,ObjectMapper json,Validator validator) {
-        this.service=service; this.reports=reports; this.repo=repo; this.queries=queries; this.storage=storage; this.json=json; this.validator=validator;
+    final AtencionService service;
+    final ReporteService reports;
+    final Mod05Repository repo;
+    final ConsultasService queries;
+    final ArchivoStorage storage;
+    final ObjectMapper json;
+    final Validator validator;
+    final FormatosReporte formatos;
+
+    public AtencionController(
+            AtencionService service,
+            ReporteService reports,
+            Mod05Repository repo,
+            ConsultasService queries,
+            ArchivoStorage storage,
+            ObjectMapper json,
+            Validator validator,
+            FormatosReporte formatos) {
+        this.service = service;
+        this.reports = reports;
+        this.repo = repo;
+        this.queries = queries;
+        this.storage = storage;
+        this.json = json;
+        this.validator = validator;
+        this.formatos = formatos;
     }
-    @GetMapping({"/me/","/me"})
-    public Map<String,Object> me(@AuthenticationPrincipal Usuario user) { return values("id",user.id(),"usuario",user.usuario(),"nombre",user.nombre(),"rol",user.rol()); }
-    @GetMapping({"/atenciones/","/atenciones"})
-    public ConsultasService.Pagina list(@AuthenticationPrincipal Usuario user,@RequestParam Map<String,String> params,HttpServletRequest request) {
-        user.exigir(false); return queries.atenciones(params,request.getRequestURL().toString());
+
+    @GetMapping({"/me/", "/me"})
+    public Map<String, Object> me(@AuthenticationPrincipal Usuario user) {
+        return values(
+                "id",
+                user.id(),
+                "usuario",
+                user.usuario(),
+                "nombre",
+                user.nombre(),
+                "rol",
+                user.rol());
     }
-    @PostMapping({"/atenciones/","/atenciones"})
+
+    @GetMapping({"/atenciones/", "/atenciones"})
+    public ConsultasService.Pagina list(
+            @AuthenticationPrincipal Usuario user,
+            @RequestParam Map<String, String> params,
+            HttpServletRequest request) {
+        user.exigir(Usuario.REGISTRAR_ATENCION);
+        return queries.atenciones(params, request.getRequestURL().toString());
+    }
+
+    @PostMapping({"/atenciones/", "/atenciones"})
     @ResponseStatus(HttpStatus.CREATED)
-    public Map<String,Object> create(@AuthenticationPrincipal Usuario user,@Valid @RequestBody Entradas.Crear body) { return service.crear(body,user); }
-    @GetMapping({"/atenciones/{id}/","/atenciones/{id}"})
-    public Map<String,Object> detail(@AuthenticationPrincipal Usuario user,@PathVariable long id) { user.exigir(false); return repo.atencion(id); }
-    @PatchMapping({"/atenciones/{id}/orden-compra/","/atenciones/{id}/orden-compra"})
-    public Map<String,Object> orden(@AuthenticationPrincipal Usuario user,@PathVariable long id,@Valid @RequestBody Entradas.Orden body) { return service.orden(id,body,user); }
-    @PostMapping({"/atenciones/{id}/inicio/","/atenciones/{id}/inicio"})
-    public Map<String,Object> inicio(@AuthenticationPrincipal Usuario user,@PathVariable long id,@Valid @RequestBody Entradas.Inicio body) { return service.inicio(id,body,user); }
-    @PostMapping({"/atenciones/{id}/fin/","/atenciones/{id}/fin"})
-    public Map<String,Object> fin(@AuthenticationPrincipal Usuario user,@PathVariable long id,@Valid @RequestBody Entradas.Fin body) { return service.fin(id,body,user); }
-    @PatchMapping({"/atenciones/{id}/origen/","/atenciones/{id}/origen"})
-    public Map<String,Object> origen(@AuthenticationPrincipal Usuario user,@PathVariable long id,@Valid @RequestBody Entradas.Origen body) { return service.origen(id,body,user); }
-    @PatchMapping({"/atenciones/{id}/acuerdo-unidad/","/atenciones/{id}/acuerdo-unidad"})
-    public Map<String,Object> acuerdo(@AuthenticationPrincipal Usuario user,@PathVariable long id,@Valid @RequestBody Entradas.Acuerdo body) { return service.acuerdo(id,body,user); }
-    @GetMapping({"/atenciones/{id}/reportes/","/atenciones/{id}/reportes"})
-    public ConsultasService.Pagina reports(@AuthenticationPrincipal Usuario user,@PathVariable long id,@RequestParam Map<String,String> params,HttpServletRequest request) {
-        user.exigir(false); return queries.reportes(id,params,request.getRequestURL().toString());
+    public Map<String, Object> create(
+            @AuthenticationPrincipal Usuario user, @Valid @RequestBody Entradas.Crear body) {
+        return service.crear(body, user);
     }
-    @PostMapping(value={"/atenciones/{id}/reportes/","/atenciones/{id}/reportes"},consumes=MediaType.MULTIPART_FORM_DATA_VALUE)
-    @ResponseStatus(HttpStatus.CREATED)
-    public Map<String,Object> upload(@AuthenticationPrincipal Usuario user,@PathVariable long id,
-        @RequestParam @DateTimeFormat(iso=DateTimeFormat.ISO.DATE) LocalDate fecha_recepcion,
-        @RequestParam(required=false) String resumen,@RequestParam String documentos,@RequestPart List<MultipartFile> archivos,
-        HttpServletRequest request) {
-        user.exigir(false);
-        var fields=new HashSet<>(request.getParameterMap().keySet());
-        fields.removeAll(Set.of("fecha_recepcion","resumen","documentos"));
-        if(!fields.isEmpty()) throw ApiError.invalid("Campos no admitidos: "+fields);
+
+    @GetMapping({"/atenciones/{id}/", "/atenciones/{id}"})
+    public Map<String, Object> detail(
+            @AuthenticationPrincipal Usuario user, @PathVariable long id) {
+        user.exigir(Usuario.REGISTRAR_ATENCION);
+        return repo.atencion(id);
+    }
+
+    @PatchMapping({"/atenciones/{id}/orden-compra/", "/atenciones/{id}/orden-compra"})
+    public Map<String, Object> orden(
+            @AuthenticationPrincipal Usuario user,
+            @PathVariable long id,
+            @Valid @RequestBody Entradas.Orden body) {
+        return service.orden(id, body, user);
+    }
+
+    @PostMapping({"/atenciones/{id}/inicio/", "/atenciones/{id}/inicio"})
+    public Map<String, Object> inicio(
+            @AuthenticationPrincipal Usuario user,
+            @PathVariable long id,
+            @Valid @RequestBody Entradas.Inicio body) {
+        return service.inicio(id, body, user);
+    }
+
+    @PostMapping({"/atenciones/{id}/fin/", "/atenciones/{id}/fin"})
+    public Map<String, Object> fin(
+            @AuthenticationPrincipal Usuario user,
+            @PathVariable long id,
+            @Valid @RequestBody Entradas.Fin body) {
+        return service.fin(id, body, user);
+    }
+
+    @PatchMapping({"/atenciones/{id}/origen/", "/atenciones/{id}/origen"})
+    public Map<String, Object> origen(
+            @AuthenticationPrincipal Usuario user,
+            @PathVariable long id,
+            @Valid @RequestBody Entradas.Origen body) {
+        return service.origen(id, body, user);
+    }
+
+    @PatchMapping({"/atenciones/{id}/acuerdo-unidad/", "/atenciones/{id}/acuerdo-unidad"})
+    public Map<String, Object> acuerdo(
+            @AuthenticationPrincipal Usuario user,
+            @PathVariable long id,
+            @Valid @RequestBody Entradas.Acuerdo body) {
+        return service.acuerdo(id, body, user);
+    }
+
+    @PostMapping({"/atenciones/{id}/conformidad/", "/atenciones/{id}/conformidad"})
+    public Map<String, Object> conformidad(
+            @AuthenticationPrincipal Usuario user,
+            @PathVariable long id,
+            @Valid @RequestBody Entradas.Conformidad body) {
+        return service.conformidad(id, body, user);
+    }
+
+    /**
+     * Formato estándar vigente del informe final para el tipo de servicio de la atención
+     * (RF-SER-009) y los datos de la última revisión registrada con ese formato. {@code formato} es
+     * {@code null} si el tipo de servicio no tiene formato: el reporte se adjunta sin datos.
+     */
+    @Operation(
+            summary = "Formato del informe final de la atención",
+            description =
+                    "Devuelve {formato, datos_anteriores}. formato: {id, version, tipo_servicio_id,"
+                            + " tipo_servicio_nombre, campos: [{nombre_campo, tipo_dato,"
+                            + " obligatorio, orden, subcampos}]} o null. datos_anteriores:"
+                            + " {revision, datos} de la última revisión con ese formato, o null.")
+    @GetMapping({"/atenciones/{id}/formato-reporte/", "/atenciones/{id}/formato-reporte"})
+    public Map<String, Object> formatoReporte(
+            @AuthenticationPrincipal Usuario user, @PathVariable long id) {
+        user.exigir(Usuario.REGISTRAR_ATENCION);
+        return formatos.deAtencion(id);
+    }
+
+    @GetMapping({"/atenciones/{id}/reportes/", "/atenciones/{id}/reportes"})
+    public ConsultasService.Pagina reports(
+            @AuthenticationPrincipal Usuario user,
+            @PathVariable long id,
+            @RequestParam Map<String, String> params,
+            HttpServletRequest request) {
+        user.exigir(Usuario.REGISTRAR_ATENCION);
+        return queries.reportes(id, params, request.getRequestURL().toString());
+    }
+
+    @PostMapping(
+            value = {"/atenciones/{id}/reportes/", "/atenciones/{id}/reportes"},
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<Map<String, Object>> upload(
+            @AuthenticationPrincipal Usuario user,
+            @PathVariable long id,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha_recepcion,
+            @RequestParam(required = false) String resumen,
+            @RequestParam String documentos,
+            @Parameter(
+                            description =
+                                    "Opcional (RF-SER-009): objeto JSON {nombre_campo: valor} con"
+                                            + " los datos del informe final según el formato"
+                                            + " vigente del tipo de servicio. Si llega, se valida"
+                                            + " entero y faltar un obligatorio es un 400.")
+                    @RequestParam(name = "datos_formato", required = false)
+                    String datosFormato,
+            @RequestPart List<MultipartFile> archivos,
+            HttpServletRequest request) {
+        user.exigir(Usuario.REGISTRAR_ATENCION);
+        var fields = new HashSet<>(request.getParameterMap().keySet());
+        fields.removeAll(Set.of("fecha_recepcion", "resumen", "documentos", "datos_formato"));
+        if (!fields.isEmpty()) throw ApiError.invalid("Campos no admitidos: " + fields);
         List<Entradas.Documento> docs;
-        try { docs=json.readValue(documentos,new TypeReference<>() {}); }
-        catch(com.fasterxml.jackson.core.JsonProcessingException e) { throw ApiError.invalid("documentos debe ser una lista JSON válida"); }
-        if(docs==null||docs.isEmpty()||docs.stream().anyMatch(d -> d==null||!validator.validate(d).isEmpty())) throw ApiError.invalid("Metadatos de documentos incompletos o inválidos");
-        return reports.adjuntar(id,fecha_recepcion,resumen,docs,archivos,user);
+        try {
+            docs = json.readValue(documentos, new TypeReference<>() {});
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw ApiError.invalid("documentos debe ser una lista JSON válida");
+        }
+        if (docs == null
+                || docs.isEmpty()
+                || docs.stream().anyMatch(d -> d == null || !validator.validate(d).isEmpty()))
+            throw ApiError.invalid("Metadatos de documentos incompletos o inválidos");
+        // 201 si crea una revisión; 200 si el envío repite la última (idempotencia por SHA-256).
+        var reporte =
+                reports.adjuntar(id, fecha_recepcion, resumen, docs, archivos, datosFormato, user);
+        return ResponseEntity.status(
+                        Boolean.TRUE.equals(reporte.get("repetido"))
+                                ? HttpStatus.OK
+                                : HttpStatus.CREATED)
+                .body(reporte);
     }
-    @GetMapping({"/atenciones/{id}/reportes/{reporte}/","/atenciones/{id}/reportes/{reporte}"})
-    public Map<String,Object> report(@AuthenticationPrincipal Usuario user,@PathVariable long id,@PathVariable long reporte) {
-        user.exigir(false); return repo.reporte(id,reporte);
+
+    @GetMapping({"/atenciones/{id}/reportes/{reporte}/", "/atenciones/{id}/reportes/{reporte}"})
+    public Map<String, Object> report(
+            @AuthenticationPrincipal Usuario user,
+            @PathVariable long id,
+            @PathVariable long reporte) {
+        user.exigir(Usuario.REGISTRAR_ATENCION);
+        return repo.reporte(id, reporte);
     }
-    @GetMapping({"/atenciones/{id}/reportes/{reporte}/documentos/{documento}/descarga/","/atenciones/{id}/reportes/{reporte}/documentos/{documento}/descarga"})
-    public ResponseEntity<Resource> download(@AuthenticationPrincipal Usuario user,@PathVariable long id,@PathVariable long reporte,@PathVariable long documento) {
-        user.exigir(false); var file=repo.archivo(id,reporte,documento);
-        return ResponseEntity.ok().contentType(MediaType.parseMediaType((String)file.get("tipo_mime")))
-            .header(HttpHeaders.CONTENT_DISPOSITION,ContentDisposition.attachment().filename((String)file.get("nombre_original"),java.nio.charset.StandardCharsets.UTF_8).build().toString())
-            .header(HttpHeaders.CACHE_CONTROL,"private, no-store").header("X-Content-Type-Options","nosniff")
-            .body(storage.leer((String)file.get("ruta_almacenamiento")));
+
+    @GetMapping({
+        "/atenciones/{id}/reportes/{reporte}/documentos/{documento}/descarga/",
+        "/atenciones/{id}/reportes/{reporte}/documentos/{documento}/descarga"
+    })
+    public ResponseEntity<Resource> download(
+            @AuthenticationPrincipal Usuario user,
+            @PathVariable long id,
+            @PathVariable long reporte,
+            @PathVariable long documento) {
+        user.exigir(Usuario.REGISTRAR_ATENCION);
+        var file = repo.archivo(id, reporte, documento);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType((String) file.get("tipo_mime")))
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment()
+                                .filename(
+                                        (String) file.get("nombre_original"),
+                                        java.nio.charset.StandardCharsets.UTF_8)
+                                .build()
+                                .toString())
+                .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
+                .header("X-Content-Type-Options", "nosniff")
+                .body(storage.leer((String) file.get("ruta_almacenamiento")));
     }
-    @GetMapping({"/catalogos/{catalogo}/","/catalogos/{catalogo}"})
-    public ConsultasService.Pagina catalog(@AuthenticationPrincipal Usuario user,@PathVariable String catalogo,@RequestParam Map<String,String> params,HttpServletRequest request) {
-        user.exigir(false); return queries.catalogo(catalogo,params,request.getRequestURL().toString());
+
+    @GetMapping({"/catalogos/{catalogo}/", "/catalogos/{catalogo}"})
+    public ConsultasService.Pagina catalog(
+            @AuthenticationPrincipal Usuario user,
+            @PathVariable String catalogo,
+            @RequestParam Map<String, String> params,
+            HttpServletRequest request) {
+        user.exigir(Usuario.REGISTRAR_ATENCION);
+        return queries.catalogo(catalogo, params, request.getRequestURL().toString());
     }
 }

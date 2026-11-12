@@ -68,11 +68,17 @@ El frontend conserva `VITE_API_TERCERIZADOS_URL=/api/tercerizados`. Su proxy Vit
 | `atenciones/{id}/fin/` | POST | Los tres roles |
 | `atenciones/{id}/origen/` | PATCH | Jefe |
 | `atenciones/{id}/acuerdo-unidad/` | PATCH | Jefe |
+| `atenciones/{id}/conformidad/` | POST | Jefe |
+| `atenciones/{id}/formato-reporte/` | GET | No aplica |
 | `atenciones/{id}/reportes/` | GET, POST multipart | Los tres roles |
 | `atenciones/{id}/reportes/{reporte}/` | GET | No aplica |
 | `atenciones/{id}/reportes/{reporte}/documentos/{documento}/descarga/` | GET | No aplica |
 
 Los grupos conservan exactamente los nombres `Jefe de sección`, `Ingeniero de campo`, `Practicante autorizado`. Solo estos tres roles pueden consultar el módulo; `/me/` admite a cualquier usuario activo autenticado para informar si tiene acceso.
+
+**Datos del informe final (RF-SER-009, AV-320).** `atenciones/{id}/formato-reporte/` devuelve `{formato, datos_anteriores}`: el formato estándar vigente del tipo de servicio de la atención (`{id, version, tipo_servicio_id, tipo_servicio_nombre, campos: [{nombre_campo, tipo_dato, obligatorio, orden, subcampos}]}`, o `null` si el tipo no tiene formato) y los datos de la última revisión registrada con ese mismo formato (`{revision, datos}` o `null`), para proponerlos en la siguiente. Al adjuntar el reporte, el campo multipart opcional `datos_formato` lleva un objeto JSON `{nombre_campo: valor}`: si llega, se valida entero contra el formato vigente (tipos, campos ajenos y obligatorios; un fallo es un 400 que no registra nada) y la revisión guarda `formato_id` y los datos normalizados. Si no llega, la revisión se registra sin datos, como antes. Las revisiones devuelven `formato_id`, `formato_version` y `datos_formato` (`null` si no tienen), y los datos entran en la huella de idempotencia.
+
+El monto de un contrato es confidencial (RNF-008): `monto_fijo` solo llega con valor al jefe de sección. A los demás roles la clave les llega con `null`, así que un cliente no debe interpretar el nulo como «contrato sin monto».
 
 Ejemplo de registro:
 
@@ -90,7 +96,7 @@ Ejemplo de registro:
 
 Contrato vigente, proveedor y servicio activos, ejecutor tercerizado. El servicio se deriva del contrato. Cada alcance indica un área o ejemplar existente, sin duplicados, con metrado no negativo y unidad juntos o ninguno. Código UUID generado por el servidor. Crear atención, alcances e historial es atómico.
 
-Estados: `Requerimiento registrado` → `OC referenciada` → `En ejecución` → `Ejecutado pendiente de reporte` → `Reporte adjunto`.
+Estados: `Requerimiento registrado` → `OC referenciada` → `En ejecución` → `Ejecutado pendiente de reporte` → `Reporte adjunto`. Tras el informe, el jefe decide: `Conforme / cerrado` o `Observado` (espera otra revisión del informe, que devuelve la atención a `Reporte adjunto`).
 
 ```text
 PATCH orden-compra/  {"numero_orden_compra":"OC-2026-001"}
@@ -98,9 +104,9 @@ POST  inicio/        {"fecha_hora_inicio":"2026-10-21T08:00:00-05:00"}
 POST  fin/           {"fecha_hora_fin":"2026-10-21T12:00:00-05:00"}
 ```
 
-Corregir OC exige motivo y solo se permite antes del inicio. No se emiten órdenes. El fin no precede al inicio. La marca de riesgo se hereda del catálogo o se activa al registrar; no puede desactivarse desde la petición. Iniciar atenciones de riesgo sigue bloqueado hasta integrar seguridad.
+En una atención extraordinaria el mismo paso registra su orden de servicio (RF-SER-008): el campo y el estado `OC referenciada` son los mismos y sin ella tampoco se inicia. Corregir OC exige motivo y solo se permite antes del inicio. No se emiten órdenes. El fin no precede al inicio. La marca de riesgo se hereda del catálogo o se activa al registrar; no puede desactivarse desde la petición. Iniciar atenciones de riesgo requiere la verificación de seguridad registrada por el jefe o el ingeniero.
 
-Origen obligatorio: `Demanda`, `ProgramacionEstacional`, `SolicitudUnidad`. Para solicitud de unidad, enviar exclusivamente `unidad_solicitante_id` o `unidad_provisional` (nombre). La creación/reutilización de la unidad provisional es atómica. Corregir origen requiere motivo y solo puede hacerse antes del inicio. Los demás orígenes no admiten unidad.
+Clase opcional al registrar (`clase`): `ProgramadaContrato` (por defecto, según contrato) o `Extraordinaria` (fuera de programación, con orden de servicio); no se corrige después y exige igualmente un contrato vigente. La incidencia que MOD-03 deriva como extraordinaria se registra con esa clase. Origen obligatorio: `Demanda`, `ProgramacionEstacional`, `SolicitudUnidad`. Para solicitud de unidad, enviar exclusivamente `unidad_solicitante_id` o `unidad_provisional` (nombre). La creación/reutilización de la unidad provisional es atómica. Corregir origen requiere motivo y solo puede hacerse antes del inicio. Los demás orígenes no admiten unidad.
 
 Después de finalizar una solicitud de unidad:
 
@@ -108,11 +114,11 @@ Después de finalizar una solicitud de unidad:
 {"acuerdo_unidad": false, "fecha_acuerdo_unidad": "2026-10-21", "comentarios_acuerdo_unidad": "Solicita revisión"}
 ```
 
-`null` con fecha `null` significa pendiente. El acuerdo comunicado necesita fecha no anterior al fin. No cambia el estado ni concede conformidad. Cada cambio deja auditoría; la base impide actualizar/eliminar auditoría e historial.
+`null` con fecha `null` significa pendiente. El acuerdo comunicado necesita fecha no anterior al fin. No cambia el estado ni concede conformidad, y puede registrarse también después de ella. Cada cambio deja auditoría; la base impide actualizar/eliminar auditoría e historial.
 
 ### Búsqueda y catálogos
 
-Atenciones: `q`, `estado`, `origen`, `contrato_id`, `page`. Búsqueda global antes de paginar, sin distinguir mayúsculas, hasta 100 caracteres y ocho palabras; cada palabra debe aparecer en al menos un campo buscable. Se busca en código, descripción, OC, contrato, proveedor, servicio y unidad.
+Atenciones: `q`, `estado`, `origen`, `clase`, `contrato_id`, `page`. Búsqueda global antes de paginar, sin distinguir mayúsculas, hasta 100 caracteres y ocho palabras; cada palabra debe aparecer en al menos un campo buscable. Se busca en código, descripción, OC, contrato, proveedor, servicio y unidad.
 
 Catálogos de solo lectura bajo `catalogos/`, todos con `q` y `page`:
 
@@ -142,7 +148,25 @@ curl --user mod05_jefe \
 
 PDF, JPEG, PNG, DOCX y XLSX, 20 MB por archivo y 100 MB por petición por defecto; límites configurables. Se valida cabecera/estructura básica y se calcula SHA-256. Validación de formato no equivale a análisis antimalware. Documentos Office con expansión superior a 100 MB o más de 10.000 entradas se rechazan.
 
+**Idempotencia (SHA-256).** Reenviar lo mismo que la última revisión no crea otra: mismo `fecha_recepcion`, mismo `resumen` y mismos documentos (categoría, `alcance_id`, descripción y SHA-256 del contenido, sin importar el orden ni los nombres de archivo). En ese caso la API responde `200` con esa revisión y `"repetido": true`, sin guardar archivos ni auditar. Una revisión nueva responde `201` con `"repetido": false`. Solo se compara con la última revisión: volver a un contenido anterior (A, B, A) crea la revisión 3. La comparación ocurre bajo el bloqueo de la atención, así que dos envíos idénticos simultáneos tampoco duplican.
+
 Archivos fuera de la BD con nombres UUID. El directorio no se publica como recurso estático; descargas autenticadas como adjuntos sin caché pública. Revisiones previas permanecen disponibles. Bloqueo de la atención serializa cambios de estado y numeración de reportes. Si falla la escritura o el commit, se limpian archivos nuevos; fallos de limpieza se registran en logs. Una terminación abrupta puede dejar huérfanos y necesita reconciliación operativa.
+
+### Subsanación (RF-SER-012)
+
+Con la atención en `Observado`, una nueva revisión requiere la respuesta del proveedor en `resumen` y los documentos vigentes, incluido el informe final. El personal autorizado registra esa entrega. Cada revisión conserva su respuesta, archivos y fecha. La atención vuelve a `Reporte adjunto` para que el jefe pueda observar nuevamente o dar conformidad.
+
+### Conformidad
+
+El jefe de sección decide sobre la última revisión del informe (RF-SER-007), solo con la atención en `Reporte adjunto`. Sin informe responde 409 (RN-007).
+
+```json
+{"resultado": "Observada", "fecha_conformidad": "2026-10-22", "comentarios": "Falta el metrado del sector B"}
+```
+
+`resultado` es `Conforme` u `Observada`. La fecha no puede ser anterior a la recepción del informe. Al observar, los comentarios son obligatorios. `Conforme` deja la atención en `Conforme / cerrado`, y ya no admite más revisiones. `Observada` la deja en `Observado`: el proveedor sube una nueva revisión (que la devuelve a `Reporte adjunto`) y el jefe vuelve a decidir. Cada revisión admite una sola decisión; no se pueden modificar ni borrar. La ficha de la atención las devuelve en `conformidades`, de la más antigua a la más reciente, con la `revision` que evaluaron. No sustituye el acuerdo de la unidad, que se registra aparte.
+
+Reenviar un informe idéntico a la última revisión sigue sin crear nada, también estando `Observado`: la subsanación exige una revisión distinta.
 
 ## Pruebas
 
@@ -150,13 +174,13 @@ Se ejecutan contra PostgreSQL real, nunca H2. Crear una base exclusiva terminada
 
 ```sh
 createdb -h localhost -U tu_usuario mod05_spring_test
-export MOD05_TEST_DB_URL=jdbc:postgresql://localhost:5432/mod05_spring_test
-export MOD05_TEST_DB_USER=tu_usuario
-export MOD05_TEST_DB_PASSWORD=tu_clave
+export TEST_DB_URL=jdbc:postgresql://localhost:5432/mod05_spring_test
+export TEST_DB_USER=tu_usuario
+export TEST_DB_PASSWORD=tu_clave
 ./mvnw test
 ```
 
-**La suite vacía las tablas de esa base** entre casos. El guard de configuración exige el sufijo `_test`. Por defecto utiliza `127.0.0.1:55432/mod05_spring_test`, el usuario del sistema y contraseña vacía. Flyway comprueba/aplica el esquema. Incluye autenticación, contrato frontend, filtros, alcances, estados, documentación, rollback durante commit, triggers, precarga y concurrencia real.
+**La suite vacía las tablas de esa base** entre casos. El guard de configuración exige el sufijo `_test`. Por defecto utiliza `127.0.0.1:55432/mod05_spring_test`, el usuario del sistema y contraseña vacía. Flyway comprueba/aplica el esquema. Incluye autenticación, contrato frontend, filtros, alcances, estados, documentación, rollback durante commit, triggers, precarga, concurrencia real, permisos y descarga de reportes, idempotencia por SHA-256 y conformidad.
 
 Las pruebas del MOD-06 corren en el mismo `./mvnw test` y usan la misma base `_test`. Frontend desde `../frontend/`: `npm test`, `npm run build`, `npm run lint`.
 
@@ -164,6 +188,13 @@ Las pruebas del MOD-06 corren en el mismo `./mvnw test` y usan la misma base `_t
 
 - Registro/mantenimiento de proveedores y contratos; hoy precarga y consulta.
 - Formularios estructurados y completitud documental por servicio, previa validación con el usuario.
+- Tarifario por tipo de intervención en los contratos (mejora futura, RF-SER-002): hoy el contrato solo tiene `monto_fijo`, obligatorio. Los contratos son únicamente de servicios tercerizados.
 - Integrar catálogos, usuarios, incidencias y programación con los módulos propietarios sin duplicar IDs.
 - Integrar almacenamiento de objetos y seguridad para atenciones de riesgo.
-- Fuera de esta entrega: extraordinarias, órdenes de servicio, conformidad, subsanación, IA y nuevas pantallas frontend.
+- Fuera de esta entrega: extraordinarias sin contrato, corregir la clase tras el registro, IA y nuevas pantallas frontend.
+
+### Verificación de seguridad (AV-377)
+
+POST `/api/v1/tercerizados/atenciones/{id}/seguridad/` recibe `medidas` (texto obligatorio, máximo 5000 caracteres) y `confirmado: true`. La matriz de acceso admite jefe de sección e ingeniero de campo (200); practicante y usuarios sin rol reciben 403, anónimos 401. Solo admite atenciones de riesgo antes del inicio (409 en otro caso). La prueba de integración cubre esta matriz.
+
+La ficha devuelve `verificaciones_seguridad`, ordenadas de antigua a reciente, con medidas, usuario y fecha. Cada corrección inserta una constancia y audita la atención bajo su bloqueo transaccional. Repetir las mismas medidas es idempotente. Una atención de riesgo requiere constancia para iniciar y conserva el flujo habitual hasta el cierre.

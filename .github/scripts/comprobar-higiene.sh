@@ -3,6 +3,9 @@
 #   1. nombres en kebab-case salvo las excepciones de docs/estandares/nombres.md;
 #   2. artefactos que no deben versionarse (builds, dependencias, .env, estado de Terraform, binarios grandes);
 #   3. marcas de "no fusionar" en las líneas añadidas.
+#   4. migraciones ya fusionadas que el PR modifica, renombra o borra;
+#   5. pruebas que leen las variables de la base de pruebas por su cuenta en vez de usar BaseDePruebas;
+#   6. migraciones nuevas con versión repetida, no posterior a la última de main o sin prefijo de módulo.
 # Uso: comprobar-higiene.sh <sha-base>
 set -euo pipefail
 
@@ -78,6 +81,63 @@ done < <(git diff --name-only --diff-filter=AR "$base"...HEAD)
 marca="DO_NOT""_MERGE"
 if git diff -U0 "$base"...HEAD -- . ':(exclude)*.md' ':(exclude).github/scripts/*' | grep -E '^\+' | grep -q "$marca"; then
   echo "::error::Hay una marca $marca en las líneas añadidas. Quítala antes de fusionar."
+  errores=1
+fi
+
+# Una migración fusionada no se edita: Flyway valida su checksum y la api no arrancaría en UAT ni en prod.
+while IFS=$'\t' read -r estado ruta destino; do
+  [[ -z "$ruta" ]] && continue
+  # AV-318: la versión V63 duplicada impedía que Flyway aplicara esta migración.
+  if [[ "$estado" == R100 &&
+        "$ruta" == src/main/resources/db/migration/V63__mod05_conformidad.sql &&
+        "$destino" == src/main/resources/db/migration/V70__mod05_conformidad.sql ]]; then
+    continue
+  fi
+  falla "$ruta" "Migración ya fusionada en main: no se edita, renombra ni borra. Corrígela con una migración nueva (docs/estandares/base-datos.md)."
+done < <(git diff --name-status -M100% --diff-filter=MDR "$base"...HEAD -- src/main/resources/db/migration/)
+
+# Migraciones nuevas: versión única, posterior a la última de main y con prefijo de módulo (AV-243).
+dir_mig=src/main/resources/db/migration
+ultima=0
+versiones_main=' '
+while IFS= read -r ruta; do
+  [[ "$(basename "$ruta")" =~ ^V([0-9]+)__ ]] || continue
+  v=$((10#${BASH_REMATCH[1]}))
+  versiones_main+="$v "
+  (( v > ultima )) && ultima=$v
+done < <(git ls-tree -r --name-only "$base" -- "$dir_mig/")
+
+nuevas=()
+while IFS= read -r ruta; do
+  [[ "$(basename "$ruta")" =~ ^V[0-9]+__ ]] && nuevas+=("$ruta")
+done < <(git diff --name-only --diff-filter=A "$base"...HEAD -- "$dir_mig/")
+
+maxima=$ultima
+for ruta in ${nuevas[@]+"${nuevas[@]}"}; do
+  [[ "$(basename "$ruta")" =~ ^V([0-9]+)__ ]] && (( 10#${BASH_REMATCH[1]} > maxima )) && maxima=$((10#${BASH_REMATCH[1]}))
+done
+siguiente=$((maxima + 1))
+
+vistas=' '
+for ruta in ${nuevas[@]+"${nuevas[@]}"}; do
+  fichero="$(basename "$ruta")"
+  [[ "$fichero" =~ ^V([0-9]+)__ ]]
+  v=$((10#${BASH_REMATCH[1]}))
+  if [[ "$versiones_main$vistas" == *" $v "* ]]; then
+    falla "$ruta" "La versión V$v ya existe en main o en otra migración del PR. Renumérala: el siguiente número libre es V$siguiente (docs/estandares/base-datos.md)."
+  elif (( v < ultima )); then
+    falla "$ruta" "La versión V$v es anterior a la última de main (V$ultima): Flyway no la aplicaría en orden. Renumérala: el siguiente número libre es V$siguiente (docs/estandares/base-datos.md)."
+  fi
+  vistas+="$v "
+  if [[ ! "$fichero" =~ ^V[0-9]+__(mod0[0-9]|core)_ ]]; then
+    falla "$ruta" "Falta el prefijo de módulo: el nombre debe ser V<n>__mod0N_<descripcion>.sql o V<n>__core_<descripcion>.sql (docs/estandares/base-datos.md)."
+  fi
+done
+
+# La base de pruebas solo se lee en BaseDePruebas: un módulo con variables propias se queda sin base en el CI (AV-242).
+if git diff -U0 "$base"...HEAD -- src/test/java ':(exclude)src/test/java/pe/edu/pucp/areasverdes/comun/BaseDePruebas.java' \
+  | grep -E '^\+' | grep -qE 'TEST_DB_[A-Z]+"'; then
+  echo "::error::Una prueba lee variables *TEST_DB_* por su cuenta. Usa BaseDePruebas.registrar(p) (docs/estandares/pruebas.md)."
   errores=1
 fi
 

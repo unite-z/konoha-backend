@@ -1,0 +1,168 @@
+package pe.edu.pucp.areasverdes.mod02.api;
+
+import com.fasterxml.jackson.annotation.JsonAlias;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
+import java.net.URI;
+import java.time.LocalDate;
+import java.util.List;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import pe.edu.pucp.areasverdes.mod02.servicios.AccesoCoberturas;
+import pe.edu.pucp.areasverdes.mod02.servicios.CatalogosMod02Service;
+import pe.edu.pucp.areasverdes.mod05.Usuario;
+
+@RestController
+@RequestMapping("/api/v1/inventario")
+@Tag(name = "MOD-02 Inventario")
+@SecurityRequirement(name = "basicAuth")
+public class CatalogosMod02Controller {
+
+    private final CatalogosMod02Service catalogos;
+
+    public CatalogosMod02Controller(CatalogosMod02Service catalogos) {
+        this.catalogos = catalogos;
+    }
+
+    public record Sector(
+            long id,
+            String nombre,
+            boolean activo,
+            boolean atencionDemanda,
+            String capatazNombre,
+            String superficieM2) {}
+
+    public record NuevoSector(
+            @NotBlank(message = "Indica el nombre") @Size(max = 120) String nombre,
+            @JsonAlias("atencion_a_demanda") Boolean atencionDemanda) {}
+
+    public record CambioSector(
+            Boolean activo, @JsonAlias("atencion_a_demanda") Boolean atencionDemanda) {}
+
+    public record CambioCapataz(
+            @JsonAlias("capataz_id") Long capatazId,
+            LocalDate fechaInicio,
+            @Size(max = 300) String motivo) {}
+
+    public record Asignacion(
+            long id,
+            long capatazId,
+            String capatazNombre,
+            String fechaInicio,
+            String fechaFin,
+            String motivo,
+            String capatazAnteriorNombre,
+            boolean vigente) {}
+
+    public record Persona(long id, String nombre) {}
+
+    public record Elemento(long id, String nombre, boolean activo, String color) {}
+
+    public record NuevoNombre(
+            @NotBlank(message = "Indica el nombre") @Size(max = 80) String nombre,
+            @Pattern(
+                            regexp = "^#[0-9A-Fa-f]{6}$",
+                            message = "El color debe tener el formato #RRGGBB")
+                    String color) {}
+
+    public record CambioElemento(
+            String nombre,
+            Boolean activo,
+            @Pattern(
+                            regexp = "^#[0-9A-Fa-f]{6}$",
+                            message = "El color debe tener el formato #RRGGBB")
+                    String color) {}
+
+    @GetMapping("/tipos-uso")
+    @Operation(summary = "Lista los tipos de uso de los espacios verdes")
+    public List<Elemento> tiposUso(
+            @AuthenticationPrincipal Usuario usuario,
+            @RequestParam(name = "incluir_inactivas", defaultValue = "false")
+                    boolean incluirInactivos) {
+        AccesoCoberturas.consultar(usuario);
+        return catalogos.tiposUso(incluirInactivos);
+    }
+
+    @PostMapping("/tipos-uso")
+    @Operation(summary = "Crea un tipo de uso")
+    public ResponseEntity<Elemento> crearTipoUso(
+            @AuthenticationPrincipal Usuario usuario, @Valid @RequestBody NuevoNombre entrada) {
+        Elemento creado = catalogos.crearTipoUso(entrada, usuario);
+        return ResponseEntity.created(URI.create("/api/v1/inventario/tipos-uso/" + creado.id()))
+                .body(creado);
+    }
+
+    @PatchMapping("/tipos-uso/{id}")
+    @Operation(summary = "Cambia el nombre, el color o el estado de un tipo de uso")
+    public Elemento cambiarTipoUso(
+            @AuthenticationPrincipal Usuario usuario,
+            @PathVariable long id,
+            @Valid @RequestBody CambioElemento cambio) {
+        return catalogos.cambiarTipoUso(id, cambio, usuario);
+    }
+
+    @GetMapping("/sectores")
+    @Operation(summary = "Lista los sectores del inventario")
+    public List<Sector> sectores(
+            @AuthenticationPrincipal Usuario usuario,
+            @RequestParam(name = "incluir_inactivos", defaultValue = "false")
+                    boolean incluirInactivos) {
+        AccesoCoberturas.consultar(usuario);
+        return catalogos.sectores(incluirInactivos);
+    }
+
+    @GetMapping("/capataces")
+    @Operation(summary = "Lista los capataces que se pueden asignar a un sector")
+    public List<Persona> capataces(@AuthenticationPrincipal Usuario usuario) {
+        AccesoCoberturas.consultar(usuario);
+        return catalogos.capataces();
+    }
+
+    @PostMapping("/sectores")
+    @Operation(summary = "Crea un sector")
+    public ResponseEntity<Sector> crearSector(
+            @AuthenticationPrincipal Usuario usuario, @Valid @RequestBody NuevoSector entrada) {
+        Sector creado = catalogos.crearSector(entrada, usuario);
+        return ResponseEntity.created(URI.create("/api/v1/inventario/sectores/" + creado.id()))
+                .body(creado);
+    }
+
+    @PatchMapping("/sectores/{id}")
+    @Operation(summary = "Cambia los datos o el estado de un sector")
+    public Sector cambiarSector(
+            @AuthenticationPrincipal Usuario usuario,
+            @PathVariable long id,
+            @RequestBody CambioSector cambio) {
+        return catalogos.cambiarSector(id, cambio, usuario);
+    }
+
+    @PatchMapping("/sectores/{id}/capataz")
+    @Operation(summary = "Asigna el capataz de un sector desde una fecha")
+    public Sector asignarCapataz(
+            @AuthenticationPrincipal Usuario usuario,
+            @PathVariable long id,
+            @Valid @RequestBody CambioCapataz cambio) {
+        return catalogos.asignarCapataz(id, cambio, usuario);
+    }
+
+    @GetMapping("/sectores/{id}/historial-capataz")
+    @Operation(summary = "Historial de capataces de un sector")
+    public List<Asignacion> historialCapataz(
+            @AuthenticationPrincipal Usuario usuario, @PathVariable long id) {
+        AccesoCoberturas.consultar(usuario);
+        return catalogos.historialCapataz(id);
+    }
+}

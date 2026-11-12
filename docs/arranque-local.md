@@ -97,10 +97,14 @@ docker start konoha-db        # o brew services start postgresql@16
 
 Usuarios de prueba de MOD-05: `mod05_jefe`, `mod05_ingeniero` y `mod05_practicante`, con la clave de `MOD05_DEMO_PASSWORD`.
 
+La aplicación web pide primero el inicio de sesión de MOD-01: se entra con esas mismas cuentas (`mod05_jefe` y su clave). La precarga del perfil `dev` las copia a `core_usuario`. Si además pones `MOD01_DEMO_PASSWORD`, tendrás una cuenta por rol, capataz incluido: `jefe@`, `ingeniero@`, `practicante@` y `capataz@pucp.edu.pe`.
+
 ## Problemas frecuentes
 
 | Síntoma | Causa y solución |
 |---|---|
+| Inicias sesión en la web y vuelve a la pantalla de ingreso | La cookie de sesión es `Secure` y la web va por http. Pon `CORE_COOKIE_SEGURA=false` en `.env` y reinicia |
+| «Correo o contraseña incorrectos» con `mod05_jefe` | La base es nueva y no arrancaste con el perfil `dev` y `--mod05.seed=true`. Arranca así una vez: la precarga copia las cuentas a MOD-01 |
 | `The JAVA_HOME environment variable is not defined correctly` | `JAVA_HOME` apunta a una carpeta que no existe. Repite el paso 1 |
 | `class file version 61.0 ... only recognizes ... 52.0` | Maven usa Java 8. `./mvnw -version` tiene que decir 21 |
 | `Connection refused` o `password authentication failed` | PostgreSQL no está levantado o `MOD05_DB_PASSWORD` no coincide |

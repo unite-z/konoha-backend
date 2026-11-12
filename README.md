@@ -9,7 +9,7 @@ Repos hermanos: `konoha-frontend` (PWA) y `konoha-infra` (despliegue, estándare
 | Módulo | Paquete | Rutas | Datos |
 |---|---|---|---|
 | MOD-05 «Atenciones tercerizadas» | `pe.edu.pucp.areasverdes.mod05` | `/api/tercerizados/` (HTTP Basic) | PostgreSQL con Flyway. Ver [docs/modulos/mod05.md](docs/modulos/mod05.md) |
-| MOD-06 «Reportes, indicadores e IA» | `pe.edu.pucp.areasverdes.mod06` | `/api/v1/` (sin autenticación) | `DATA_SOURCE=mock` lee `mock-data/` (`db`, pendiente) |
+| MOD-06 «Reportes, indicadores e IA» | `pe.edu.pucp.areasverdes.mod06` | `/api/v1/` (sesión de MOD-01) | `DATA_SOURCE=db` (por defecto) lee las tablas de los módulos dueños; `mock` lee `mock-data/` en demos locales |
 
 Documentación de la API: `http://localhost:8000/api/docs` (OpenAPI en `/api/schema`).
 
@@ -27,12 +27,12 @@ cp .env.example .env      # completar MOD05_DB_PASSWORD; GEMINI_API_KEY solo par
 | Variable | Uso |
 |---|---|
 | `PORT` | Puerto HTTP (8000 por defecto) |
-| `DATA_SOURCE` | Fuente del MOD-06: `mock` o `db` |
+| `DATA_SOURCE` | Fuente del MOD-06: `db` (por defecto) o `mock` (solo demos locales) |
 | `MOCK_DATA_DIR` | Carpeta de datos simulados del MOD-06 (por defecto `mock-data`) |
 | `GEMINI_API_KEY`, `GEMINI_MODEL` | Extracción con IA del MOD-06 (RF-IA-001). La clave no se versiona |
 | `GEMINI_THINKING_LEVEL` | Razonamiento de Gemini: `minimal`, `low` (por defecto), `medium` o `high` |
 | `IA_FUENTE_REPORTES` | Origen del reporte para RF-IA-001: `mod05` (por defecto) o `mock` |
-| `POSTGRES_*` | Reservadas para `DATA_SOURCE=db` del MOD-06 (pendiente) |
+| `POSTGRES_*` | Reservadas (MOD-06 usa la misma conexión que el resto, `MOD05_DB_*`) |
 | `MOD05_*` | Base de datos, archivos y precarga del MOD-05 (ver [docs/modulos/mod05.md](docs/modulos/mod05.md)) |
 
 ## Pruebas
@@ -41,7 +41,28 @@ cp .env.example .env      # completar MOD05_DB_PASSWORD; GEMINI_API_KEY solo par
 ./mvnw verify
 ```
 
-Necesitan PostgreSQL con PostGIS en una base terminada en `_test` (`MOD05_TEST_DB_*` como variables de entorno). Cómo levantarla con Docker: [docs/estandares/pruebas.md](docs/estandares/pruebas.md).
+Necesitan PostgreSQL con PostGIS en una base terminada en `_test` (`TEST_DB_*` como variables de entorno). Cómo levantarla con Docker: [docs/estandares/pruebas.md](docs/estandares/pruebas.md).
+
+## MOD-04: operación de campo
+
+Integración de RF-T-005 (cuadrillas, capataces y operarios), RF-PLA-005 (encargos semanales/quincenales) y RF-ACT-003 (participantes). Sus rutas están bajo `/api/v1/operacion-campo/` y se documentan en Swagger. Utilizan la sesión común de MOD-01 con cookie y CSRF: 401 sin sesión, 403 sin permiso. HTTP Basic se conserva para las pruebas, igual que en MOD-03/MOD-05.
+
+| Operaciones | Jefe de sección | Ingeniero / practicante | Capataz |
+| --- | --- | --- | --- |
+| Consultar cuadrillas y encargos | Todas | Todas | Solo los suyos |
+| Registrar personal, gestionar cuadrillas y encargos | Sí | No | No |
+| Consultar actividades y participantes | Todas | Todas | Solo los suyos |
+| Abrir parte, registrar actividad y guardar participantes | Sí | No | Solo de su equipo, con parte abierto |
+
+La matriz ejecutable de permisos y la comprobación de cobertura de endpoints están en `Mod04IntegrationTest`. Los alias de ruta con y sin barra final comparten los mismos permisos.
+
+La migración nueva `V11__mod04_operacion_campo.sql` añade las tablas del módulo y amplía el catálogo provisional de roles con `Capataz` para la compatibilidad de pruebas HTTP Basic. Las migraciones V1–V10 se conservan. **Revisar la numeración antes de fusionar**, por si otro PR ocupa V11. Áreas verdes referencia `mod05_areaverde`, la tabla compartida provisional que ya existe; no crea otra copia. Las claves de usuario referencian `core_usuario`, dueño MOD-01: una cuenta creada solo en MOD-01 también puede registrar en campo. La auditoría usa el servicio público `RegistradorAuditoria` de MOD-01 y su tabla inmutable `core_registro_auditoria`.
+
+Para la demostración, usar el perfil `dev`, una contraseña propia en `MOD04_DEMO_PASSWORD` y `--mod04.seed=true`. Precarga en `core_usuario` las cuentas `mod04_jefe` y `mod04_capataz_2`, `_3`, `_4`; es idempotente y no sustituye datos existentes. El catálogo compartido de áreas debe estar disponible: en una base nueva de demostración se puede ejecutar además `--mod05.seed=true` con `MOD05_DEMO_PASSWORD` configurada.
+
+Los POST de partes y actividades aceptan `Idempotency-Key` (UUID). El servidor comprueba usuario, operación y contenido; un reenvío idéntico devuelve el mismo resultado y otro contenido con la misma clave devuelve 409. La vigencia es de 24 horas. El frontend conserva la clave de una actividad al reintentar sin cambiar sus datos. Los PUT reemplazan la composición o selección completa.
+
+Decisiones funcionales conservadas: semanal hasta 7 días y quincenal hasta 14, incluidos ambos extremos; confirmar la interpretación de quincenal con el equipo. Se valida la pertenencia histórica del operario en la fecha de la actividad. El cierre de partes completo y la cola sin conexión de HU-MOD04-012 quedan fuera de estos tres requisitos; la interfaz actual registra con conexión. MOD-06 conserva su fuente de datos existente.
 
 ## Documentación
 

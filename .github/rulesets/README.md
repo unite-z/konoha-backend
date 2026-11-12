@@ -4,27 +4,23 @@
 
 - sin borrado ni force push;
 - historia lineal;
-- PR obligatorio con una aprobación, revisión de `CODEOWNERS` y conversaciones resueltas;
+- PR obligatorio, sin aprobación mínima: quien abre el PR puede fusionarlo;
+- conversaciones resueltas antes de fusionar;
 - solo squash;
 - check `ci-ok` obligatorio.
 
-Es igual en los tres repos. **No está aplicado**: se aplica cuando lo apruebe quien coordina el equipo.
+Es igual en los tres repos y **está aplicado desde el 28/10/2026**. Para ver el ruleset activo: `gh api repos/unite-z/<repo>/rulesets`.
 
-## Aprobaciones: dos opciones
+## Aprobaciones
 
-Lo decide quien coordina al aplicar el ruleset, cambiando `required_approving_review_count` en `main.json`:
+`required_approving_review_count` está a `0` y `require_code_owner_review` a `false`: cada persona fusiona su propio PR cuando `ci-ok` está en verde. GitHub no deja aprobar el PR propio, así que con `1` nadie podría fusionar sin esperar a otra persona. La revisión ajena sigue siendo recomendable ([git-y-prs.md](https://github.com/unite-z/konoha-infra/blob/main/docs/estandares/git-y-prs.md)).
 
-| Opción | Valor | Cuándo |
-|---|---|---|
-| **Una aprobación** (recomendada) | `1` | Lo normal: el curso pide un revisor en cada entrega y una segunda mirada detecta los errores baratos |
-| PR obligatorio sin aprobación | `0` | Solo si el equipo se atasca esperando revisiones. Se mantienen el PR, `ci-ok`, la historia lineal y el bloqueo del push directo. Con `0`, pon también `require_code_owner_review` a `false` |
+Para exigir una aprobación más adelante, pon `required_approving_review_count` a `1`. Para exigir también la de `CODEOWNERS` (`require_code_owner_review: true`), cada ruta necesita al menos dos personas: si tiene un único dueño, sus propios PR no se pueden fusionar.
 
 ## Requisitos antes de aplicarlo
 
 1. El repo es público, o su dueño tiene un plan de pago: en el plan gratuito, los rulesets no se aplican en repos privados. Los repos de `unite-z` son públicos.
-2. Hay al menos dos colaboradores con permiso de escritura (nadie puede aprobar su propio PR).
-3. `CODEOWNERS` tiene **al menos dos personas por ruta**. Si una ruta tiene un único dueño, sus propios PR no se pueden fusionar. Mientras falten usuarios, aplica el ruleset con `"require_code_owner_review": false`.
-4. CI ha pasado al menos una vez en un PR, para que GitHub conozca el check `ci-ok`.
+2. CI ha pasado al menos una vez en un PR, para que GitHub conozca el check `ci-ok`.
 
 ## Aplicarlo
 

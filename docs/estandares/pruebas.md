@@ -17,15 +17,16 @@ resultados y límites frente a UAT están en [MOD-03](../modulos/mod03.md).
 ## Base de datos de pruebas
 
 - Una base exclusiva cuyo nombre termina en `_test`: las suites vacían sus tablas.
-- Variables: `MOD05_TEST_DB_URL`, `MOD05_TEST_DB_USER` y `MOD05_TEST_DB_PASSWORD`. Pasan a `TEST_DB_*` cuando se unifique la configuración (deuda con ticket).
+- Variables: `TEST_DB_URL`, `TEST_DB_USER` y `TEST_DB_PASSWORD`. Los nombres anteriores, `MOD05_TEST_DB_*`, se siguen aceptando.
+- Todas las pruebas de integración obtienen la base de `comun/BaseDePruebas`: con `BaseDePruebas.registrar(p)` dentro de su `@DynamicPropertySource`, o con `BaseDePruebas.URL`, `USUARIO` y `CLAVE` si abren la conexión a mano. Ningún módulo define variables propias: el CI solo da base a estas y `comprobar-higiene.sh` rechaza una prueba que lea otras.
 - En local, con Docker:
 
   ```sh
   docker run -d --name konoha-test-db -p 55432:5432 \
     -e POSTGRES_USER=areas_verdes -e POSTGRES_PASSWORD=solo-pruebas \
     -e POSTGRES_DB=mod05_spring_test postgis/postgis:16-3.4
-  export MOD05_TEST_DB_URL=jdbc:postgresql://127.0.0.1:55432/mod05_spring_test
-  export MOD05_TEST_DB_USER=areas_verdes MOD05_TEST_DB_PASSWORD=solo-pruebas
+  export TEST_DB_URL=jdbc:postgresql://127.0.0.1:55432/mod05_spring_test
+  export TEST_DB_USER=areas_verdes TEST_DB_PASSWORD=solo-pruebas
   ./mvnw verify
   ```
 
@@ -39,6 +40,14 @@ Cada endpoint tiene una fila en la matriz con el resultado esperado por rol: an�
 - Una prueba recorre todos los endpoints registrados en Spring y **falla si alguno no está en la matriz**. Añadir un endpoint sin decidir quién puede usarlo rompe CI.
 - Otra prueba ejecuta cada combinación de rol y endpoint y compara el código HTTP con el esperado.
 - La matriz vive en un único fichero de prueba por módulo, legible como tabla, para que quien revise el PR vea el cambio de permisos de un vistazo.
+
+`comun/ContratoRutasApiTest` aplica el contrato de rutas a todos los endpoints de Spring y falla indicando método, ruta y motivo si alguno:
+
+- no cuelga de `/api/v1/<modulo>/` (excepciones explícitas: `/api/tercerizados/**` y `/api/health`, anteriores al contrato);
+- no lleva `@Operation` (los handlers `@Hidden` no cuentan);
+- no figura en la matriz de su módulo. Cada matriz expone `endpointsCubiertos()` y se registra en esa prueba. `SIN_MATRIZ_AUN` lista los controladores con filas pendientes: es deuda, no admite controladores nuevos y la prueba exige quitar el que ya esté completo.
+
+Además, `comun/PermisosGlobalesApiTest` llama sin credenciales a todos los endpoints de todos los módulos y exige 401 o 403. Falla indicando método y ruta si alguno responde otra cosa. Las excepciones van en la lista `PUBLICOS` de esa prueba, cada una con su motivo.
 
 ## IA
 

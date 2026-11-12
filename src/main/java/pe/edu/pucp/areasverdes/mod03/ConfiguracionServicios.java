@@ -4,13 +4,14 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import java.time.LocalTime;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import pe.edu.pucp.areasverdes.mod05.Usuario;
+import pe.edu.pucp.areasverdes.mod01.servicios.RegistradorAuditoria;
 
 /** Configuración de los servicios periódicos por el jefe de sección, con autor y auditoría. */
 @Service
@@ -57,23 +58,32 @@ public class ConfiguracionServicios {
             RETURNING id
             """;
 
-    /** Fila de auditoría (patrón de MOD-05) con el estado anterior y el nuevo de la tabla dada. */
-    private static final String AUDITAR =
-            """
-            INSERT INTO mod05_registroauditoria(entidad, registro_id, accion, fecha_hora,
-                valores_anteriores, valores_nuevos, motivo, usuario_id)
-            SELECT '%1$s', t.id, 'configurar', now(), CAST(:antes AS jsonb), to_jsonb(t), '', :usuario
-            FROM %1$s t WHERE t.id = :id
-            """;
+    /**
+     * Entidad de la auditoría común (RegistradorAuditoria) para la configuración de un servicio: el
+     * registro es el tipo de servicio (AV-256, decisión del 31/10 en AV-250).
+     */
+    static final String ENTIDAD = "mod03_configuracion_servicio";
+
+    static final List<String> CAMPOS_FRECUENCIA =
+            List.of(
+                    "frecuencia_teorica_dias",
+                    "frecuencia_practica_dias",
+                    "frecuencia_maxima_dias");
+
+    static final List<String> CAMPOS_DURACION =
+            List.of("duracion_maxima_dias", "dias_limpieza", "hora_inicio", "hora_fin");
 
     private final NamedParameterJdbcTemplate jdbc;
+    private final RegistradorAuditoria auditoria;
 
-    public ConfiguracionServicios(NamedParameterJdbcTemplate jdbc) {
+    public ConfiguracionServicios(NamedParameterJdbcTemplate jdbc, RegistradorAuditoria auditoria) {
         this.jdbc = jdbc;
+        this.auditoria = auditoria;
     }
 
     @Transactional
-    public void frecuencia(long servicio, String estacion, NuevaFrecuencia nueva, Usuario usuario) {
+    public void frecuencia(
+            long servicio, String estacion, NuevaFrecuencia nueva, UsuarioPlanificacion usuario) {
         Acceso.gestionar(usuario);
         if (!ESTACIONES.contains(estacion)) {
             throw new ErrorPlanificacion(
@@ -105,11 +115,14 @@ public class ConfiguracionServicios {
                 "mod03_frecuencia_servicio",
                 "tipo_servicio_id = :servicio AND estacion = :estacion",
                 GUARDAR_FRECUENCIA,
-                datos);
+                datos,
+                CAMPOS_FRECUENCIA,
+                estacion,
+                usuario);
     }
 
     @Transactional
-    public void duracion(long servicio, NuevaDuracion nueva, Usuario usuario) {
+    public void duracion(long servicio, NuevaDuracion nueva, UsuarioPlanificacion usuario) {
         Acceso.gestionar(usuario);
         exigirPeriodico(servicio);
         if (nueva.horaInicio() != null
@@ -126,19 +139,70 @@ public class ConfiguracionServicios {
                         .addValue("inicio", nueva.horaInicio())
                         .addValue("fin", nueva.horaFin())
                         .addValue("usuario", usuario.id());
-        guardar("mod03_duracion_servicio", "tipo_servicio_id = :servicio", GUARDAR_DURACION, datos);
+        guardar(
+                "mod03_duracion_servicio",
+                "tipo_servicio_id = :servicio",
+                GUARDAR_DURACION,
+                datos,
+                CAMPOS_DURACION,
+                null,
+                usuario);
     }
 
-    /** Guarda con la sentencia dada y deja la auditoría. Tabla y filtro vienen del código. */
+    /**
+     * Guarda con la sentencia dada y deja en la auditoría común los valores anteriores y los nuevos
+     * de los campos dados (con la estación, si la hay). Tabla, filtro y campos vienen del código.
+     */
     private void guardar(
-            String tabla, String filtro, String sentencia, MapSqlParameterSource datos) {
-        String antes =
-                jdbc.query(
-                        "SELECT to_jsonb(t)::text FROM " + tabla + " t WHERE " + filtro,
-                        datos,
-                        rs -> rs.next() ? rs.getString(1) : "{}");
-        long id = jdbc.queryForObject(sentencia, datos, Long.class);
-        jdbc.update(AUDITAR.formatted(tabla), datos.addValue("id", id).addValue("antes", antes));
+            String tabla,
+            String filtro,
+            String sentencia,
+            MapSqlParameterSource datos,
+            List<String> campos,
+            String estacion,
+            UsuarioPlanificacion usuario) {
+        String columnas = String.join(", ", campos);
+        Map<String, Object> antes = valores(tabla, filtro, columnas, datos);
+        jdbc.queryForObject(sentencia, datos, Long.class);
+        Map<String, Object> despues = valores(tabla, filtro, columnas, datos);
+        if (estacion != null) {
+            despues.put("estacion", estacion);
+        }
+        long servicio = (Long) datos.getValue("servicio");
+        if (antes.isEmpty()) {
+            auditoria.registrarAlta(ENTIDAD, servicio, despues, usuario.id());
+            return;
+        }
+        if (estacion != null) {
+            antes.put("estacion", estacion);
+        }
+        auditoria.registrarCambio(
+                ENTIDAD, servicio, "Modificacion", antes, despues, null, usuario.id());
+    }
+
+    /** Los campos de la fila como texto ({@code null} si no tienen valor); vacío si no hay fila. */
+    private Map<String, Object> valores(
+            String tabla, String filtro, String columnas, MapSqlParameterSource datos) {
+        return jdbc.query(
+                "SELECT " + columnas + " FROM " + tabla + " WHERE " + filtro,
+                datos,
+                rs -> {
+                    Map<String, Object> fila = new LinkedHashMap<>();
+                    if (rs.next()) {
+                        for (String columna : columnas.split(", ")) {
+                            Object valor = rs.getObject(columna);
+                            fila.put(columna, valor == null ? null : texto(valor));
+                        }
+                    }
+                    return fila;
+                });
+    }
+
+    /** «06:00» para las horas; el número tal cual para los días. */
+    private static String texto(Object valor) {
+        return valor instanceof java.sql.Time hora
+                ? hora.toLocalTime().toString()
+                : valor.toString();
     }
 
     private void exigirPeriodico(long servicio) {

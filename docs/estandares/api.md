@@ -33,7 +33,7 @@ Formato objetivo para el código nuevo: **ProblemDetail (RFC 9457)**, con `codig
 | 415 | Tipo de archivo no admitido |
 | 503 | Dependencia caída: S3, Gemini |
 
-Deuda: hoy MOD-05 responde 403 también sin credenciales, y MOD-05 y MOD-06 usan `{codigo, detalle}` y formatos heredados de DRF. Se migra en tickets aparte.
+Deuda: MOD-05 y MOD-06 usan `{codigo, detalle}` y formatos heredados de DRF. Se migra en tickets aparte.
 
 ## Formato JSON
 
@@ -64,7 +64,8 @@ Obligatoria en los endpoints que usa la cola sin conexión de la PWA (creaciones
 
 ## Autenticación
 
-- Hoy: HTTP Basic sobre HTTPS, sin sesión, con usuarios propios de MOD-05. Se sustituye al integrar MOD-01.
+- Sesión de MOD-01: cookie `HttpOnly` `av_sesion` y, en las escrituras, el token de la cookie `XSRF-TOKEN` en la cabecera `X-XSRF-TOKEN`. La aceptan MOD-01, MOD-03 y MOD-05 (ver `docs/modulos/mod01.md`).
+- MOD-03 y MOD-05 aceptan además HTTP Basic con los usuarios de MOD-05, solo para pruebas y el smoke test del despliegue. Se retira con la consolidación de usuarios.
 - Cada endpoint declara su regla de acceso de forma explícita y entra en la matriz de permisos (ver `pruebas.md`).
 
 ## OpenAPI

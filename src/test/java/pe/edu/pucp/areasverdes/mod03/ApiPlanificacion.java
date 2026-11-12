@@ -1,5 +1,8 @@
 package pe.edu.pucp.areasverdes.mod03;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,10 +13,13 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import pe.edu.pucp.areasverdes.comun.BaseDePruebas;
 
 /**
  * Base de las pruebas de API de MOD-03: base PostGIS real terminada en {@code _test} y usuarios
  * {@code jefe}, {@code ingeniero}, {@code practicante} y {@code sinrol}, todos con {@link #CLAVE}.
+ * Cada uno tiene su cuenta de MOD-01 con el mismo id, como en producción (copia de {@code V6}),
+ * para la auditoría común, cuyo autor apunta a {@code core_usuario}.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -21,19 +27,21 @@ abstract class ApiPlanificacion {
 
     static final String CLAVE = "prueba-integration-local";
 
+    /** Los adjuntos de prueba (fotos de incidencias), fuera del repo. */
+    static final String ARCHIVOS;
+
+    static {
+        try {
+            ARCHIVOS = Files.createTempDirectory("mod03-archivos-").toString();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
     @DynamicPropertySource
     static void baseDePruebas(DynamicPropertyRegistry p) {
-        String url =
-                System.getenv()
-                        .getOrDefault(
-                                "MOD05_TEST_DB_URL",
-                                "jdbc:postgresql://127.0.0.1:55432/mod05_spring_test");
-        if (!url.endsWith("_test")) {
-            throw new IllegalStateException("Las pruebas requieren una base terminada en _test");
-        }
-        p.add("spring.datasource.url", () -> url);
-        p.add("spring.datasource.username", () -> System.getenv("MOD05_TEST_DB_USER"));
-        p.add("spring.datasource.password", () -> System.getenv("MOD05_TEST_DB_PASSWORD"));
+        BaseDePruebas.registrar(p);
+        p.add("mod05.archivos", () -> ARCHIVOS);
     }
 
     @Autowired MockMvc http;
@@ -47,6 +55,25 @@ abstract class ApiPlanificacion {
         usuario("ingeniero", "Ingeniero de campo");
         usuario("practicante", "Practicante autorizado");
         usuario("sinrol", null);
+        jdbc.getJdbcTemplate()
+                .execute(
+                        "TRUNCATE core_sesion, core_registro_acceso, core_registro_auditoria,"
+                                + " core_usuario RESTART IDENTITY CASCADE");
+        jdbc.getJdbcTemplate()
+                .execute(
+                        """
+                        INSERT INTO core_usuario (id, nombre_usuario, correo, nombre, credencial_hash,
+                            rol_id)
+                        SELECT u.id, 'mod05-' || u.usuario, 'mod05-' || u.usuario || '@prueba.pucp.edu.pe',
+                            u.nombre, 'sin-clave', r.id
+                        FROM mod05_usuario u
+                        LEFT JOIN mod05_usuario_rol ur ON ur.usuario_id = u.id
+                        JOIN core_rol r ON r.codigo = CASE ur.rol
+                            WHEN 'Jefe de sección' THEN 'jefe-seccion'
+                            WHEN 'Ingeniero de campo' THEN 'ingeniero-campo'
+                            WHEN 'Practicante autorizado' THEN 'practicante'
+                            ELSE 'capataz' END
+                        """);
     }
 
     private void usuario(String nombre, String rol) {
