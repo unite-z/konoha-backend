@@ -82,7 +82,13 @@ class AutorizacionTest {
         var capataz = usuario("capataz", "CAM.PARTE.REGISTRAR");
         assertDoesNotThrow(() -> autorizacion.exigirCuadrilla(capataz, 7));
         assertThrows(ErrorCore.class, () -> autorizacion.exigirCuadrilla(capataz, 8));
-        assertTrue(autorizacion.alcanceCuadrillas(usuario("ingeniero-campo")).isEmpty());
+        // Sin límite quien puede ver los partes de todas las cuadrillas (AV-382: por permiso, no
+        // por rol).
+        assertTrue(
+                autorizacion
+                        .alcanceCuadrillas(
+                                usuario("ingeniero-campo", Autorizacion.CONSULTAR_PARTES))
+                        .isEmpty());
     }
 
     @Test

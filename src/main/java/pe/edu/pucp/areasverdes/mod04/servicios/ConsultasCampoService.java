@@ -132,7 +132,7 @@ public class ConsultasCampoService {
                 });
         boolean soloCapataz =
                 !OperacionCampoService.jefe(user)
-                        && user.roles().stream().noneMatch(Usuario.ROLES::contains);
+                        && !user.puede(OperacionCampoService.CONSULTAR_PARTES);
         if (soloCapataz
                 && Set.of("cuadrillas", "encargos", "partes", "actividades").contains(recurso)) {
             Long personal = service.personalUsuario(user);

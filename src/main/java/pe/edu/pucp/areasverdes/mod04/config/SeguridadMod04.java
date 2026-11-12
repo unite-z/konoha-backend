@@ -64,7 +64,8 @@ public class SeguridadMod04 {
                     usuario.nombre(),
                     "",
                     true,
-                    List.of(OperacionCampoService.CAPATAZ));
+                    List.of(OperacionCampoService.CAPATAZ),
+                    usuario.permisos());
         }
         return SesionCompartida.comoUsuarioMod05(usuario);
     }

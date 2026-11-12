@@ -57,6 +57,10 @@ mod02:
   poda:
     # Promedio diario a partir del cual se destaca una campaña (HU-MOD02-023). Pendiente de confirmar.
     umbral-rendimiento: ${MOD02_UMBRAL_RENDIMIENTO:18}
+mod04:
+  # Días que se recuerda una clave de operación: cubre la cola sin conexión de la PWA (AV-226).
+  idempotencia:
+    dias: ${MOD04_IDEMPOTENCIA_DIAS:30}
 mod05:
   archivos: ${MOD05_ARCHIVOS_DIR:./private-media}
   max-archivo-bytes: ${MOD05_MAX_ARCHIVO_BYTES:20971520}

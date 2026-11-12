@@ -38,7 +38,7 @@ public class ReporteService {
             List<Entradas.Documento> docs,
             List<MultipartFile> files,
             Usuario user) {
-        user.exigir(false);
+        user.exigir(Usuario.REGISTRAR_ATENCION);
         var antes = repo.lock("atenciontercerizada", id);
         var a = Atencion.from(antes);
         // «Observado»: la nueva revisión es la subsanación y devuelve la atención a «Reporte

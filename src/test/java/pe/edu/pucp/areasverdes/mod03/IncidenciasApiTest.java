@@ -176,6 +176,35 @@ class IncidenciasApiTest extends ApiPlanificacion {
                         .queryForObject("SELECT count(*) FROM mod03_incidencia", Integer.class));
     }
 
+    static String conHora(String json, String hora) {
+        return json.replace(
+                "\"descripcion\"", "\"reportado_en\": \"%s\", \"descripcion\"".formatted(hora));
+    }
+
+    @Test
+    void elReporteSinConexionConservaSuHoraOriginal() throws Exception {
+        String json = conHora(cuerpo("App", "{\"usuario_id\": 2}"), "2026-01-10T09:15:00-05:00");
+        registrarConFoto("ingeniero", json, UUID.randomUUID()).andExpect(status().isCreated());
+        assertEquals(
+                "2026-01-10 09:15",
+                jdbc.getJdbcTemplate()
+                        .queryForObject(
+                                "SELECT to_char(fecha_registro AT TIME ZONE 'America/Lima',"
+                                        + " 'YYYY-MM-DD HH24:MI') FROM mod03_incidencia",
+                                String.class));
+    }
+
+    @Test
+    void rechazaUnaHoraDeReporteFutura() throws Exception {
+        registrar(
+                        "jefe",
+                        conHora(
+                                cuerpo("Telefono", "{\"nombre\": \"Ana\"}"),
+                                "2999-01-01T00:00:00-05:00"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.codigo").value("fecha-futura"));
+    }
+
     @Test
     void bandejaDelJefeYSeguimientoDelReportante() throws Exception {
         registrarConFoto("ingeniero", cuerpo("App", "{\"usuario_id\": 2}"), null);
