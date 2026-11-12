@@ -64,8 +64,8 @@ public class ClienteGemini implements ClienteIA {
     public static final String MENSAJE_IA_NO_CONFIGURADA =
             "El análisis con IA no está configurado; registra los datos manualmente";
     public static final String MENSAJE_IA_FALLO =
-            "No se pudo analizar el informe con IA; registra los datos manualmente o inténtalo más"
-                    + " tarde";
+            "No se pudo completar el análisis con IA; registra los datos manualmente o inténtalo"
+                    + " más tarde";
     public static final String TEXTO_SOLICITUD =
             "Extrae los datos del informe adjunto según el esquema indicado.";
 
