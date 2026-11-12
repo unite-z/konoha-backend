@@ -23,6 +23,7 @@ import pe.edu.pucp.areasverdes.mod05.ArchivoStorage;
 import pe.edu.pucp.areasverdes.mod06.comun.Periodo;
 import pe.edu.pucp.areasverdes.mod06.gestion.ErrorGestion;
 import pe.edu.pucp.areasverdes.mod06.gestion.RangoFechas;
+import pe.edu.pucp.areasverdes.mod06.gestion.datos.IncidenciasRepository;
 import pe.edu.pucp.areasverdes.mod06.gestion.datos.ServiciosTercerizadosRepository;
 import pe.edu.pucp.areasverdes.mod06.gestion.exportaciones.GeneradorArchivos.Tabla;
 import pe.edu.pucp.areasverdes.mod06.gestion.exportaciones.TiposExportables.TipoExportable;
@@ -83,6 +84,7 @@ public class ExportacionReportesService {
     private final MaterialVegetalService material;
     private final DistribucionPersonalService distribucion;
     private final ServiciosTercerizadosRepository catalogos;
+    private final IncidenciasRepository incidencias;
     private final NamedParameterJdbcTemplate jdbc;
     private final Clock reloj;
 
@@ -94,6 +96,7 @@ public class ExportacionReportesService {
             MaterialVegetalService material,
             DistribucionPersonalService distribucion,
             ServiciosTercerizadosRepository catalogos,
+            IncidenciasRepository incidencias,
             NamedParameterJdbcTemplate jdbc,
             Clock reloj) {
         this.repositorio = repositorio;
@@ -103,6 +106,7 @@ public class ExportacionReportesService {
         this.material = material;
         this.distribucion = distribucion;
         this.catalogos = catalogos;
+        this.incidencias = incidencias;
         this.jdbc = jdbc;
         this.reloj = reloj;
     }
@@ -231,6 +235,12 @@ public class ExportacionReportesService {
             case "ServicioTercerizado" -> servicio(t, p);
             case "MaterialVegetal" -> materialVegetal(t, p);
             case "DistribucionPersonal" -> distribucionPersonal(t, p);
+            case "MatrizIncidencias" ->
+                    new Tabla(
+                            t.nombre(),
+                            resumen(p),
+                            MatrizIncidencias.columnas(),
+                            MatrizIncidencias.filas(incidencias.conteos(p.periodo())));
             default ->
                     throw new ErrorGestion(
                             400, "tipo-no-disponible", "Elige un tipo de reporte exportable");
