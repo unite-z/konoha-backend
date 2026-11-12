@@ -45,6 +45,7 @@ public class ClienteDeepSeek implements ClienteIA {
 
     private final String modelo;
     private final Transporte transporte;
+    private Uso ultimoUso;
 
     public ClienteDeepSeek(String apiKey, String modelo, Transporte transporte) {
         String clave = apiKey == null ? "" : apiKey.strip();
@@ -75,6 +76,15 @@ public class ClienteDeepSeek implements ClienteIA {
                 throw new IllegalStateException("HTTP " + respuesta.statusCode());
             return respuesta.body();
         };
+    }
+
+    @Override
+    public Uso ultimoUso() {
+        return ultimoUso;
+    }
+
+    private static Integer entero(com.fasterxml.jackson.databind.JsonNode nodo, String campo) {
+        return nodo.path(campo).isNumber() ? nodo.path(campo).intValue() : null;
     }
 
     @Override
@@ -158,13 +168,15 @@ public class ClienteDeepSeek implements ClienteIA {
     private Map<String, Object> pedir(String cuerpo) {
         String texto;
         try {
-            texto =
-                    JSON.readTree(transporte.enviar(cuerpo))
-                            .path("choices")
-                            .path(0)
-                            .path("message")
-                            .path("content")
-                            .asText("");
+            com.fasterxml.jackson.databind.JsonNode raiz = JSON.readTree(transporte.enviar(cuerpo));
+            com.fasterxml.jackson.databind.JsonNode usage = raiz.path("usage");
+            if (usage.isObject())
+                ultimoUso =
+                        new Uso(
+                                entero(usage, "prompt_tokens"),
+                                entero(usage, "completion_tokens"),
+                                entero(usage, "prompt_cache_hit_tokens"));
+            texto = raiz.path("choices").path(0).path("message").path("content").asText("");
         } catch (Exception exc) { // red, HTTP no 2xx o respuesta que no es JSON
             log.error("Fallo en la llamada a DeepSeek ({})", exc.getClass().getSimpleName());
             throw new ServicioIANoDisponible(ClienteGemini.MENSAJE_IA_FALLO);

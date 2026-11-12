@@ -111,7 +111,7 @@ public class CronogramasService {
         if (cuerpo.get("tipo_servicio_ids") instanceof List<?> l) {
             for (Object o : l) if (o instanceof Number n) tipos.add(n.longValue());
         }
-        ClienteIA cliente = fabrica.obtenerClienteIa();
+        ClienteIA cliente = fabrica.obtenerClienteIa("cronograma");
 
         List<Map<String, Object>> restricciones = restricciones(desde, hasta);
         List<Map<String, Object>> pendientes = pendientes(desde, hasta, tipos, modalidad);

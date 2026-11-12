@@ -29,6 +29,7 @@ public class FabricaClienteIA {
     private final Mod06Propiedades propiedades;
     private final ProveedorIaPropiedades proveedorIa;
     private final ConfiguracionIaRepository configuracion;
+    private final UsoIaRepository uso;
 
     public FabricaClienteIA(Mod06Propiedades propiedades) {
         this(propiedades, ProveedorIaPropiedades.GEMINI);
@@ -38,14 +39,42 @@ public class FabricaClienteIA {
         this(propiedades, proveedorIa, null);
     }
 
-    @Autowired
     public FabricaClienteIA(
             Mod06Propiedades propiedades,
             ProveedorIaPropiedades proveedorIa,
             ConfiguracionIaRepository configuracion) {
+        this(propiedades, proveedorIa, configuracion, null);
+    }
+
+    @Autowired
+    public FabricaClienteIA(
+            Mod06Propiedades propiedades,
+            ProveedorIaPropiedades proveedorIa,
+            ConfiguracionIaRepository configuracion,
+            UsoIaRepository uso) {
         this.propiedades = propiedades;
         this.proveedorIa = proveedorIa;
         this.configuracion = configuracion;
+        this.uso = uso;
+    }
+
+    /**
+     * Cliente para un asistente concreto, con cada llamada registrada en el uso de la IA (AV-396).
+     * Si la IA no está configurada, el fallo también queda registrado.
+     */
+    public ClienteIA obtenerClienteIa(String asistente) {
+        ClienteIA cliente;
+        try {
+            cliente = obtenerClienteIa();
+        } catch (ServicioIANoDisponible e) {
+            if (uso != null) {
+                Activo activo = activo();
+                uso.registrar(
+                        asistente, activo.proveedor(), activo.modelo(), 0, e.getMessage(), null);
+            }
+            throw e;
+        }
+        return uso == null ? cliente : new ClienteRegistrado(cliente, asistente, uso);
     }
 
     public Activo activo() {

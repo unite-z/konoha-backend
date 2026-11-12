@@ -161,7 +161,7 @@ public class ClasificacionesIncidenciaService {
     public Map<String, Object> solicitar(Map<String, Object> cuerpo, long usuario) {
         long incidenciaId = idObligatorio(cuerpo.get("incidencia_id"), "incidencia_id");
         Map<String, Object> incidencia = registrada(incidenciaId);
-        ClienteIA cliente = fabrica.obtenerClienteIa();
+        ClienteIA cliente = fabrica.obtenerClienteIa("clasificacion");
         List<Map<String, Object>> antecedentes = antecedentes(incidencia);
         Map<String, Object> datos = new LinkedHashMap<>();
         datos.put("incidencia", incidencia);

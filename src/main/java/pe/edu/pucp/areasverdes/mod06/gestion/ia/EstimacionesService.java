@@ -144,7 +144,7 @@ public class EstimacionesService {
 
     public Map<String, Object> solicitar(Map<String, Object> cuerpo, long usuario) {
         Origen origen = origen(cuerpo);
-        ClienteIA cliente = fabrica.obtenerClienteIa();
+        ClienteIA cliente = fabrica.obtenerClienteIa("estimacion");
         List<Map<String, Object>> antecedentes = antecedentes(origen);
         Map<String, Object> datos =
                 mapa(

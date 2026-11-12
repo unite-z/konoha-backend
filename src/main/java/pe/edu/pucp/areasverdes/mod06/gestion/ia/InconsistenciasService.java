@@ -95,7 +95,7 @@ public class InconsistenciasService {
                     "La fecha final no puede ser anterior a la inicial",
                     Map.of("hasta", List.of("La fecha final no puede ser anterior a la inicial")));
         }
-        ClienteIA cliente = fabrica.obtenerClienteIa();
+        ClienteIA cliente = fabrica.obtenerClienteIa("inconsistencias");
         List<Candidato> candidatos = candidatos(conjunto, desde, hasta);
         List<String> limitaciones = new ArrayList<>();
         if (candidatos.size() > MAXIMO_HALLAZGOS) {

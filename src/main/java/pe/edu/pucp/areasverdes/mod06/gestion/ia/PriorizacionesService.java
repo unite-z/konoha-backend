@@ -93,7 +93,7 @@ public class PriorizacionesService {
         LocalDate hoy = Fechas.hoy(sugerencias.reloj());
 
         // El cliente se obtiene antes de leer: si la IA no está configurada, 503 inmediato.
-        ClienteIA cliente = fabrica.obtenerClienteIa();
+        ClienteIA cliente = fabrica.obtenerClienteIa("priorizacion");
         Integer frecuencia = tipoServicio == null ? null : frecuencia(tipoServicio);
         List<Map<String, Object>> candidatos = new ArrayList<>();
         if (!alcance.equals("Ejemplares")) candidatos.addAll(areas(area, hoy, frecuencia));

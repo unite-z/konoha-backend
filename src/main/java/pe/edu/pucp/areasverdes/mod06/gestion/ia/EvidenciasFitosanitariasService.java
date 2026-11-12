@@ -194,7 +194,7 @@ public class EvidenciasFitosanitariasService {
         String sintomas =
                 datos.get("sintomas") instanceof String s && !s.isBlank() ? s.strip() : null;
 
-        ClienteIA cliente = fabrica.obtenerClienteIa();
+        ClienteIA cliente = fabrica.obtenerClienteIa("evidencia");
         List<String> plagas =
                 jdbc.queryForList(
                         "SELECT nombre FROM mod05_plaga WHERE activo ORDER BY nombre",
