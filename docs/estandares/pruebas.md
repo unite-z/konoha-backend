@@ -2,8 +2,8 @@
 
 `./mvnw verify` corre todo: formato, compilación y pruebas. Es lo que ejecuta CI.
 
-La verificación técnica local de RF-PLA-001 y RF-PLA-002, sus contratos, fixtures,
-resultados y límites frente a UAT están en [MOD-03](../modulos/mod03.md).
+Qué prueba cubre cada parte de la configuración de servicios de MOD-03 (RF-PLA-001 y
+RF-PLA-002): en [MOD-03](../modulos/mod03.md#pruebas).
 
 ## Tipos
 
