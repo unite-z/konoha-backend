@@ -39,6 +39,8 @@ public final class BaseDePruebas {
         // fallaba con «too many clients». Los contextos ociosos sueltan sus conexiones.
         p.add("spring.datasource.hikari.minimum-idle", () -> 0);
         p.add("spring.datasource.hikari.idle-timeout", () -> 10_000);
+        // BCrypt de coste 4 en vez de 10: HTTP Basic verifica la contraseña en cada petición.
+        p.add("seguridad.bcrypt-coste", () -> 4);
     }
 
     private static String variable(String nombre, String porDefecto) {
