@@ -38,7 +38,7 @@ public class ObservacionPlagaService {
             """;
 
     public ConsultasService.Pagina listar(Usuario user, Map<String, String> params, String url) {
-        user.exigir(false);
+        user.exigir(Usuario.REGISTRAR_ATENCION);
         return queries.list(
                 new ConsultasService.Catalogo(
                         OBSERVACIONES,
@@ -55,7 +55,7 @@ public class ObservacionPlagaService {
     }
 
     public Map<String, Object> detalle(Usuario user, long id) {
-        user.exigir(false);
+        user.exigir(Usuario.REGISTRAR_ATENCION);
         return repo.one(OBSERVACIONES + " WHERE o.id=:id", Map.of("id", id));
     }
 
@@ -65,7 +65,7 @@ public class ObservacionPlagaService {
      */
     public List<Map<String, Object>> porAlcance(
             Usuario user, List<Long> areaVerdeIds, List<Long> ejemplarIds) {
-        user.exigir(false);
+        user.exigir(Usuario.REGISTRAR_ATENCION);
         if (areaVerdeIds.isEmpty() && ejemplarIds.isEmpty()) return List.of();
         return repo.rows(
                 OBSERVACIONES
@@ -78,7 +78,7 @@ public class ObservacionPlagaService {
 
     @Transactional
     public Map<String, Object> registrar(EntradasFitosanitario.ObservacionPlaga in, Usuario user) {
-        user.exigir(false);
+        user.exigir(Usuario.REGISTRAR_ATENCION);
         if ((in.area_verde_id() == null) == (in.ejemplar_id() == null))
             throw ApiError.invalid("Indica solo un área verde o un ejemplar");
         if (in.area_verde_id() != null) {

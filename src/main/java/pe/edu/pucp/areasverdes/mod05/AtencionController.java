@@ -4,6 +4,8 @@ import static pe.edu.pucp.areasverdes.mod05.AtencionService.values;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -30,6 +32,7 @@ public class AtencionController {
     final ArchivoStorage storage;
     final ObjectMapper json;
     final Validator validator;
+    final FormatosReporte formatos;
 
     public AtencionController(
             AtencionService service,
@@ -38,7 +41,8 @@ public class AtencionController {
             ConsultasService queries,
             ArchivoStorage storage,
             ObjectMapper json,
-            Validator validator) {
+            Validator validator,
+            FormatosReporte formatos) {
         this.service = service;
         this.reports = reports;
         this.repo = repo;
@@ -46,6 +50,7 @@ public class AtencionController {
         this.storage = storage;
         this.json = json;
         this.validator = validator;
+        this.formatos = formatos;
     }
 
     @GetMapping({"/me/", "/me"})
@@ -66,7 +71,7 @@ public class AtencionController {
             @AuthenticationPrincipal Usuario user,
             @RequestParam Map<String, String> params,
             HttpServletRequest request) {
-        user.exigir(false);
+        user.exigir(Usuario.REGISTRAR_ATENCION);
         return queries.atenciones(params, request.getRequestURL().toString());
     }
 
@@ -80,7 +85,7 @@ public class AtencionController {
     @GetMapping({"/atenciones/{id}/", "/atenciones/{id}"})
     public Map<String, Object> detail(
             @AuthenticationPrincipal Usuario user, @PathVariable long id) {
-        user.exigir(false);
+        user.exigir(Usuario.REGISTRAR_ATENCION);
         return repo.atencion(id);
     }
 
@@ -132,13 +137,32 @@ public class AtencionController {
         return service.conformidad(id, body, user);
     }
 
+    /**
+     * Formato estándar vigente del informe final para el tipo de servicio de la atención
+     * (RF-SER-009) y los datos de la última revisión registrada con ese formato. {@code formato} es
+     * {@code null} si el tipo de servicio no tiene formato: el reporte se adjunta sin datos.
+     */
+    @Operation(
+            summary = "Formato del informe final de la atención",
+            description =
+                    "Devuelve {formato, datos_anteriores}. formato: {id, version, tipo_servicio_id,"
+                            + " tipo_servicio_nombre, campos: [{nombre_campo, tipo_dato,"
+                            + " obligatorio, orden, subcampos}]} o null. datos_anteriores:"
+                            + " {revision, datos} de la última revisión con ese formato, o null.")
+    @GetMapping({"/atenciones/{id}/formato-reporte/", "/atenciones/{id}/formato-reporte"})
+    public Map<String, Object> formatoReporte(
+            @AuthenticationPrincipal Usuario user, @PathVariable long id) {
+        user.exigir(Usuario.REGISTRAR_ATENCION);
+        return formatos.deAtencion(id);
+    }
+
     @GetMapping({"/atenciones/{id}/reportes/", "/atenciones/{id}/reportes"})
     public ConsultasService.Pagina reports(
             @AuthenticationPrincipal Usuario user,
             @PathVariable long id,
             @RequestParam Map<String, String> params,
             HttpServletRequest request) {
-        user.exigir(false);
+        user.exigir(Usuario.REGISTRAR_ATENCION);
         return queries.reportes(id, params, request.getRequestURL().toString());
     }
 
@@ -151,11 +175,19 @@ public class AtencionController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha_recepcion,
             @RequestParam(required = false) String resumen,
             @RequestParam String documentos,
+            @Parameter(
+                            description =
+                                    "Opcional (RF-SER-009): objeto JSON {nombre_campo: valor} con"
+                                            + " los datos del informe final según el formato"
+                                            + " vigente del tipo de servicio. Si llega, se valida"
+                                            + " entero y faltar un obligatorio es un 400.")
+                    @RequestParam(name = "datos_formato", required = false)
+                    String datosFormato,
             @RequestPart List<MultipartFile> archivos,
             HttpServletRequest request) {
-        user.exigir(false);
+        user.exigir(Usuario.REGISTRAR_ATENCION);
         var fields = new HashSet<>(request.getParameterMap().keySet());
-        fields.removeAll(Set.of("fecha_recepcion", "resumen", "documentos"));
+        fields.removeAll(Set.of("fecha_recepcion", "resumen", "documentos", "datos_formato"));
         if (!fields.isEmpty()) throw ApiError.invalid("Campos no admitidos: " + fields);
         List<Entradas.Documento> docs;
         try {
@@ -168,7 +200,8 @@ public class AtencionController {
                 || docs.stream().anyMatch(d -> d == null || !validator.validate(d).isEmpty()))
             throw ApiError.invalid("Metadatos de documentos incompletos o inválidos");
         // 201 si crea una revisión; 200 si el envío repite la última (idempotencia por SHA-256).
-        var reporte = reports.adjuntar(id, fecha_recepcion, resumen, docs, archivos, user);
+        var reporte =
+                reports.adjuntar(id, fecha_recepcion, resumen, docs, archivos, datosFormato, user);
         return ResponseEntity.status(
                         Boolean.TRUE.equals(reporte.get("repetido"))
                                 ? HttpStatus.OK
@@ -181,7 +214,7 @@ public class AtencionController {
             @AuthenticationPrincipal Usuario user,
             @PathVariable long id,
             @PathVariable long reporte) {
-        user.exigir(false);
+        user.exigir(Usuario.REGISTRAR_ATENCION);
         return repo.reporte(id, reporte);
     }
 
@@ -194,7 +227,7 @@ public class AtencionController {
             @PathVariable long id,
             @PathVariable long reporte,
             @PathVariable long documento) {
-        user.exigir(false);
+        user.exigir(Usuario.REGISTRAR_ATENCION);
         var file = repo.archivo(id, reporte, documento);
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType((String) file.get("tipo_mime")))
@@ -217,7 +250,7 @@ public class AtencionController {
             @PathVariable String catalogo,
             @RequestParam Map<String, String> params,
             HttpServletRequest request) {
-        user.exigir(false);
+        user.exigir(Usuario.REGISTRAR_ATENCION);
         return queries.catalogo(catalogo, params, request.getRequestURL().toString());
     }
 }

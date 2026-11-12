@@ -4,24 +4,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
 
-import java.io.IOException;
-import java.nio.file.Files;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 /**
  * Ningún endpoint sin proteger (AV-240): recorre todos los endpoints registrados en Spring, de
@@ -31,9 +21,7 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
  *
  * <p>Las excepciones están en {@link #PUBLICOS}, cada una con su motivo.
  */
-@SpringBootTest
-@AutoConfigureMockMvc
-class PermisosGlobalesApiTest {
+class PermisosGlobalesApiTest extends BasePruebaGlobal {
 
     /** Endpoints públicos a propósito: «método ruta» y el motivo. */
     static final Map<String, String> PUBLICOS =
@@ -59,19 +47,6 @@ class PermisosGlobalesApiTest {
                     RequestMethod.PUT,
                     RequestMethod.PATCH,
                     RequestMethod.DELETE);
-
-    @DynamicPropertySource
-    static void baseDePruebas(DynamicPropertyRegistry p) throws IOException {
-        BaseDePruebas.registrar(p);
-        String archivos = Files.createTempDirectory("permisos-globales-").toString();
-        p.add("mod05.archivos", () -> archivos);
-    }
-
-    @Autowired MockMvc http;
-
-    @Autowired
-    @Qualifier("requestMappingHandlerMapping")
-    RequestMappingHandlerMapping rutas;
 
     @Test
     void ningunEndpointQuedaSinProteger() {

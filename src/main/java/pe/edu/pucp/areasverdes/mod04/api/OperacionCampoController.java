@@ -255,8 +255,14 @@ public class OperacionCampoController {
     public Map<String, Object> crearMaterial(
             @PathVariable long id,
             @Valid @RequestBody Entradas.MaterialActividad body,
-            @AuthenticationPrincipal Usuario user) {
-        return materialesActividad.crear(id, body, user);
+            @AuthenticationPrincipal Usuario user,
+            @RequestHeader(value = "Idempotency-Key", required = false) UUID clave) {
+        return idempotencia.ejecutar(
+                clave,
+                user,
+                "crear-material:" + id,
+                body,
+                () -> materialesActividad.crear(id, body, user));
     }
 
     @GetMapping({

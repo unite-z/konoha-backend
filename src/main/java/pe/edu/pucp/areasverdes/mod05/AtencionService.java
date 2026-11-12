@@ -63,7 +63,7 @@ public class AtencionService {
 
     @Transactional
     public Map<String, Object> crear(Entradas.Crear input, Usuario user) {
-        user.exigir(true);
+        user.exigir(Usuario.GESTIONAR_ATENCION);
         var c = repo.lock("contrato", input.contrato_id());
         var proveedor = repo.get("proveedor", number(c, "proveedor_id"));
         var servicio = repo.get("tiposervicio", number(c, "tipo_servicio_id"));
@@ -239,7 +239,7 @@ public class AtencionService {
 
     @Transactional
     public Map<String, Object> orden(long id, Entradas.Orden input, Usuario user) {
-        user.exigir(false);
+        user.exigir(Usuario.REGISTRAR_ATENCION);
         var antes = repo.lock("atenciontercerizada", id);
         var a = Atencion.from(antes);
         a.exigir(REQUERIMIENTO, OC);
@@ -262,10 +262,7 @@ public class AtencionService {
     @Transactional
     public Map<String, Object> verificarSeguridad(
             long id, Entradas.VerificacionSeguridad input, Usuario user) {
-        user.exigir(false);
-        if (!user.roles().contains(Usuario.JEFE) && !user.roles().contains("Ingeniero de campo"))
-            throw new ApiError(
-                    403, "SinPermiso", "Solo el jefe o el ingeniero pueden verificar la seguridad");
+        user.exigir(Usuario.VERIFICAR_SEGURIDAD);
         var antes = repo.lock("atenciontercerizada", id);
         var a = Atencion.from(antes);
         a.exigir(REQUERIMIENTO, OC);
@@ -303,7 +300,7 @@ public class AtencionService {
 
     @Transactional
     public Map<String, Object> inicio(long id, Entradas.Inicio input, Usuario user) {
-        user.exigir(false);
+        user.exigir(Usuario.REGISTRAR_ATENCION);
         var antes = repo.lock("atenciontercerizada", id);
         var a = Atencion.from(antes);
         a.exigir(OC);
@@ -325,7 +322,7 @@ public class AtencionService {
 
     @Transactional
     public Map<String, Object> fin(long id, Entradas.Fin input, Usuario user) {
-        user.exigir(false);
+        user.exigir(Usuario.REGISTRAR_ATENCION);
         var antes = repo.lock("atenciontercerizada", id);
         var a = Atencion.from(antes);
         a.exigir(EJECUCION);
@@ -341,7 +338,7 @@ public class AtencionService {
 
     @Transactional
     public Map<String, Object> origen(long id, Entradas.Origen input, Usuario user) {
-        user.exigir(true);
+        user.exigir(Usuario.GESTIONAR_ATENCION);
         var antes = repo.lock("atenciontercerizada", id);
         Atencion.from(antes).exigir(REQUERIMIENTO, OC);
         Long unidad =
@@ -360,7 +357,7 @@ public class AtencionService {
 
     @Transactional
     public Map<String, Object> acuerdo(long id, Entradas.Acuerdo input, Usuario user) {
-        user.exigir(true);
+        user.exigir(Usuario.GESTIONAR_ATENCION);
         var antes = repo.lock("atenciontercerizada", id);
         var a = Atencion.from(antes);
         // La unidad puede responder después de la conformidad: el acuerdo nunca cierra la atención.
@@ -396,7 +393,7 @@ public class AtencionService {
      */
     @Transactional
     public Map<String, Object> conformidad(long id, Entradas.Conformidad input, Usuario user) {
-        user.exigir(true);
+        user.exigir(Usuario.REGISTRAR_CONFORMIDAD);
         var antes = repo.lock("atenciontercerizada", id);
         var a = Atencion.from(antes);
         if (a.estado().equals(EJECUTADO))

@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static pe.edu.pucp.areasverdes.mod06.gestion.FuenteMovimientosMaterialEnMemoria.consumo;
 import static pe.edu.pucp.areasverdes.mod06.gestion.FuenteMovimientosMaterialEnMemoria.propagacion;
 import static pe.edu.pucp.areasverdes.mod06.gestion.FuenteMovimientosMaterialEnMemoria.traslado;
+import static pe.edu.pucp.areasverdes.mod06.gestion.FuenteProductosProveedorEnMemoria.aplicacion;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -38,7 +39,14 @@ class MaterialVegetalServiceTest {
     }
 
     static ReporteMaterialVegetal generar(FuenteMovimientosMaterialEnMemoria fuente, Long area) {
-        return new MaterialVegetalService(fuente, RELOJ, 3).generar(OCTUBRE, area);
+        return generar(fuente, FuenteProductosProveedorEnMemoria.vacia(), area);
+    }
+
+    static ReporteMaterialVegetal generar(
+            FuenteMovimientosMaterialEnMemoria fuente,
+            FuenteProductosProveedorEnMemoria productos,
+            Long area) {
+        return new MaterialVegetalService(fuente, productos, RELOJ, 3).generar(OCTUBRE, area);
     }
 
     @Test
@@ -209,6 +217,51 @@ class MaterialVegetalServiceTest {
     void conCeroMesesDeComparacionNoArranca() {
         var fuente = new FuenteMovimientosMaterialEnMemoria(Disponibilidad.DISPONIBLE, List.of());
         assertThrows(
-                IllegalStateException.class, () -> new MaterialVegetalService(fuente, RELOJ, 0));
+                IllegalStateException.class,
+                () ->
+                        new MaterialVegetalService(
+                                fuente, FuenteProductosProveedorEnMemoria.vacia(), RELOJ, 0));
+    }
+
+    // --- Flujo 3a: productos aplicados por los proveedores ---------------------------------------
+
+    @Test
+    void sinProductosAplicadosLaVistaApartePoneSuMotivo() {
+        var r = generar(FuenteMovimientosMaterialEnMemoria.con());
+        assertTrue(r.productosProveedor().sinDatos());
+        assertEquals(
+                MaterialVegetalService.MENSAJE_SIN_PRODUCTOS,
+                r.productosProveedor().mensajeSinDatos());
+        assertTrue(r.productosProveedor().productos().isEmpty());
+    }
+
+    @Test
+    void losProductosSePidenSoloDelMesYConElEspacioElegido() {
+        var productos =
+                FuenteProductosProveedorEnMemoria.con(
+                        aplicacion("2026-09-30", 1, "Cupravit", "Oxicloruro", "2 g/L", "Agro SAC"),
+                        aplicacion("2026-10-08", 2, "Cupravit", "Oxicloruro", "2 g/L", "Agro SAC"));
+        var r = generar(FuenteMovimientosMaterialEnMemoria.con(), productos, 7L);
+        assertEquals(
+                List.of(new RangoFechas(LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 31))),
+                productos.periodosPedidos);
+        assertEquals(List.of(7L), productos.areasPedidas);
+        assertFalse(r.productosProveedor().sinDatos());
+        assertNull(r.productosProveedor().mensajeSinDatos());
+        assertEquals(1, r.productosProveedor().productos().getFirst().aplicaciones());
+    }
+
+    @Test
+    void losProductosSeMuestranAunqueNoHayaMaterialDeLasCuadrillas() {
+        var fuente =
+                new FuenteMovimientosMaterialEnMemoria(
+                        new FuenteMovimientosMaterialNoDisponible().disponibilidad(), List.of());
+        var productos =
+                FuenteProductosProveedorEnMemoria.con(
+                        aplicacion("2026-10-08", 2, "Cupravit", "Oxicloruro", "2 g/L", "Agro SAC"));
+        var r = generar(fuente, productos, null);
+        assertTrue(r.sinDatos(), "El material de las cuadrillas sigue sin datos");
+        assertFalse(r.productosProveedor().sinDatos());
+        assertEquals("Cupravit", r.productosProveedor().productos().getFirst().producto());
     }
 }

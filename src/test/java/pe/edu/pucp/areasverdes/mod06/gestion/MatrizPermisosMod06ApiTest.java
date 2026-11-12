@@ -34,7 +34,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  * | POST ia/extracciones/{id}/rechazar/  |   401   |  ok  |   403     |    403      |   403   |   401    |
  * </pre>
  */
-class MatrizPermisosMod06ApiTest extends ApiGestion {
+public class MatrizPermisosMod06ApiTest extends ApiGestion {
 
     static final int OK = 0;
     static final String ANONIMO = "anónimo";
@@ -67,6 +67,11 @@ class MatrizPermisosMod06ApiTest extends ApiGestion {
                     new Fila("GET", "/api/v1/ia/extracciones/metricas/", SOLO_VALIDADOR),
                     new Fila("POST", "/api/v1/ia/extracciones/999999/validar/", SOLO_VALIDADOR),
                     new Fila("POST", "/api/v1/ia/extracciones/999999/rechazar/", SOLO_VALIDADOR));
+
+    /** Endpoints de la matriz («MÉTODO url»), para la prueba global de contrato de rutas. */
+    public static List<String> endpointsCubiertos() {
+        return MATRIZ.stream().map(f -> f.metodo() + " " + f.url()).toList();
+    }
 
     static Stream<Arguments> combinaciones() {
         List<Arguments> casos = new ArrayList<>();

@@ -47,16 +47,26 @@ public class Autorizacion {
     }
 
     /** Datos personales de cuentas y personal: solo el jefe de sección (RNF-008). */
+    /** Consultar partes; el alcance de cuadrilla se determina por separado. */
+    public static final String CONSULTAR_PARTES = "CAM.PARTE.CONSULTAR";
+
+    public static final String REGISTRAR_PARTE = "CAM.PARTE.REGISTRAR";
+    public static final String GESTIONAR_CUADRILLAS = "CAM.CUADRILLA.GESTIONAR";
+
     public boolean puedeVerDatosPersonales(UsuarioSesion usuario) {
         return usuario != null && usuario.tiene(VER_DATOS_PERSONALES);
     }
 
     /**
-     * Cuadrillas a las que se limita el usuario. Vacío significa sin límite de cuadrilla (roles de
-     * oficina); para el capataz, solo las suyas (HU-MOD01-007, «Alcance de cuadrilla»).
+     * Cuadrillas a las que se limita el usuario; vacío significa sin restricción de cuadrilla.
+     * Quien registra partes propios sin gestionar cuadrillas queda limitado a las suyas
+     * (HU-MOD01-007, «Alcance de cuadrilla»). Se decide por permisos, no por el nombre del rol
+     * (AV-382).
      */
     public Optional<Set<Long>> alcanceCuadrillas(UsuarioSesion usuario) {
-        if (usuario != null && UsuarioSesion.CAPATAZ.equals(usuario.rol())) {
+        if (usuario != null
+                && usuario.tiene(REGISTRAR_PARTE)
+                && !usuario.tiene(GESTIONAR_CUADRILLAS)) {
             return Optional.of(campo.cuadrillasDelCapataz(usuario.id()));
         }
         return Optional.empty();

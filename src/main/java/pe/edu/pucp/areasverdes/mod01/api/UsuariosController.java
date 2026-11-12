@@ -26,9 +26,11 @@ import pe.edu.pucp.areasverdes.mod01.datos.BitacoraRepository;
 import pe.edu.pucp.areasverdes.mod01.datos.BitacoraRepository.Acceso;
 import pe.edu.pucp.areasverdes.mod01.datos.BitacoraRepository.Cambio;
 import pe.edu.pucp.areasverdes.mod01.datos.BitacoraRepository.FiltroAccesos;
+import pe.edu.pucp.areasverdes.mod01.datos.RolesRepository;
 import pe.edu.pucp.areasverdes.mod01.servicios.Autorizacion;
 import pe.edu.pucp.areasverdes.mod01.servicios.ErrorCore;
 import pe.edu.pucp.areasverdes.mod01.servicios.RolesService;
+import pe.edu.pucp.areasverdes.mod01.servicios.RolesService.PermisosRol;
 import pe.edu.pucp.areasverdes.mod01.servicios.RolesService.RolConPermisos;
 import pe.edu.pucp.areasverdes.mod01.servicios.RolesService.RolUsuario;
 import pe.edu.pucp.areasverdes.mod01.servicios.UsuarioSesion;
@@ -54,6 +56,12 @@ public class UsuariosController {
     public record Motivo(@NotBlank @Size(max = 500) String motivo) {}
 
     public record AsignacionRol(@NotBlank String rol, @NotBlank @Size(max = 500) String motivo) {}
+
+    /**
+     * Se valida en el servicio, después de comprobar el permiso: sin él, 403 aunque el cuerpo
+     * falle.
+     */
+    public record AsignacionPermisos(List<String> permisos, String motivo) {}
 
     public record SesionesCerradas(int sesionesCerradas) {}
 
@@ -196,6 +204,39 @@ public class UsuariosController {
     public List<RolConPermisos> listarRoles(@AuthenticationPrincipal UsuarioSesion yo) {
         autorizacion.exigir(yo, GESTIONAR);
         return roles.listar();
+    }
+
+    /** El jefe lo lee para ver qué implica cada rol al dar de alta o cambiar el rol (AV-381). */
+    @Operation(summary = "Catálogo de permisos por módulo (jefe de sección y superadministrador)")
+    @GetMapping({"/permisos", "/permisos/"})
+    public List<RolesRepository.Permiso> catalogoPermisos(
+            @AuthenticationPrincipal UsuarioSesion yo) {
+        if (yo == null || !yo.tiene(RolesService.GESTIONAR_ROLES)) {
+            autorizacion.exigir(yo, GESTIONAR);
+        }
+        return roles.catalogo();
+    }
+
+    @Operation(summary = "Permisos de un rol y sus cambios (solo el superadministrador)")
+    @GetMapping({"/roles/{codigo}/permisos", "/roles/{codigo}/permisos/"})
+    public PermisosRol permisosRol(
+            @AuthenticationPrincipal UsuarioSesion yo, @PathVariable String codigo) {
+        autorizacion.exigir(yo, RolesService.GESTIONAR_ROLES);
+        return roles.permisosDe(codigo);
+    }
+
+    /** Sustituye todos los permisos del rol. Valen desde la siguiente petición de sus usuarios. */
+    @Operation(summary = "Editar los permisos de un rol (solo el superadministrador)")
+    @ApiResponse(
+            responseCode = "409",
+            description = "Sin cambios o permiso reservado al superadministrador")
+    @PutMapping({"/roles/{codigo}/permisos", "/roles/{codigo}/permisos/"})
+    public PermisosRol cambiarPermisosRol(
+            @AuthenticationPrincipal UsuarioSesion yo,
+            @PathVariable String codigo,
+            @RequestBody AsignacionPermisos asignacion) {
+        autorizacion.exigir(yo, RolesService.GESTIONAR_ROLES);
+        return roles.cambiarPermisos(codigo, asignacion.permisos(), asignacion.motivo(), yo);
     }
 
     /**

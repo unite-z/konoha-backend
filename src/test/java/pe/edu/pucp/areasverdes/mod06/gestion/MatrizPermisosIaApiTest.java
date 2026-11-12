@@ -29,7 +29,7 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
  * IA.PROPUESTA.VALIDAR (V9). Sin Gemini configurado, quien puede solicitar recibe 503; las
  * sugerencias inexistentes dan 404 a quien pasa el permiso.
  */
-class MatrizPermisosIaApiTest extends ApiGestion {
+public class MatrizPermisosIaApiTest extends ApiGestion {
 
     static final List<String> USUARIOS =
             List.of("anónimo", "jefe", "ingeniero", "practicante", "capataz", "inactivo");
@@ -140,6 +140,11 @@ class MatrizPermisosIaApiTest extends ApiGestion {
                         base + "/999999/rechazar/",
                         "{}",
                         VALIDAR));
+    }
+
+    /** Endpoints de la matriz («MÉTODO url»), para la prueba global de contrato de rutas. */
+    public static List<String> endpointsCubiertos() {
+        return MATRIZ.stream().map(f -> f.metodo() + " " + f.url()).toList();
     }
 
     @Autowired
