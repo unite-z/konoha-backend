@@ -48,6 +48,10 @@ public class OperacionCampoService implements ConsultaCampo {
     /** Registrar en la propia cuadrilla (antes: capataz). */
     public static final String REGISTRAR_PARTE = "CAM.PARTE.REGISTRAR";
 
+    public static final String VERIFICAR_PARTE = "CAM.PARTE.VERIFICAR";
+
+    public static final String ANULAR_PARTE = "CAM.PARTE.ANULAR";
+
     public static boolean jefe(Usuario user) {
         return user != null && user.puede(GESTIONAR);
     }
@@ -59,6 +63,10 @@ public class OperacionCampoService implements ConsultaCampo {
 
     public static void exigirJefe(Usuario user) {
         if (!jefe(user)) throw forbidden();
+    }
+
+    static void exigirPermiso(Usuario user, String permiso) {
+        if (user == null || !user.puede(permiso)) throw forbidden();
     }
 
     static ApiError forbidden() {
@@ -388,6 +396,8 @@ public class OperacionCampoService implements ConsultaCampo {
 
     Map<String, Object> parteDeActividad(long id, Usuario user, boolean write) {
         var activity = repo.get("actividad", id, write);
+        if (write && "Anulada".equals(activity.get("estado_actividad")))
+            throw ApiError.conflict("La actividad está anulada y solo puede consultarse");
         var part = repo.get("parte_diario", number(activity, "parte_id"), write);
         exigirCapataz(number(part, "capataz_id"), user, write);
         if (write && !part.get("estado").equals("Abierto"))
@@ -454,14 +464,25 @@ public class OperacionCampoService implements ConsultaCampo {
                                         "SELECT nombre FROM core_usuario WHERE id=:id",
                                         Map.of("id", verificador))
                                 .get("nombre"));
+        Object anulador = result.get("anulada_por_usuario_id");
+        result.put(
+                "anulada_por_nombre",
+                anulador == null
+                        ? null
+                        : repo.one(
+                                        "SELECT nombre FROM core_usuario WHERE id=:id",
+                                        Map.of("id", anulador))
+                                .get("nombre"));
         return result;
     }
 
     @Transactional
     public Map<String, Object> verificarActividad(
             long id, Entradas.Verificacion body, Usuario user) {
-        exigirJefe(user);
+        exigirPermiso(user, VERIFICAR_PARTE);
         var before = repo.get("actividad", id, true);
+        if ("Anulada".equals(before.get("estado_actividad")))
+            throw ApiError.conflict("Una actividad anulada no puede verificarse");
         repo.update(
                 "actividad",
                 id,
@@ -471,9 +492,40 @@ public class OperacionCampoService implements ConsultaCampo {
                         "verificado_por_usuario_id",
                         user.id(),
                         "fecha_verificacion",
-                        OffsetDateTime.now(clock)));
+                        OffsetDateTime.now(clock),
+                        "estado_actividad",
+                        "Verificada"));
         var after = repo.get("actividad", id, false);
         repo.audit("Actividad", id, "Verificar", user.id(), before, after);
+        return actividad(id, user);
+    }
+
+    @Transactional
+    public Map<String, Object> anularActividad(long id, Entradas.Anulacion body, Usuario user) {
+        exigirPermiso(user, ANULAR_PARTE);
+        String motivo = body.motivo().strip();
+        var before = repo.get("actividad", id, true);
+        String estado = String.valueOf(before.get("estado_actividad"));
+        if ("Verificada".equals(estado))
+            throw ApiError.conflict("Una actividad verificada no puede anularse");
+        if ("Anulada".equals(estado)) {
+            if (motivo.equals(before.get("anulacion_motivo"))) return actividad(id, user);
+            throw ApiError.conflict("La actividad ya fue anulada con otro motivo");
+        }
+        repo.update(
+                "actividad",
+                id,
+                values(
+                        "estado_actividad",
+                        "Anulada",
+                        "anulada_en",
+                        OffsetDateTime.now(clock),
+                        "anulada_por_usuario_id",
+                        user.id(),
+                        "anulacion_motivo",
+                        motivo));
+        var after = repo.get("actividad", id, false);
+        repo.auditExplicit("Actividad", id, "Anulacion", user.id(), before, after, motivo);
         return actividad(id, user);
     }
 

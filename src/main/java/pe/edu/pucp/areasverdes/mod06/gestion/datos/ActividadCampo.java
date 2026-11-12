@@ -8,7 +8,8 @@ import java.time.LocalDate;
  *
  * @param fecha fecha local (America/Lima) de la actividad
  * @param estado SUPUESTO (pendiente de MOD-04): el estado del parte diario, {@code Abierto} o
- *     {@code Cerrado}; {@code mod04_actividad} no tiene estado propio
+ *     {@code Cerrado}. Las anuladas se excluyen al adaptar la fuente porque no representan una
+ *     ejecución válida.
  * @param areaVerdeId espacio de la actividad
  */
 public record ActividadCampo(

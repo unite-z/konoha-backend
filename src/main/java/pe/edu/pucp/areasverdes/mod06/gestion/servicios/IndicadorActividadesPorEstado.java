@@ -18,8 +18,8 @@ import pe.edu.pucp.areasverdes.mod06.servicios.AtencionesEspacioSectorService;
  * valor es el número de actividades del periodo; el desglose, cuántas hay por estado y por tipo.
  *
  * <p>SUPUESTO (pendiente de MOD-04): el estado es el del parte diario ({@code Abierto} o {@code
- * Cerrado}), porque {@code mod04_actividad} no tiene estado propio. Si {@link FuenteOperacionCampo}
- * no está disponible, responde «Sin datos» con su motivo.
+ * Cerrado}). La fuente de MOD-04 descarta antes las actividades anuladas. Si {@link
+ * FuenteOperacionCampo} no está disponible, responde «Sin datos» con su motivo.
  */
 @Component
 public class IndicadorActividadesPorEstado implements IndicadorPanel {

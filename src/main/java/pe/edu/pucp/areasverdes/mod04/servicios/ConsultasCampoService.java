@@ -29,7 +29,11 @@ public class ConsultasCampoService {
     }
 
     public record Pagina(
-            long count, String next, String previous, List<Map<String, Object>> results) {}
+            long count,
+            String next,
+            String previous,
+            List<Map<String, Object>> results,
+            Long pendientesVerificacion) {}
 
     public Pagina listar(String recurso, Map<String, String> params, String url, Usuario user) {
         service.exigirLectura(user);
@@ -57,7 +61,8 @@ public class ConsultasCampoService {
                             """
                             SELECT a.*,p.cuadrilla_id,p.capataz_id,p.fecha,p.estado,t.nombre texto,
                                 COALESCE(a.tipo_actividad_nombre,t.nombre) tipo_actividad_nombre,av.nombre area_verde_nombre,c.nombre cuadrilla_nombre,
-                                u.nombre verificado_por_nombre,e.codigo ejemplar_codigo,e.altura_total_m ejemplar_altura_m,
+                                u.nombre verificado_por_nombre,anulador.nombre anulada_por_nombre,
+                                e.codigo ejemplar_codigo,e.altura_total_m ejemplar_altura_m,
                                 (SELECT min(r.fecha_hora) FROM core_registro_auditoria r
                                  WHERE r.entidad='Actividad' AND r.registro_id=a.id AND r.accion='Alta'
                                    AND r.usuario_id=a.usuario_creacion_id) fecha_hora_registro
@@ -65,6 +70,7 @@ public class ConsultasCampoService {
                             JOIN mod04_parte_diario p ON p.id=a.parte_id JOIN mod04_tipo_actividad t ON t.id=a.tipo_actividad_id
                             JOIN mod05_areaverde av ON av.id=a.area_verde_id JOIN mod04_cuadrilla c ON c.id=p.cuadrilla_id
                             LEFT JOIN core_usuario u ON u.id=a.verificado_por_usuario_id
+                            LEFT JOIN core_usuario anulador ON anulador.id=a.anulada_por_usuario_id
                             LEFT JOIN mod02_ejemplar e ON e.id=a.ejemplar_id
                             """;
                     case "tipos-actividad" ->
@@ -101,6 +107,7 @@ public class ConsultasCampoService {
         Set<String> allowed = new HashSet<>(filters.keySet());
         allowed.addAll(List.of("q", "page"));
         if (recurso.equals("encargos")) allowed.addAll(List.of("desde", "hasta"));
+        if (recurso.equals("actividades")) allowed.add("estado_actividad");
         if (!allowed.containsAll(params.keySet()))
             throw ApiError.invalid("Filtros no admitidos para " + recurso);
         StringBuilder where = new StringBuilder(" WHERE true");
@@ -165,6 +172,25 @@ public class ConsultasCampoService {
             if (desde != null && hasta != null && desde.isAfter(hasta))
                 throw ApiError.invalid("desde no puede ser posterior a hasta");
         }
+        Long pendientesVerificacion = null;
+        if (recurso.equals("actividades")) {
+            String basePendientes = " FROM (" + sql + ") datos" + where;
+            pendientesVerificacion =
+                    repo.jdbc()
+                            .queryForObject(
+                                    "SELECT count(*)"
+                                            + basePendientes
+                                            + " AND estado_actividad='Registrada'",
+                                    args,
+                                    Long.class);
+            String estado = params.getOrDefault("estado_actividad", "").strip();
+            if (!estado.isEmpty()) {
+                args.put(
+                        "estado_actividad",
+                        option(estado, List.of("Registrada", "Verificada", "Anulada")));
+                where.append(" AND estado_actividad=:estado_actividad");
+            }
+        }
         String base = " FROM (" + sql + ") datos" + where;
         long count = repo.jdbc().queryForObject("SELECT count(*)" + base, args, Long.class);
         long pages = Math.max(1, (count + 24) / 25), page;
@@ -194,7 +220,8 @@ public class ConsultasCampoService {
                 count,
                 page < pages ? link(url, params, page + 1) : null,
                 page > 1 ? link(url, params, page - 1) : null,
-                results);
+                results,
+                pendientesVerificacion);
     }
 
     static String option(String value, List<String> options) {
