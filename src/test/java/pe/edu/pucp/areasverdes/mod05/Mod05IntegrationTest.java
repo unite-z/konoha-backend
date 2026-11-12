@@ -307,8 +307,7 @@ class Mod05IntegrationTest {
 
         http.perform(get(BASE + id + "/").with(httpBasic("jefe", PASSWORD)))
                 .andExpect(status().isOk())
-                .andExpect(
-                        jsonPath("$.productos[0].producto_nombre").value("Fungicida RF-FIT-004"))
+                .andExpect(jsonPath("$.productos[0].producto_nombre").value("Fungicida RF-FIT-004"))
                 .andExpect(jsonPath("$.plagas[0].plaga_nombre").value("Pulgón"));
 
         var productoRepetido = input();
@@ -326,8 +325,7 @@ class Mod05IntegrationTest {
 
         var conProductoInactivo = input();
         conProductoInactivo.put(
-                "productos",
-                List.of(values("producto_id", productoInactivo, "dosis", "1 L/ha")));
+                "productos", List.of(values("producto_id", productoInactivo, "dosis", "1 L/ha")));
         http.perform(
                         post(BASE)
                                 .with(httpBasic("jefe", PASSWORD))
