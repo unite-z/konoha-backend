@@ -80,15 +80,30 @@ public class CorteCesped {
             LocalDate fechaInicioPrevista,
             LocalDate fechaFinPrevista) {}
 
+    /**
+     * Jardín no retirado de la ruta de MOD-02 en {@code :fecha} (AV-129): un retiro se aplica a los
+     * ciclos que empiezan desde su fecha; los programados antes conservan su copia.
+     */
+    static final String NO_RETIRADO =
+            """
+             AND NOT EXISTS (SELECT 1 FROM mod02_ruta_corte_retiro r
+                WHERE r.area_verde_id = a.id AND r.desde <= CAST(:fecha AS date)
+                  AND (r.reincorporado_desde IS NULL
+                       OR r.reincorporado_desde > CAST(:fecha AS date)))
+            """;
+
     static final String ZONAS =
             """
             SELECT s.nombre zona, count(a.id) jardines, NOT s.atencion_a_demanda en_ruta
             FROM mod02_sector s
             JOIN mod02_historial_area_sector h ON h.sector_id = s.id AND h.fecha_fin IS NULL
             JOIN mod02_area_verde a ON a.id = h.area_verde_id AND a.activo
-            WHERE s.activo
-            GROUP BY s.id, s.nombre, s.atencion_a_demanda ORDER BY s.nombre
-            """;
+            """
+                    + NO_RETIRADO
+                    + """
+                    WHERE s.activo
+                    GROUP BY s.id, s.nombre, s.atencion_a_demanda ORDER BY s.nombre
+                    """;
 
     private final NamedParameterJdbcTemplate jdbc;
     private final InterrupcionesCorte interrupciones;
@@ -104,15 +119,16 @@ public class CorteCesped {
     /** La ruta propuesta para programar el servicio y si va fuera de frecuencia (CU-010 1a). */
     public RutaCorte ruta(long servicio, UsuarioPlanificacion usuario) {
         Acceso.consultar(usuario);
+        LocalDate hoy = LocalDate.now(reloj);
         List<ZonaRuta> zonas =
                 jdbc.query(
                         ZONAS,
+                        Map.of("fecha", hoy),
                         (rs, n) ->
                                 new ZonaRuta(
                                         rs.getString("zona"),
                                         rs.getInt("jardines"),
                                         rs.getBoolean("en_ruta")));
-        LocalDate hoy = LocalDate.now(reloj);
         List<FueraDeFrecuencia> fuera =
                 jdbc.query(
                         """
@@ -152,8 +168,16 @@ public class CorteCesped {
         }
         Set<String> elegidas = new TreeSet<>(zonas);
         Set<String> existentes = new TreeSet<>();
+        // AV-129: la ruta de MOD-02 en el día que empieza el ciclo, sin los jardines retirados.
+        LocalDate inicio =
+                jdbc.queryForObject(
+                        "SELECT fecha_inicio_prevista FROM mod03_programacion_servicio WHERE id ="
+                                + " :id",
+                        Map.of("id", programacion),
+                        LocalDate.class);
         jdbc.query(
                 ZONAS,
+                Map.of("fecha", inicio),
                 rs -> {
                     existentes.add(rs.getString("zona"));
                 });
@@ -171,10 +195,14 @@ public class CorteCesped {
                         FROM mod02_sector s
                         JOIN mod02_historial_area_sector h ON h.sector_id = s.id AND h.fecha_fin IS NULL
                         JOIN mod02_area_verde a ON a.id = h.area_verde_id AND a.activo
-                        WHERE s.activo AND s.nombre IN (:zonas)
-                        """,
+                        """
+                                + NO_RETIRADO
+                                + """
+                                WHERE s.activo AND s.nombre IN (:zonas)
+                                """,
                         new MapSqlParameterSource()
                                 .addValue("programacion", programacion)
+                                .addValue("fecha", inicio)
                                 .addValue("zonas", List.copyOf(elegidas)));
         if (copiados == 0) {
             throw new ErrorPlanificacion(400, "ruta-vacia", "La ruta no tiene jardines");
