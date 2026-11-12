@@ -6,6 +6,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -17,7 +19,7 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-abstract class BasePruebaGlobal {
+public abstract class BasePruebaGlobal {
 
     @DynamicPropertySource
     static void baseDePruebas(DynamicPropertyRegistry p) throws IOException {
@@ -26,9 +28,13 @@ abstract class BasePruebaGlobal {
         p.add("mod05.archivos", () -> archivos);
     }
 
-    @Autowired MockMvc http;
+    @Autowired protected MockMvc http;
+
+    @Autowired protected NamedParameterJdbcTemplate jdbc;
+
+    @Autowired protected PasswordEncoder claves;
 
     @Autowired
     @Qualifier("requestMappingHandlerMapping")
-    RequestMappingHandlerMapping rutas;
+    protected RequestMappingHandlerMapping rutas;
 }
