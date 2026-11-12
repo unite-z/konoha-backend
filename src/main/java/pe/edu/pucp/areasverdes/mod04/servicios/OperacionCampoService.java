@@ -48,6 +48,9 @@ public class OperacionCampoService implements ConsultaCampo {
     /** Registrar en la propia cuadrilla (antes: capataz). */
     public static final String REGISTRAR_PARTE = "CAM.PARTE.REGISTRAR";
 
+    /** Avanzar el estado de los encargos propios (capataz responsable). */
+    public static final String ACTUALIZAR_ESTADO_ENCARGO = "PLA.ENCARGO.ACTUALIZAR_ESTADO";
+
     public static boolean jefe(Usuario user) {
         return user != null && user.puede(GESTIONAR);
     }
@@ -327,6 +330,8 @@ public class OperacionCampoService implements ConsultaCampo {
             before = repo.get("encargo", id, true);
             if ("Cancelado".equals(before.get("estado")))
                 throw ApiError.conflict("No se puede redefinir un encargo cancelado");
+            if ("Completado".equals(before.get("estado")))
+                throw ApiError.conflict("No se puede redefinir un encargo completado");
             if (!repo.rows("SELECT id FROM mod04_actividad WHERE encargo_id=:id", Map.of("id", id))
                     .isEmpty())
                 throw ApiError.conflict(
@@ -405,7 +410,7 @@ public class OperacionCampoService implements ConsultaCampo {
             long id, Entradas.CambioEstadoEncargo body, Usuario user) {
         exigirLectura(user);
         boolean cancelar = "Cancelado".equals(body.estado());
-        if (cancelar ? !jefe(user) : !user.roles().contains(CAPATAZ)) throw forbidden();
+        if (cancelar ? !jefe(user) : !user.puede(ACTUALIZAR_ESTADO_ENCARGO)) throw forbidden();
         var encargo = repo.get("encargo", id, true);
         if (!cancelar && !Objects.equals(personalUsuario(user), number(encargo, "capataz_id")))
             throw forbidden();

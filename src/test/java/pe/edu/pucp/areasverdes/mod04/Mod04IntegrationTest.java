@@ -990,6 +990,7 @@ class Mod04IntegrationTest {
                         "capataz1",
                         200);
         assertEquals("Completado", cerrado.path("estado").asText());
+        putJson("/encargos/" + creado.path("id").asLong(), directo, "jefe", 409);
         var historial = cerrado.path("historial_estados");
         assertEquals(4, historial.size());
         assertEquals("Falta material", historial.get(2).path("observaciones").asText());
