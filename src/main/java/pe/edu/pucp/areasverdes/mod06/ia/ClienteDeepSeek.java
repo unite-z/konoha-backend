@@ -2,6 +2,7 @@ package pe.edu.pucp.areasverdes.mod06.ia;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -24,8 +25,9 @@ import pe.edu.pucp.areasverdes.mod06.comun.errores.ServicioIANoDisponible;
  * <p>Usa la API compatible con OpenAI ({@code POST /chat/completions}) con {@code response_format:
  * json_object}: el esquema va en la instrucción del sistema. Las fotografías van como bloques
  * {@code image_url} en base64 (solo {@code deepseek-flash} las acepta: JPEG, PNG, GIF o WebP).
- * DeepSeek no lee PDF. Nunca se registra la clave ({@code DEEPSEEK_API_KEY}) ni el contenido
- * enviado (RNF-008).
+ * DeepSeek no lee PDF: los informes se envían como texto más una imagen por página ({@link
+ * PdfParaIa}). Nunca se registra la clave ({@code DEEPSEEK_API_KEY}) ni el contenido enviado
+ * (RNF-008).
  */
 public class ClienteDeepSeek implements ClienteIA {
 
@@ -34,8 +36,6 @@ public class ClienteDeepSeek implements ClienteIA {
 
     public static final String PROVEEDOR_IA = "DeepSeek";
     public static final String URL = "https://api.deepseek.com/chat/completions";
-    public static final String MENSAJE_SIN_PDF =
-            "DeepSeek aún no lee informes PDF; registra los datos manualmente o usa Gemini";
 
     /** Envía el cuerpo JSON y devuelve el cuerpo de la respuesta; en las pruebas, un doble. */
     @FunctionalInterface
@@ -90,7 +90,16 @@ public class ClienteDeepSeek implements ClienteIA {
     @Override
     public Map<String, Object> extraerJson(
             byte[] pdf, Map<String, Object> esquema, String instruccion) {
-        throw new ServicioIANoDisponible(MENSAJE_SIN_PDF);
+        PdfParaIa.Contenido contenido;
+        try {
+            contenido = PdfParaIa.convertir(pdf);
+        } catch (IOException | RuntimeException exc) { // PDF dañado o cifrado
+            log.error(
+                    "No se pudo preparar el PDF para DeepSeek ({})",
+                    exc.getClass().getSimpleName());
+            throw new ServicioIANoDisponible(ClienteGemini.MENSAJE_IA_FALLO);
+        }
+        return pedir(cuerpo(modelo, esquema, instruccion, contenido.datos(), contenido.paginas()));
     }
 
     @Override
