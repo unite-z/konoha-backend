@@ -113,7 +113,7 @@ La asignación inicial por rol sigue la matriz de las Historias de Usuario (secc
 
 - Rol `superadmin`, oculto: no sale en `GET roles/` ni se puede asignar, y su cuenta no aparece en `GET usuarios/` ni se gestiona desde la API (404).
 - Tiene siempre todos los permisos, también los que se añadan después (`RolesRepository.permisos`).
-- En los módulos que deciden por nombre de rol (MOD-05 y partes de MOD-02 y MOD-04) actúa como jefe de sección (`SesionCompartida.comoUsuarioMod05`, `SeguridadMod02`). Editar la matriz no cambia esas comprobaciones: se migran a permisos en un ticket aparte.
+- Desde AV-382 todos los módulos autorizan por permisos: el principal de MOD-05 (`mod05.Usuario`), que reutilizan MOD-02 y MOD-04, lleva los permisos de la sesión (`permisos`) y `exigir(permiso)` los comprueba. `roles` queda solo para mostrar y auditar. Con HTTP Basic (pruebas), los permisos son los del rol de MOD-01 equivalente. El alcance de cuadrilla y las actividades propias se deciden por no tener `CAM.PARTE.CONSULTAR`, no por ser capataz.
 - La cuenta `superadmin` (`superadmin@pucp.edu.pe`, id 999999) nace en `V75` con una contraseña temporal que obliga a cambiarla al entrar. La contraseña inicial no está en el repo: la tiene el responsable de MOD-01.
 
 ## Cuentas

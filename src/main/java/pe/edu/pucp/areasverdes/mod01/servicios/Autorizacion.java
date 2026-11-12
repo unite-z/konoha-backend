@@ -47,16 +47,21 @@ public class Autorizacion {
     }
 
     /** Datos personales de cuentas y personal: solo el jefe de sección (RNF-008). */
+    /** Ver los partes de cualquier cuadrilla; sin él, el alcance se limita a las propias. */
+    public static final String CONSULTAR_PARTES = "CAM.PARTE.CONSULTAR";
+
     public boolean puedeVerDatosPersonales(UsuarioSesion usuario) {
         return usuario != null && usuario.tiene(VER_DATOS_PERSONALES);
     }
 
     /**
-     * Cuadrillas a las que se limita el usuario. Vacío significa sin límite de cuadrilla (roles de
-     * oficina); para el capataz, solo las suyas (HU-MOD01-007, «Alcance de cuadrilla»).
+     * Cuadrillas a las que se limita el usuario. Vacío significa sin límite de cuadrilla: quien
+     * puede consultar los partes de todas ({@code CAM.PARTE.CONSULTAR}); sin ese permiso (el
+     * capataz), solo las suyas (HU-MOD01-007, «Alcance de cuadrilla»). AV-382: por permiso, no por
+     * rol.
      */
     public Optional<Set<Long>> alcanceCuadrillas(UsuarioSesion usuario) {
-        if (usuario != null && UsuarioSesion.CAPATAZ.equals(usuario.rol())) {
+        if (usuario != null && !usuario.tiene(CONSULTAR_PARTES)) {
             return Optional.of(campo.cuadrillasDelCapataz(usuario.id()));
         }
         return Optional.empty();

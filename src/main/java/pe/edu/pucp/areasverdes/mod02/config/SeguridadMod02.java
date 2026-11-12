@@ -71,6 +71,7 @@ public class SeguridadMod02 {
                 usuario.nombre(),
                 "",
                 true,
-                rol == null ? List.of() : List.of(rol));
+                rol == null ? List.of() : List.of(rol),
+                usuario.permisos());
     }
 }

@@ -106,7 +106,8 @@ public class SesionCompartida {
                 u.nombre(),
                 "",
                 true,
-                rol == null ? List.of() : List.of(rol));
+                rol == null ? List.of() : List.of(rol),
+                u.permisos());
     }
 
     /**

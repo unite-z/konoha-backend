@@ -96,6 +96,31 @@ public class Mod05Repository {
                         "SELECT rol FROM mod05_usuario_rol WHERE usuario_id=:id",
                         Map.of("id", id),
                         String.class);
+        // Rol de MOD-01 equivalente a cada rol de MOD-05 (AV-382): la autorización va por sus
+        // permisos.
+        List<String> codigos =
+                new java.util.ArrayList<>(
+                        pe.edu.pucp.areasverdes.mod01.config.SesionCompartida.ROL_MOD05
+                                .entrySet()
+                                .stream()
+                                .filter(e -> roles.contains(e.getValue()))
+                                .map(Map.Entry::getKey)
+                                .toList());
+        // El capataz no tiene rol en MOD-05, pero MOD-04 lo usa con HTTP Basic en sus pruebas.
+        if (roles.contains(Usuario.CAPATAZ)) codigos.add("capataz");
+        Set<String> permisos =
+                codigos.isEmpty()
+                        ? Set.of()
+                        : Set.copyOf(
+                                jdbc.queryForList(
+                                        """
+                                        SELECT DISTINCT p.codigo FROM core_rol_permiso rp
+                                        JOIN core_permiso p ON p.id = rp.permiso_id
+                                        JOIN core_rol r ON r.id = rp.rol_id
+                                        WHERE r.codigo IN (:codigos)
+                                        """,
+                                        Map.of("codigos", codigos),
+                                        String.class));
         return Optional.of(
                 new Usuario(
                         id,
@@ -103,7 +128,8 @@ public class Mod05Repository {
                         (String) u.get("nombre"),
                         (String) u.get("password_hash"),
                         (boolean) u.get("activo"),
-                        roles));
+                        roles,
+                        permisos));
     }
 
     public void audit(

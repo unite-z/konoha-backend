@@ -19,29 +19,47 @@ class SuperadminApiTest extends ApiCore {
 
     static final String PERMISOS_CAPATAZ = "/api/v1/core/roles/capataz/permisos/";
 
-    /** La matriz no se trunca entre pruebas: se deja la del capataz como estaba. */
+    /** La matriz no se trunca entre pruebas: se deja como estaba. */
+    private List<Map<String, Object>> matrizOriginal;
+
     private List<String> capatazOriginal;
 
     @BeforeEach
     void superadmin() {
         cuenta("superadmin", "superadmin");
+        matrizOriginal =
+                jdbc.queryForList("SELECT rol_id, permiso_id FROM core_rol_permiso", Map.of());
         capatazOriginal = permisosDelRol("capataz");
     }
 
     @AfterEach
-    void restaurarCapataz() {
-        jdbc.update(
-                "DELETE FROM core_rol_permiso WHERE rol_id = (SELECT id FROM core_rol WHERE codigo"
-                        + " = 'capataz')",
-                Map.of());
-        if (capatazOriginal.isEmpty()) return;
-        jdbc.update(
-                """
-                INSERT INTO core_rol_permiso (rol_id, permiso_id)
-                SELECT r.id, p.id FROM core_rol r, core_permiso p
-                WHERE r.codigo = 'capataz' AND p.codigo IN (:codigos)
-                """,
-                Map.of("codigos", capatazOriginal));
+    void restaurarMatriz() {
+        jdbc.update("DELETE FROM core_rol_permiso", Map.of());
+        for (var fila : matrizOriginal) {
+            jdbc.update(
+                    "INSERT INTO core_rol_permiso (rol_id, permiso_id) VALUES (:rol_id,"
+                            + " :permiso_id)",
+                    fila);
+        }
+    }
+
+    @Test
+    void quitarUnPermisoQuitaLaAccionEnLosModulosQueAntesDecidianPorRol() throws Exception {
+        // AV-382: MOD-05 autoriza por permisos, no por el nombre del rol.
+        var ingeniero = sesion("ingeniero");
+        http.perform(get("/api/tercerizados/proveedores/").cookie(ingeniero))
+                .andExpect(status().isOk());
+        List<String> sinContratos = new ArrayList<>(permisosDelRol("ingeniero-campo"));
+        sinContratos.remove("SER.CONTRATO.CONSULTAR");
+        http.perform(
+                        escribir(
+                                put("/api/v1/core/roles/ingeniero-campo/permisos/"),
+                                sesion("superadmin"),
+                                json.writeValueAsString(
+                                        Map.of("permisos", sinContratos, "motivo", "Prueba"))))
+                .andExpect(status().isOk());
+        http.perform(get("/api/tercerizados/proveedores/").cookie(ingeniero))
+                .andExpect(status().isForbidden());
     }
 
     List<String> permisosDelRol(String rol) {

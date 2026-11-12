@@ -8,7 +8,6 @@ import java.util.*;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import pe.edu.pucp.areasverdes.mod01.config.SesionCompartida;
 import pe.edu.pucp.areasverdes.mod01.datos.RolesRepository;
 import pe.edu.pucp.areasverdes.mod03.ErrorPlanificacion;
 import pe.edu.pucp.areasverdes.mod03.ProgramacionServicios;
@@ -49,7 +48,7 @@ public class PlanFitosanitarioService {
 
     @Transactional
     public List<Map<String, Object>> crear(EntradasFitosanitario.Plan plan, Usuario user) {
-        user.exigir(true);
+        user.exigir(Usuario.GESTIONAR_ATENCION);
         var contrato = repo.lock("contrato", plan.contrato_id());
         var servicio = repo.get("tiposervicio", number(contrato, "tipo_servicio_id"));
         if (!CONTROL_FITOSANITARIO.equals(servicio.get("nombre")))
@@ -128,7 +127,7 @@ public class PlanFitosanitarioService {
     @Transactional
     public Map<String, Object> programarAplicacionAdicional(
             long especialId, EntradasFitosanitario.AplicacionAdicional in, Usuario user) {
-        user.exigir(true);
+        user.exigir(Usuario.GESTIONAR_ATENCION);
         var especial = repo.lock("atencion_especial", especialId);
         if ((boolean) especial.get("cancelado"))
             throw ApiError.invalid(
@@ -208,15 +207,6 @@ public class PlanFitosanitarioService {
 
     /** Traduce el usuario de MOD-05 a los permisos del rol de MOD-01 equivalente (como MOD-03). */
     private UsuarioPlanificacion usuarioPlanificacion(Usuario user) {
-        Map<String, String> rolMod01 =
-                SesionCompartida.ROL_MOD05.entrySet().stream()
-                        .collect(Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey));
-        Map<String, List<String>> porRol = roles.permisosPorRol();
-        Set<String> permisos = new HashSet<>();
-        for (String rol : user.roles()) {
-            String codigo = rolMod01.get(rol);
-            if (codigo != null) permisos.addAll(porRol.getOrDefault(codigo, List.of()));
-        }
-        return new UsuarioPlanificacion(user.id(), user.nombre(), permisos);
+        return new UsuarioPlanificacion(user.id(), user.nombre(), user.permisos());
     }
 }
