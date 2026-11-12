@@ -75,9 +75,9 @@ public final class TiposExportables {
                             "Incidencias del periodo por espacio, tipo y estado",
                             List.of(PDF, EXCEL),
                             List.of("periodo"),
-                            false,
-                            "La matriz de incidencias aún no está disponible en MOD-06",
-                            null));
+                            true,
+                            null,
+                            LIMITES));
 
     private TiposExportables() {}
 
