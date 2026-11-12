@@ -33,7 +33,9 @@ public final class BaseDePruebas {
         p.add("spring.datasource.url", () -> URL);
         p.add("spring.datasource.username", () -> USUARIO);
         p.add("spring.datasource.password", () -> CLAVE);
-        p.add("spring.datasource.hikari.maximum-pool-size", () -> 5);
+        // La suite conserva varios contextos Spring en caché; tres conexiones por contexto
+        // mantienen el total por debajo del límite de PostgreSQL en CI.
+        p.add("spring.datasource.hikari.maximum-pool-size", () -> 3);
     }
 
     private static String variable(String nombre, String porDefecto) {
