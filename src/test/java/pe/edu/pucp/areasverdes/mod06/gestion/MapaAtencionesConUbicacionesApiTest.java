@@ -5,6 +5,7 @@ import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -136,6 +137,24 @@ class MapaAtencionesConUbicacionesApiTest extends ApiGestion {
                 .andExpect(jsonPath("$.mapa.features[*].properties.codigo", contains("AT-001")))
                 .andExpect(jsonPath("$.mapa.features[0].geometry.type").value("Polygon"))
                 .andExpect(jsonPath("$.sin_coordenadas[*].codigo", contains("AT-006")));
+    }
+
+    /** Cada fila lleva el tipo de uso de su espacio, para colorearlo; sin espacio, ninguno. */
+    @Test
+    void cadaAtencionLlevaElTipoDeUsoDeSuEspacio() throws Exception {
+        mapa("").andExpect(
+                        jsonPath(
+                                "$.mapa.features[?(@.geometry.type =="
+                                        + " 'Polygon')].properties.tipo_uso_id",
+                                contains(1)))
+                .andExpect(
+                        jsonPath(
+                                "$.sin_coordenadas[?(@.codigo == 'AT-006')].tipo_uso_id",
+                                contains(1)))
+                .andExpect(
+                        jsonPath(
+                                "$.sin_coordenadas[?(@.codigo == 'AT-007')].tipo_uso_id",
+                                contains(nullValue())));
     }
 
     @Test

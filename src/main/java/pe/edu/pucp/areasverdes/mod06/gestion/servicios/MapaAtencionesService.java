@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -13,6 +14,8 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import pe.edu.pucp.areasverdes.mod06.gestion.RangoFechas;
+import pe.edu.pucp.areasverdes.mod06.gestion.datos.ActividadesMapaRepository;
+import pe.edu.pucp.areasverdes.mod06.gestion.datos.ActividadesMapaRepository.ActividadMapa;
 import pe.edu.pucp.areasverdes.mod06.gestion.datos.AtencionRealizada;
 import pe.edu.pucp.areasverdes.mod06.gestion.datos.AtencionesTercerizadasRepository;
 import pe.edu.pucp.areasverdes.mod06.gestion.datos.Disponibilidad;
@@ -28,10 +31,14 @@ import pe.edu.pucp.areasverdes.mod06.servicios.AtencionesEspacioSectorService;
  * lectura.
  *
  * <ul>
- *   <li>Hoy solo hay atenciones tercerizadas (MOD-05): el mantenimiento y la poda del personal
- *       propio (MOD-04) aún no están en el sistema.
- *   <li>Sin geometrías (MOD-02) todas las atenciones van a {@code sinCoordenadas}; no es «Sin
- *       datos»: las atenciones existen y se listan.
+ *   <li>Atenciones tercerizadas (MOD-05), por su tipo de servicio, y actividades del personal
+ *       propio (MOD-04), por su clase: mantenimiento de jardines, poda y manejo fitosanitario.
+ *   <li>Los filtros de tipo de servicio, estado y riesgo son de MOD-05: con alguno, solo cuentan
+ *       las atenciones tercerizadas (una actividad no tiene riesgo, así que «sin riesgo» sí las
+ *       deja).
+ *   <li>Sin geometrías (MOD-02) las atenciones van a {@code sinCoordenadas}; no es «Sin datos»: las
+ *       atenciones existen y se listan.
+ *   <li>Cada fila lleva el tipo de uso de su espacio (MOD-02) para colorearlo en el mapa.
  *   <li>El «historial del espacio» (paso 7) es la misma consulta con {@code area_verde_id}.
  * </ul>
  */
@@ -54,10 +61,17 @@ public class MapaAtencionesService {
     public static final String NOTA_SIN_CLASIFICAR =
             "Atenciones de otros servicios (no son mantenimiento, poda ni control fitosanitario)"
                     + " que no se muestran: %d";
+    public static final String NOTA_ACTIVIDADES_SIN_CLASIFICAR =
+            "Actividades del personal propio de otras clases (no son mantenimiento, poda ni manejo"
+                    + " fitosanitario) que no se muestran: %d";
     // CONFIRMADO (decisión del responsable, 28/10/2026): ver TiposAtencion.
     public static final String NOTA_CORTE = "El corte de césped se muestra como mantenimiento";
 
+    /** Prefijo del código de una actividad del personal propio en el mapa. */
+    public static final String PREFIJO_ACTIVIDAD = "ACT-";
+
     private final AtencionesTercerizadasRepository atenciones;
+    private final ActividadesMapaRepository actividades;
     private final FuenteUbicaciones ubicaciones;
     private final FuenteTiposUso tiposUso;
     private final FuenteOperacionCampo operacion;
@@ -65,11 +79,13 @@ public class MapaAtencionesService {
 
     public MapaAtencionesService(
             AtencionesTercerizadasRepository atenciones,
+            ActividadesMapaRepository actividades,
             FuenteUbicaciones ubicaciones,
             FuenteTiposUso tiposUso,
             FuenteOperacionCampo operacion,
             Clock reloj) {
         this.atenciones = atenciones;
+        this.actividades = actividades;
         this.ubicaciones = ubicaciones;
         this.tiposUso = tiposUso;
         this.operacion = operacion;
@@ -78,12 +94,18 @@ public class MapaAtencionesService {
 
     public MapaAtenciones mapa(RangoFechas periodo, FiltrosMapa filtros) {
         OffsetDateTime generadoEn = OffsetDateTime.now(reloj);
+        boolean conTercerizadas =
+                !AtencionesEspacioSectorService.PERSONAL_PROPIO.equals(filtros.modalidad());
+        boolean conPropias =
+                !AtencionesEspacioSectorService.TERCERIZADO.equals(filtros.modalidad())
+                        && filtros.tipoServicioId() == null
+                        && filtros.estado() == null
+                        && !Boolean.TRUE.equals(filtros.esRiesgo());
 
-        // 1. Personal propio: sus actividades aún no están en el sistema; no se inventan ceros.
-        if (AtencionesEspacioSectorService.PERSONAL_PROPIO.equals(filtros.modalidad())) {
-            Disponibilidad d = operacion.disponibilidad();
-            return vacio(
-                    periodo, filtros, generadoEn, d.disponible() ? MENSAJE_SIN_DATOS : d.motivo());
+        // 1. Personal propio pedido sin MOD-04 en el sistema: no se inventan ceros.
+        Disponibilidad campo = operacion.disponibilidad();
+        if (!conTercerizadas && !campo.disponible()) {
+            return vacio(periodo, filtros, generadoEn, campo.motivo());
         }
         // 2. Filtro de tipo de uso sin tipo de uso en el sistema.
         Disponibilidad usos = tiposUso.disponibilidad();
@@ -91,44 +113,58 @@ public class MapaAtencionesService {
             return vacio(periodo, filtros, generadoEn, usos.motivo());
         }
 
-        // 3. Consulta.
-        List<AtencionRealizada> filas =
-                atenciones.atencionesRealizadas(
-                        new FiltroAtenciones(
-                                periodo,
-                                filtros.areaVerdeId(),
-                                filtros.tipoServicioId(),
-                                filtros.estado()),
-                        filtros.esRiesgo());
-
-        // 4. Clasificación por tipo de atención.
+        // 3 y 4. Consulta y clasificación por tipo de atención.
         List<String> notas = new ArrayList<>();
-        Set<Long> sinClasificar = new LinkedHashSet<>();
         List<AtencionMapa> clasificadas = new ArrayList<>();
-        for (AtencionRealizada f : filas) {
-            var tipo = TiposAtencion.deTipoServicio(f.tipoServicio());
-            if (tipo.isEmpty()) {
-                sinClasificar.add(f.atencionId());
-            } else if (filtros.tipoAtencion() == null
-                    || filtros.tipoAtencion().equals(tipo.get())) {
-                clasificadas.add(comoAtencion(f, tipo.get()));
+        if (conTercerizadas) {
+            Set<Long> sinClasificar = new LinkedHashSet<>();
+            for (AtencionRealizada f :
+                    atenciones.atencionesRealizadas(
+                            new FiltroAtenciones(
+                                    periodo,
+                                    filtros.areaVerdeId(),
+                                    filtros.tipoServicioId(),
+                                    filtros.estado()),
+                            filtros.esRiesgo())) {
+                var tipo = TiposAtencion.deTipoServicio(f.tipoServicio());
+                if (tipo.isEmpty()) sinClasificar.add(f.atencionId());
+                else if (pedido(filtros, tipo.get())) clasificadas.add(comoAtencion(f, tipo.get()));
+            }
+            if (!sinClasificar.isEmpty()) {
+                notas.add(NOTA_SIN_CLASIFICAR.formatted(sinClasificar.size()));
             }
         }
-        if (!sinClasificar.isEmpty()) {
-            notas.add(NOTA_SIN_CLASIFICAR.formatted(sinClasificar.size()));
+        if (conPropias && campo.disponible()) {
+            int sinClasificar = 0;
+            for (ActividadMapa a : actividades.actividades(periodo, filtros.areaVerdeId())) {
+                var tipo = TiposAtencion.deClaseActividad(a.clase());
+                if (tipo.isEmpty()) sinClasificar++;
+                else if (pedido(filtros, tipo.get()))
+                    clasificadas.add(comoActividad(a, tipo.get()));
+            }
+            if (sinClasificar > 0) {
+                notas.add(NOTA_ACTIVIDADES_SIN_CLASIFICAR.formatted(sinClasificar));
+            }
         }
+        // De la más reciente a la más antigua; con la misma fecha, en el orden de lectura.
+        clasificadas.sort(Comparator.comparing(AtencionMapa::fecha).reversed());
 
-        // 5. Tipo de uso (disponible): solo los espacios de ese tipo; sin espacio, fuera.
-        if (filtros.tipoUsoId() != null) {
+        // 5. Tipo de uso de cada espacio (para colorearlo) y, si se filtra, solo los de ese tipo.
+        if (usos.disponible()) {
             Map<Long, Long> usoPorEspacio = tiposUso.tipoUsoDeEspacios(ids(clasificadas, true));
             clasificadas =
                     clasificadas.stream()
-                            .filter(a -> a.areaVerdeId() != null)
+                            .map(
+                                    a ->
+                                            a.conTipoUso(
+                                                    a.areaVerdeId() == null
+                                                            ? null
+                                                            : usoPorEspacio.get(a.areaVerdeId())))
                             .filter(
                                     a ->
-                                            filtros.tipoUsoId()
-                                                    .equals(usoPorEspacio.get(a.areaVerdeId())))
-                            .toList();
+                                            filtros.tipoUsoId() == null
+                                                    || filtros.tipoUsoId().equals(a.tipoUsoId()))
+                            .collect(Collectors.toCollection(ArrayList::new));
         }
 
         // 6. Geometrías: la del ejemplar si la fila es un ejemplar; si no, la del espacio.
@@ -162,7 +198,7 @@ public class MapaAtencionesService {
             long total =
                     clasificadas.stream()
                             .filter(a -> a.tipoAtencion().equals(tipo))
-                            .map(AtencionMapa::atencionId)
+                            .map(AtencionMapa::clave)
                             .distinct()
                             .count();
             totales.add(new TotalTipoAtencion(tipo, total));
@@ -170,7 +206,7 @@ public class MapaAtencionesService {
 
         // 9. Notas.
         if (!AtencionesEspacioSectorService.TERCERIZADO.equals(filtros.modalidad())
-                && !operacion.disponibilidad().disponible()) {
+                && !campo.disponible()) {
             notas.add(IndicadorAtencionesPorEspacio.NOTA_SOLO_TERCERIZADAS);
         }
         notas.add(NOTA_CORTE);
@@ -225,7 +261,33 @@ public class MapaAtencionesService {
                 f.areaVerdeId() == null ? AgrupadorMaterial.SIN_ESPACIO : f.espacio(),
                 f.ejemplarId(),
                 f.ejemplarCodigo(),
-                f.archivosAsociados());
+                f.archivosAsociados(),
+                null);
+    }
+
+    /** Una actividad del personal propio como fila del mapa (ver {@link AtencionMapa}). */
+    private static AtencionMapa comoActividad(ActividadMapa a, String tipoAtencion) {
+        return new AtencionMapa(
+                a.id(),
+                PREFIJO_ACTIVIDAD + a.id(),
+                tipoAtencion,
+                a.tipoActividad(),
+                a.fecha(),
+                a.estadoParte(),
+                AtencionesEspacioSectorService.PERSONAL_PROPIO,
+                false,
+                a.cuadrilla(),
+                a.areaVerdeId(),
+                a.areaVerdeId() == null ? AgrupadorMaterial.SIN_ESPACIO : a.espacio(),
+                a.ejemplarId(),
+                a.ejemplarCodigo(),
+                0,
+                null);
+    }
+
+    /** Si el tipo de atención entra con el filtro de tipo de atención. */
+    private static boolean pedido(FiltrosMapa filtros, String tipo) {
+        return filtros.tipoAtencion() == null || filtros.tipoAtencion().equals(tipo);
     }
 
     /** Ids distintos de espacios ({@code espacios}) o de ejemplares de las atenciones. */

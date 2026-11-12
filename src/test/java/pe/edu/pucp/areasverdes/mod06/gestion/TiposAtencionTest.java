@@ -29,6 +29,22 @@ class TiposAtencionTest {
         assertEquals(Optional.of(tipo), TiposAtencion.deTipoServicio(servicio));
     }
 
+    @ParameterizedTest
+    @CsvSource({
+        "Mantenimiento de jardines, Mantenimiento",
+        "Poda, Poda",
+        "Manejo fitosanitario, Fitosanitario"
+    })
+    void clasificaLasClasesDeActividadDelPersonalPropio(String clase, String tipo) {
+        assertEquals(Optional.of(tipo), TiposAtencion.deClaseActividad(clase));
+    }
+
+    @Test
+    void lasDemasClasesDeActividadNoSonAtenciones() {
+        assertTrue(TiposAtencion.deClaseActividad("Riego").isEmpty());
+        assertTrue(TiposAtencion.deClaseActividad(null).isEmpty());
+    }
+
     @Test
     void unNombreDesconocidoONuloNoSeClasifica() {
         assertTrue(TiposAtencion.deTipoServicio("Riego tecnificado").isEmpty());
