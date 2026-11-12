@@ -72,6 +72,14 @@ public class Mod01PermisosApiTest extends ApiCore {
                             "ok",
                             "ok"),
                     new Fila(
+                            "PUT",
+                            "/auth/apariencia",
+                            "/api/v1/core/auth/apariencia/",
+                            "ok",
+                            "ok",
+                            "ok",
+                            "ok"),
+                    new Fila(
                             "GET",
                             "/usuarios",
                             "/api/v1/core/usuarios/",
