@@ -4,7 +4,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -47,8 +49,13 @@ import pe.edu.pucp.areasverdes.mod06.gestion.servicios.ReporteServicioTercerizad
  *       proveedor subió una revisión posterior a la decisión, está pendiente de revisión. Una
  *       observación sin revisión nueva es una subsanación abierta y cuenta como «Observada»
  *       (SUPUESTO).
+ *   <li>Metrado previsto: el del alcance de cada atención. Ejecutado: el que declara el proveedor
+ *       en los datos de su informe final (AV-320) o, si no lo declara, el previsto de esa atención.
  *   <li>Rendimiento: metrado ejecutado por hora entre inicio y fin reales.
- *   <li>Fuera de plazo: MOD-05 no registra un plazo por atención, así que va a {@code null}.
+ *   <li>Fuera de plazo: MOD-05 no guarda un plazo por atención; lo tienen las que vienen de una
+ *       programación de MOD-03, cuyo fin previsto es el plazo. Va fuera de plazo la que terminó
+ *       después de ese día o, sin terminar, la que ya lo pasó. Si ninguna tiene plazo, {@code
+ *       null}.
  * </ul>
  */
 @Service
@@ -72,8 +79,13 @@ public class ReporteServicioService {
     public static final String NOTA_UNIDADES =
             "Las atenciones usan unidades de metrado distintas: no se suman";
     public static final String NOTA_PLAZO =
-            "MOD-05 aún no registra el plazo de cada atención: no se cuentan las que van fuera de"
-                    + " plazo";
+            "Solo tienen plazo las atenciones que vienen de una programación: las demás no se"
+                    + " cuentan como fuera de plazo";
+    public static final String NOTA_METRADO_PREVISTO =
+            "Algunos informes no declaran el metrado ejecutado: para esas atenciones se usa el"
+                    + " previsto";
+
+    private static final ZoneId LIMA = ZoneId.of("America/Lima");
 
     private static final Set<String> EJECUTADAS =
             Set.of(Atencion.EJECUTADO, Atencion.REPORTE, Atencion.OBSERVADO, Atencion.CONFORME);
@@ -146,8 +158,9 @@ public class ReporteServicioService {
                 atenciones.stream()
                         .map(a -> fila(a, atendidos.getOrDefault(a.id(), List.of())))
                         .toList();
-        notas.add(NOTA_PLAZO);
         Avance avance = avance(atenciones, ejecutadas, notas);
+        LocalDate hoy = LocalDate.now(reloj.withZone(LIMA));
+        Integer fueraDePlazo = fueraDePlazo(atenciones, hoy, notas);
         return new ReporteServicioTercerizado(
                 periodo,
                 new Filtros(tipoServicioId, proveedorId, contratoId),
@@ -156,7 +169,7 @@ public class ReporteServicioService {
                 vacio ? MENSAJE_SIN_DATOS : null,
                 new Servicio(tipoServicioId, nombre, proveedor, contrato),
                 avance,
-                rendimiento(ejecutadas, avance, vacio),
+                rendimiento(ejecutadas, avance, vacio, fueraDePlazo),
                 especiesPlagas(atendidos, vacio),
                 conformidad(ejecutadas, vacio),
                 filas,
@@ -179,6 +192,11 @@ public class ReporteServicioService {
         atenciones.forEach(a -> unidades.add(a.unidad()));
         boolean unaUnidad = unidades.size() == 1 && unidades.iterator().next() != null;
         if (unidades.size() > 1) notas.add(NOTA_UNIDADES);
+        if (unaUnidad
+                && ejecutadas.stream()
+                        .anyMatch(a -> a.metrado() != null && a.metradoReportado() == null)) {
+            notas.add(NOTA_METRADO_PREVISTO);
+        }
         return new Avance(
                 false,
                 null,
@@ -191,23 +209,25 @@ public class ReporteServicioService {
                                 .count(),
                 (int) atenciones.stream().filter(a -> PENDIENTES.contains(a.estado())).count(),
                 porcentaje(ejecutadas.size(), atenciones.size()),
-                unaUnidad ? texto(suma(atenciones)) : null,
-                unaUnidad ? texto(suma(ejecutadas)) : null,
+                unaUnidad ? texto(suma(atenciones, AtencionServicio::metrado)) : null,
+                unaUnidad
+                        ? texto(suma(ejecutadas, ReporteServicioService::metradoEjecutado))
+                        : null,
                 unaUnidad ? unidades.iterator().next() : null);
     }
 
     private static Rendimiento rendimiento(
-            List<AtencionServicio> ejecutadas, Avance avance, boolean vacio) {
+            List<AtencionServicio> ejecutadas, Avance avance, boolean vacio, Integer fueraDePlazo) {
         if (vacio) return new Rendimiento(true, MENSAJE_SIN_DATOS, null, null, null, null, null);
         List<Duration> duraciones = new ArrayList<>();
         BigDecimal metrado = BigDecimal.ZERO;
         for (AtencionServicio a : ejecutadas) {
             if (a.fechaHoraInicio() == null || a.fechaHoraFin() == null) continue;
             duraciones.add(Duration.between(a.fechaHoraInicio(), a.fechaHoraFin()));
-            if (a.metrado() != null) metrado = metrado.add(a.metrado());
+            if (metradoEjecutado(a) != null) metrado = metrado.add(metradoEjecutado(a));
         }
         if (duraciones.isEmpty()) {
-            return new Rendimiento(true, MENSAJE_SIN_FECHAS, null, null, null, null, null);
+            return new Rendimiento(true, MENSAJE_SIN_FECHAS, null, null, null, null, fueraDePlazo);
         }
         BigDecimal horas =
                 BigDecimal.valueOf(duraciones.stream().mapToLong(Duration::toMinutes).sum())
@@ -224,7 +244,40 @@ public class ReporteServicioService {
                 porHora,
                 porHora == null ? null : unidad + "/h",
                 texto(horas.divide(BigDecimal.valueOf(duraciones.size()), 2, RoundingMode.HALF_UP)),
-                null);
+                fueraDePlazo);
+    }
+
+    /**
+     * Atenciones fuera de plazo entre las que tienen plazo (fin previsto de su programación). Una
+     * terminada cuenta si terminó después de ese día; una sin terminar, si hoy ya lo pasó. Sin
+     * ninguna con plazo, {@code null}: no se puede decir que haya cero.
+     */
+    static Integer fueraDePlazo(
+            List<AtencionServicio> atenciones, LocalDate hoy, List<String> notas) {
+        List<AtencionServicio> conPlazo =
+                atenciones.stream().filter(a -> a.finPrevisto() != null).toList();
+        if (conPlazo.size() < atenciones.size()) notas.add(NOTA_PLAZO);
+        if (conPlazo.isEmpty()) return null;
+        return (int)
+                conPlazo.stream()
+                        .filter(
+                                a -> {
+                                    LocalDate fin =
+                                            a.fechaHoraFin() == null
+                                                    ? null
+                                                    : a.fechaHoraFin()
+                                                            .atZoneSameInstant(LIMA)
+                                                            .toLocalDate();
+                                    return fin != null
+                                            ? fin.isAfter(a.finPrevisto())
+                                            : hoy.isAfter(a.finPrevisto());
+                                })
+                        .count();
+    }
+
+    /** Lo que declara el proveedor en su informe o, si no lo declara, lo previsto. */
+    private static BigDecimal metradoEjecutado(AtencionServicio a) {
+        return a.metradoReportado() != null ? a.metradoReportado() : a.metrado();
     }
 
     private static EspeciesPlagas especiesPlagas(
@@ -298,6 +351,7 @@ public class ReporteServicioService {
     }
 
     private static FilaAtencion fila(AtencionServicio a, List<Atendido> atendidos) {
+        BigDecimal metrado = EJECUTADAS.contains(a.estado()) ? metradoEjecutado(a) : a.metrado();
         return new FilaAtencion(
                 a.id(),
                 a.codigo(),
@@ -308,7 +362,7 @@ public class ReporteServicioService {
                 a.ejemplarCodigo(),
                 a.fechaHoraInicio(),
                 a.fechaHoraFin(),
-                a.metrado() == null ? null : texto(a.metrado()),
+                metrado == null ? null : texto(metrado),
                 a.unidad(),
                 resultadoVigente(a),
                 a.documentos(),
@@ -317,9 +371,11 @@ public class ReporteServicioService {
                 a.esRiesgo());
     }
 
-    private static BigDecimal suma(List<AtencionServicio> atenciones) {
+    private static BigDecimal suma(
+            List<AtencionServicio> atenciones,
+            java.util.function.Function<AtencionServicio, BigDecimal> metrado) {
         return atenciones.stream()
-                .map(AtencionServicio::metrado)
+                .map(metrado)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
