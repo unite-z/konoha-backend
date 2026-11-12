@@ -21,6 +21,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <springdoc.version>2.8.9</springdoc.version>
     <google-genai.version>1.78.0</google-genai.version>
+    <pdfbox.version>3.0.7</pdfbox.version>
     <spotless.version>2.44.4</spotless.version>
     <google-java-format.version>1.27.0</google-java-format.version>
     <!-- Spotless solo formatea y comprueba lo que cambia respecto a esta referencia. -->
@@ -56,6 +57,12 @@
       <groupId>org.springdoc</groupId>
       <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
       <version>${springdoc.version}</version>
+    </dependency>
+    <!-- PDFBox: páginas del informe a imagen y su texto, para DeepSeek, que no lee PDF (AV-395). -->
+    <dependency>
+      <groupId>org.apache.pdfbox</groupId>
+      <artifactId>pdfbox</artifactId>
+      <version>${pdfbox.version}</version>
     </dependency>
     <!-- SDK oficial de Gemini para Java (googleapis/java-genai). Solo lo usa ia/ClienteGemini. -->
     <dependency>
