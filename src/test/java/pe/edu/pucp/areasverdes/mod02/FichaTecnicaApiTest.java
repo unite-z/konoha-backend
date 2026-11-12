@@ -117,6 +117,41 @@ public class FichaTecnicaApiTest extends BasePruebaGlobal {
     }
 
     @Test
+    void muestraElAreaYElCuartelDelInventario() throws Exception {
+        long autor =
+                jdbc.queryForObject(
+                        "SELECT id FROM core_usuario WHERE nombre_usuario = :u",
+                        Map.of("u", "ingeniero-campo" + DOMINIO),
+                        Long.class);
+        long cuartel =
+                jdbc.queryForObject(
+                        """
+                        INSERT INTO mod02_cuartel (numero, nombre) VALUES ('FICHA-C1', 'Cuartel ficha')
+                        ON CONFLICT (numero) DO UPDATE SET nombre = EXCLUDED.nombre RETURNING id
+                        """,
+                        Map.of(),
+                        Long.class);
+        long area =
+                jdbc.queryForObject(
+                        """
+                        INSERT INTO mod02_area_verde (nombre, lugar, ubicacion, superficie_m2, cuartel_id,
+                            usuario_creacion_id, usuario_modificacion_id)
+                        VALUES ('Jardín ficha', 'Campus', 'Frente a la biblioteca', 120, :cuartel, :autor, :autor)
+                        RETURNING id
+                        """,
+                        Map.of("cuartel", cuartel, "autor", autor),
+                        Long.class);
+        jdbc.update(
+                "UPDATE mod02_ejemplar SET area_verde_inventario_id = :area WHERE id = :id",
+                Map.of("area", area, "id", ejemplar));
+
+        http.perform(get(ruta("ficha-tecnica/")).cookie(ingeniero))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.area_verde_nombre").value("Jardín ficha"))
+                .andExpect(jsonPath("$.cuartel_nombre").value("Cuartel ficha"));
+    }
+
+    @Test
     void validaLasMedidas() throws Exception {
         cambiar("{\"altura_total_m\": \"5\", \"altura_fuste_m\": \"6\"}")
                 .andExpect(status().isBadRequest())

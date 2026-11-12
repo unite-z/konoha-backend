@@ -368,7 +368,7 @@ public class FichaTecnicaService {
                             e.origen, e.estado_salud
                         FROM mod02_ejemplar e
                         LEFT JOIN mod02_especie_vegetal s ON s.id = e.especie_id
-                        LEFT JOIN mod02_area_verde a ON a.id = e.area_verde_id
+                        LEFT JOIN mod02_area_verde a ON a.id = e.area_verde_inventario_id
                         LEFT JOIN mod02_cuartel c ON c.id = a.cuartel_id
                         WHERE e.id = :id
                         """,
