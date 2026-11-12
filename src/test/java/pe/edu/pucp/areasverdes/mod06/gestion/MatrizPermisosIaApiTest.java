@@ -139,6 +139,17 @@ public class MatrizPermisosIaApiTest extends ApiGestion {
                         "/api/v1/ia/configuracion/probar/",
                         "{}",
                         soloJefe));
+        // Uso y costes de la IA (AV-396): solo el jefe.
+        MATRIZ.add(new Fila("GET", "/api/v1/ia/uso", "/api/v1/ia/uso/", null, soloJefe));
+        MATRIZ.add(new Fila("GET", "/api/v1/ia/precios", "/api/v1/ia/precios/", null, soloJefe));
+        MATRIZ.add(
+                new Fila(
+                        "PUT",
+                        "/api/v1/ia/precios",
+                        "/api/v1/ia/precios/",
+                        "{\"modelo\": \"deepseek-flash\", \"vigente_desde\": \"2099-01-01\","
+                                + " \"usd_millon_entrada\": 0.3, \"usd_millon_salida\": 1.2}",
+                        soloJefe));
     }
 
     private static void alta(String nombre, String sufijo, String cuerpo, List<Integer> esperados) {
