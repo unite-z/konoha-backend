@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -201,6 +202,37 @@ class AuthApiTest extends ApiCore {
                                         campo.getResponse()
                                                 .getCookie(SeguridadMod01.COOKIE_SESION)))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void laAparienciaSeGuardaEnLaCuentaYLlegaConLaSesion() throws Exception {
+        var sesion = sesion("jefe");
+        http.perform(get("/api/v1/core/auth/sesion/").cookie(sesion))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.apariencia").isEmpty());
+
+        http.perform(
+                        escribir(
+                                put("/api/v1/core/auth/apariencia/"),
+                                sesion,
+                                "{\"tema\": \"oscuro\", \"acento\": \"verde\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tema").value("oscuro"));
+        http.perform(
+                        escribir(
+                                put("/api/v1/core/auth/apariencia/"),
+                                sesion,
+                                "{\"tema\": \"rosa\", \"acento\": \"verde\"}"))
+                .andExpect(status().isBadRequest());
+
+        // Otro inicio de sesión (otro dispositivo) la recibe al entrar.
+        http.perform(login("jefe" + DOMINIO, CLAVE))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.apariencia.tema").value("oscuro"))
+                .andExpect(jsonPath("$.apariencia.acento").value("verde"));
+        // La de un usuario no toca la de otro.
+        http.perform(get("/api/v1/core/auth/sesion/").cookie(sesion("ingeniero")))
+                .andExpect(jsonPath("$.apariencia").isEmpty());
     }
 
     @Test

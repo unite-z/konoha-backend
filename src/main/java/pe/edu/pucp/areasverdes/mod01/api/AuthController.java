@@ -21,11 +21,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import pe.edu.pucp.areasverdes.mod01.config.PropiedadesSeguridad;
 import pe.edu.pucp.areasverdes.mod01.config.SeguridadMod01;
+import pe.edu.pucp.areasverdes.mod01.datos.AparienciaRepository;
 import pe.edu.pucp.areasverdes.mod01.servicios.AutenticacionService;
 import pe.edu.pucp.areasverdes.mod01.servicios.ErrorCore;
 import pe.edu.pucp.areasverdes.mod01.servicios.UsuarioSesion;
@@ -56,33 +58,55 @@ public class AuthController {
 
     public record RolActual(String codigo, String nombre) {}
 
+    /** Apariencia elegida en Configuración (AV-391): tema y color de acento. */
+    public record Apariencia(
+            @NotBlank
+                    @Pattern(
+                            regexp = "claro|oscuro|sistema",
+                            message = "El tema es claro, oscuro o sistema")
+                    String tema,
+            @NotBlank
+                    @Pattern(
+                            regexp = "institucional|azul|verde|morado|magenta",
+                            message = "Color de acento desconocido")
+                    String acento) {}
+
     /** Lo que la interfaz necesita para armar el menú del rol (CU-MOD01-006 paso 1). */
     public record Sesion(
             UsuarioActual usuario,
             RolActual rol,
             List<String> permisos,
             boolean debeCambiarContrasena,
-            OffsetDateTime expira) {
+            OffsetDateTime expira,
+            /** La que eligió el usuario, o {@code null}: la interfaz usa la predeterminada. */
+            Apariencia apariencia) {
 
-        static Sesion de(UsuarioSesion u, OffsetDateTime expira) {
+        static Sesion de(
+                UsuarioSesion u, OffsetDateTime expira, AparienciaRepository.Apariencia a) {
             return new Sesion(
                     new UsuarioActual(u.id(), u.nombre(), u.nombreUsuario()),
                     new RolActual(u.rol(), u.rolNombre()),
                     List.copyOf(u.permisos()),
                     u.debeCambiarContrasena(),
-                    expira);
+                    expira,
+                    a == null ? null : new Apariencia(a.tema(), a.acento()));
         }
     }
 
     private final AutenticacionService autenticacion;
     private final PropiedadesSeguridad politica;
     private final Clock reloj;
+    private final AparienciaRepository apariencias;
 
     public AuthController(
-            AutenticacionService autenticacion, PropiedadesSeguridad politica, Clock reloj) {
+            AutenticacionService autenticacion,
+            PropiedadesSeguridad politica,
+            Clock reloj,
+            AparienciaRepository apariencias) {
         this.autenticacion = autenticacion;
         this.politica = politica;
         this.reloj = reloj;
+        this.apariencias = apariencias;
     }
 
     /**
@@ -112,14 +136,34 @@ public class AuthController {
         }
         return ResponseEntity.ok()
                 .header(HttpHeaders.SET_COOKIE, cookie.build().toString())
-                .body(Sesion.de(inicio.usuario(), inicio.expira()));
+                .body(
+                        Sesion.de(
+                                inicio.usuario(),
+                                inicio.expira(),
+                                apariencias.de(inicio.usuario().id())));
     }
 
     @Operation(summary = "Usuario, rol y permisos de la sesión actual")
     @SecurityRequirement(name = "sesionCore")
     @GetMapping({"/sesion", "/sesion/"})
     public Sesion sesion(@AuthenticationPrincipal UsuarioSesion usuario) {
-        return Sesion.de(usuario, null);
+        return Sesion.de(usuario, null, apariencias.de(usuario.id()));
+    }
+
+    /**
+     * Guarda la apariencia del propio usuario, para cargarla al entrar desde cualquier dispositivo.
+     */
+    @Operation(summary = "Guardar la apariencia de la propia cuenta (tema y color de acento)")
+    @ApiResponse(responseCode = "400", description = "Tema o acento desconocidos")
+    @SecurityRequirement(name = "sesionCore")
+    @PutMapping({"/apariencia", "/apariencia/"})
+    public Apariencia guardarApariencia(
+            @AuthenticationPrincipal UsuarioSesion usuario,
+            @Valid @RequestBody Apariencia apariencia) {
+        apariencias.guardar(
+                usuario.id(),
+                new AparienciaRepository.Apariencia(apariencia.tema(), apariencia.acento()));
+        return apariencia;
     }
 
     /** Invalida la sesión de este dispositivo. Los registros locales del móvil no se tocan. */
