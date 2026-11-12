@@ -119,7 +119,8 @@ public class Incidencias {
             Atencion atencion,
             Cierre cierre,
             List<Evento> historial,
-            DerivacionTercerizada.Requerimiento requerimiento) {}
+            DerivacionTercerizada.Requerimiento requerimiento,
+            DerivacionInterna.EncargoCancelado encargoCancelado) {}
 
     /**
      * Las fotos de los reportes; todo otro adjunto de la incidencia es evidencia de la atención.
@@ -209,16 +210,19 @@ public class Incidencias {
     private final AdjuntosService adjuntos;
     private final Avisos avisos;
     private final DerivacionTercerizada derivacion;
+    private final DerivacionInterna interna;
 
     public Incidencias(
             NamedParameterJdbcTemplate jdbc,
             AdjuntosService adjuntos,
             Avisos avisos,
-            DerivacionTercerizada derivacion) {
+            DerivacionTercerizada derivacion,
+            DerivacionInterna interna) {
         this.jdbc = jdbc;
         this.adjuntos = adjuntos;
         this.avisos = avisos;
         this.derivacion = derivacion;
+        this.interna = interna;
     }
 
     public Catalogos catalogos(UsuarioPlanificacion usuario) {
@@ -453,6 +457,7 @@ public class Incidencias {
     public List<Resumen> bandeja(String grupo, UsuarioPlanificacion usuario) {
         Acceso.consultarIncidencias(usuario);
         derivacion.sincronizar();
+        interna.sincronizar();
         if (grupo != null && !GRUPOS.containsKey(grupo)) {
             throw new ErrorPlanificacion(
                     400, "grupo-invalido", "El grupo es abiertas, en_proceso o cerradas");
@@ -471,6 +476,7 @@ public class Incidencias {
     public List<Resumen> mias(UsuarioPlanificacion usuario) {
         Acceso.registrarIncidencia(usuario);
         derivacion.sincronizar();
+        interna.sincronizar();
         return jdbc.query(
                 RESUMEN
                         + " WHERE i.reportante_usuario_id = :usuario"
@@ -482,6 +488,7 @@ public class Incidencias {
     public Detalle detalle(long id, UsuarioPlanificacion usuario) {
         Acceso.consultarIncidencias(usuario);
         derivacion.sincronizar();
+        interna.sincronizar();
         return ficha(id);
     }
 
@@ -521,7 +528,8 @@ public class Incidencias {
                                         atencion(id, rs.getString("estado")),
                                         cierre(id, rs.getString("estado"), rs),
                                         historial(id),
-                                        derivacion.requerimiento(id)));
+                                        derivacion.requerimiento(id),
+                                        interna.encargoCancelado(id)));
         if (fichas.isEmpty()) {
             throw new ErrorPlanificacion(
                     404, "incidencia-no-encontrada", "No existe esa incidencia");
@@ -533,6 +541,7 @@ public class Incidencias {
     public Seguimiento seguimiento(long id, UsuarioPlanificacion usuario) {
         Acceso.registrarIncidencia(usuario);
         derivacion.sincronizar();
+        interna.sincronizar();
         List<Seguimiento> lista =
                 jdbc.query(
                         """
@@ -641,7 +650,7 @@ public class Incidencias {
                                 new Atencion(
                                         rs.getString("autor"),
                                         instante(rs, "fecha_hora"),
-                                        null,
+                                        interna.codigoEncargo(id),
                                         evidencias(id)))
                 .stream()
                 .findFirst()
