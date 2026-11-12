@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.enums.SecuritySchemeType;
 import io.swagger.v3.oas.annotations.security.SecurityScheme;
 import java.util.Map;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.*;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -19,9 +20,15 @@ import pe.edu.pucp.areasverdes.mod01.config.SesionCompartida;
 @Configuration
 @SecurityScheme(name = "basicAuth", type = SecuritySchemeType.HTTP, scheme = "basic")
 public class Seguridad {
+    /**
+     * BCrypt con coste 10 (el de Spring). Las pruebas lo bajan a 4 ({@code seguridad.bcrypt-coste}
+     * en {@code BaseDePruebas}): cada petición con HTTP Basic verifica la contraseña y con 10 eran
+     * la mayor parte del tiempo del CI. El coste va dentro de cada hash, así que los guardados se
+     * verifican igual con cualquier valor.
+     */
     @Bean
-    PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
+    PasswordEncoder passwordEncoder(@Value("${seguridad.bcrypt-coste:10}") int coste) {
+        return new BCryptPasswordEncoder(coste);
     }
 
     @Bean
