@@ -139,6 +139,33 @@ class Mod01PermisosApiTest extends ApiCore {
                     new Fila("GET", "/usuarios/{id}/rol", U + "/rol/", "ok", "403", "403", "403"),
                     new Fila("PUT", "/usuarios/{id}/rol", U + "/rol/", "ok", "403", "403", "403"),
                     new Fila("GET", "/roles", "/api/v1/core/roles/", "ok", "403", "403", "403"),
+                    // AV-381: el catálogo lo lee también el jefe; la matriz solo el
+                    // superadministrador,
+                    // rol oculto fuera de esta tabla (SuperadminApiTest).
+                    new Fila(
+                            "GET",
+                            "/permisos",
+                            "/api/v1/core/permisos/",
+                            "ok",
+                            "403",
+                            "403",
+                            "403"),
+                    new Fila(
+                            "GET",
+                            "/roles/{codigo}/permisos",
+                            "/api/v1/core/roles/capataz/permisos/",
+                            "403",
+                            "403",
+                            "403",
+                            "403"),
+                    new Fila(
+                            "PUT",
+                            "/roles/{codigo}/permisos",
+                            "/api/v1/core/roles/capataz/permisos/",
+                            "403",
+                            "403",
+                            "403",
+                            "403"),
                     new Fila("GET", "/accesos", "/api/v1/core/accesos/", "ok", "403", "403", "403"),
                     new Fila(
                             "GET",

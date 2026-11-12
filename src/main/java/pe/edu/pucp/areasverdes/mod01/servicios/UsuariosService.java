@@ -101,6 +101,8 @@ public class UsuariosService {
         OffsetDateTime ahora = OffsetDateTime.now(reloj);
         Map<Long, Integer> rechazos = bitacora.rechazosRecientes(ahora.minusDays(DIAS_RECHAZOS));
         return usuarios.listar().stream()
+                // La cuenta superadmin (AV-381) no se lista ni se gestiona desde la aplicación.
+                .filter(c -> !UsuarioSesion.SUPERADMIN.equals(c.rolCodigo()))
                 .map(c -> resumen(c, ahora, rechazos.getOrDefault(c.id(), 0)))
                 .filter(u -> filtros.rol() == null || filtros.rol().equals(u.rol()))
                 .filter(u -> filtros.estado() == null || filtros.estado().equals(u.estado()))
@@ -389,6 +391,7 @@ public class UsuariosService {
     private RolesRepository.Rol rolAsignable(String codigo) {
         var rol =
                 roles.porCodigo(codigo == null ? "" : codigo)
+                        .filter(r -> !UsuarioSesion.SUPERADMIN.equals(r.codigo()))
                         .orElseThrow(
                                 () -> ErrorCore.invalido("rol-desconocido", "El rol no existe"));
         if (!rol.activo()) {
@@ -410,7 +413,9 @@ public class UsuariosService {
     }
 
     private Cuenta cuenta(long id) {
-        return usuarios.porId(id).orElseThrow(() -> ErrorCore.noEncontrado("El usuario no existe"));
+        return usuarios.porId(id)
+                .filter(c -> !UsuarioSesion.SUPERADMIN.equals(c.rolCodigo()))
+                .orElseThrow(() -> ErrorCore.noEncontrado("El usuario no existe"));
     }
 
     private static String obligatorio(String valor, String campo) {

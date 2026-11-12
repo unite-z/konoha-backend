@@ -59,7 +59,7 @@ public class SeguridadMod02 {
     static Usuario comoUsuarioMod02(UsuarioSesion usuario) {
         String rol =
                 switch (usuario.rol()) {
-                    case "jefe-seccion" -> Usuario.JEFE;
+                    case "jefe-seccion", UsuarioSesion.SUPERADMIN -> Usuario.JEFE;
                     case "ingeniero-campo" -> "Ingeniero de campo";
                     case "practicante" -> "Practicante autorizado";
                     case "capataz" -> "Capataz";
