@@ -219,8 +219,12 @@ class Mod04IntegrationTest {
     }
 
     long actividad(long squad) throws Exception {
+        return actividad(squad, "capataz1");
+    }
+
+    long actividad(long squad, String usuario) throws Exception {
         long part =
-                postJson("/partes", values("cuadrilla_id", squad, "fecha", HOY), "capataz1", 201)
+                postJson("/partes", values("cuadrilla_id", squad, "fecha", HOY), usuario, 201)
                         .path("id")
                         .asLong();
         return postJson(
@@ -234,7 +238,7 @@ class Mod04IntegrationTest {
                                 area,
                                 "fecha_hora_actividad",
                                 "2026-10-22T08:00:00-05:00"),
-                        "capataz1",
+                        usuario,
                         201)
                 .path("id")
                 .asLong();
@@ -997,6 +1001,99 @@ class Mod04IntegrationTest {
                         "UPDATE core_usuario SET activo=false WHERE nombre_usuario='capataz1'",
                         Map.of());
         http.perform(get(BASE + "/me/").cookie(sesion)).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void capatazTieneConsultaYRegistroSinPermisosDeJefatura() {
+        List<String> permisos =
+                repo.jdbc()
+                        .queryForList(
+                                """
+                                SELECT p.codigo FROM core_permiso p
+                                JOIN core_rol_permiso rp ON rp.permiso_id=p.id
+                                JOIN core_rol r ON r.id=rp.rol_id
+                                WHERE r.codigo='capataz' AND p.modulo='MOD-04'
+                                ORDER BY p.codigo
+                                """,
+                                Map.of(),
+                                String.class);
+
+        assertEquals(
+                List.of("CAM.CUADRILLA.CONSULTAR", "CAM.PARTE.CONSULTAR", "CAM.PARTE.REGISTRAR"),
+                permisos);
+    }
+
+    @Test
+    void cookieDeCapatazConsultaYRegistraSoloEnSuCuadrilla() throws Exception {
+        long propia = cuadrilla(c1, o1), ajena = cuadrilla(c2, o2);
+        long actividad = actividad(propia);
+        long actividadAjena = actividad(ajena, "capataz2");
+        postJson("/encargos", encargo(propia, "Semanal", 7), "jefe", 201);
+        Cookie sesion = sesionCore("capataz1");
+
+        for (String recurso : List.of("cuadrillas", "encargos", "partes", "actividades")) {
+            http.perform(get(BASE + "/" + recurso + "/").cookie(sesion))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.count").value(1));
+        }
+        http.perform(get(BASE + "/personal/").cookie(sesion))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(2))
+                .andExpect(jsonPath("$.results[?(@.id == " + c2 + ")]").isEmpty())
+                .andExpect(jsonPath("$.results[?(@.id == " + o2 + ")]").isEmpty());
+        http.perform(
+                        put(BASE + "/actividades/" + actividad + "/participantes/")
+                                .cookie(sesion)
+                                .with(csrf())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(json.writeValueAsBytes(values("operarios", List.of(o1)))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cantidad_operarios").value(1));
+        http.perform(get(BASE + "/cuadrillas/" + ajena).cookie(sesion))
+                .andExpect(status().isForbidden());
+        http.perform(
+                        get("/api/v1/core/adjuntos/")
+                                .param("entidad", "actividad")
+                                .param("registro_id", String.valueOf(actividad))
+                                .cookie(sesion))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+        http.perform(
+                        get("/api/v1/core/adjuntos/")
+                                .param("entidad", "actividad")
+                                .param("registro_id", String.valueOf(actividadAjena))
+                                .cookie(sesion))
+                .andExpect(status().isForbidden());
+        http.perform(
+                        post(BASE + "/cuadrillas/")
+                                .cookie(sesion)
+                                .with(csrf())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(json.writeValueAsBytes(squad(c1, o1))))
+                .andExpect(status().isForbidden());
+        http.perform(
+                        put(BASE + "/actividades/" + actividad + "/verificacion/")
+                                .cookie(sesion)
+                                .with(csrf())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        json.writeValueAsBytes(
+                                                values("observaciones", "No autorizado"))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void capatazSinFichaObtieneListadosVaciosSinAccederADatosAjenos() throws Exception {
+        cuadrilla(c1, o1);
+        cuenta("capataz-sin-ficha", "Capataz");
+        Cookie sesion = sesionCore("capataz-sin-ficha");
+
+        for (String recurso :
+                List.of("personal", "cuadrillas", "encargos", "partes", "actividades")) {
+            http.perform(get(BASE + "/" + recurso + "/").cookie(sesion))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.count").value(0));
+        }
     }
 
     @Autowired

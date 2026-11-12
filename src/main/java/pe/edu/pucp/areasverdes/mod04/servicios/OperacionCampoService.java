@@ -52,6 +52,11 @@ public class OperacionCampoService implements ConsultaCampo {
         return user != null && user.puede(GESTIONAR);
     }
 
+    /** Registra trabajo propio pero no administra globalmente las cuadrillas. */
+    public static boolean alcancePropio(Usuario user) {
+        return user != null && user.puede(REGISTRAR_PARTE) && !user.puede(GESTIONAR);
+    }
+
     public static void exigirJefe(Usuario user) {
         if (!jefe(user)) throw forbidden();
     }
@@ -105,7 +110,7 @@ public class OperacionCampoService implements ConsultaCampo {
     void exigirCapataz(long capataz, Usuario user, boolean escritura) {
         exigirLectura(user);
         if (jefe(user)) return;
-        if (!escritura && user.puede(CONSULTAR_PARTES)) return;
+        if (!escritura && user.puede(CONSULTAR_PARTES) && !alcancePropio(user)) return;
         if (!user.puede(REGISTRAR_PARTE) || !Objects.equals(personalUsuario(user), capataz))
             throw forbidden();
     }
