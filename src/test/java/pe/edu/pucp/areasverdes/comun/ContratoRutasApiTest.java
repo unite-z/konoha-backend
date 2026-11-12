@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.util.pattern.PathPattern;
 import org.springframework.web.util.pattern.PathPatternParser;
 import pe.edu.pucp.areasverdes.mod01.Mod01PermisosApiTest;
+import pe.edu.pucp.areasverdes.mod02.PodasAlturaApiTest;
 import pe.edu.pucp.areasverdes.mod03.MatrizPermisosApiTest;
 import pe.edu.pucp.areasverdes.mod05.MatrizPermisosMod05ApiTest;
 import pe.edu.pucp.areasverdes.mod06.gestion.MatrizPermisosGestionApiTest;
@@ -83,6 +84,7 @@ class ContratoRutasApiTest extends BasePruebaGlobal {
     void todoEndpointCumpleElContrato() {
         List<String> cubiertos = new ArrayList<>();
         cubiertos.addAll(Mod01PermisosApiTest.endpointsCubiertos());
+        cubiertos.addAll(PodasAlturaApiTest.endpointsCubiertos());
         cubiertos.addAll(MatrizPermisosApiTest.endpointsCubiertos());
         cubiertos.addAll(MatrizPermisosMod05ApiTest.endpointsCubiertos());
         cubiertos.addAll(MatrizPermisosGestionApiTest.endpointsCubiertos());
