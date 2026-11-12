@@ -12,6 +12,7 @@ import static pe.edu.pucp.areasverdes.AreasVerdesApplication.LIMA;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,17 +27,21 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.ResultActions;
 
 /**
- * RF-PLA-001/002: HTTP real de Spring, persistencia y auditoría en PostGIS exclusivo de pruebas.
+ * RF-PLA-001/002: HTTP real de Spring, persistencia y auditoría común (core_registro_auditoria) en
+ * PostGIS exclusivo de pruebas.
  */
 @Import(ConfiguracionServiciosApiTest.Tiempo.class)
 class ConfiguracionServiciosApiTest extends ApiPlanificacion {
+
+    /** 28/10/2026 a las 10:00 en Lima: primavera. */
+    static final Instant INSTANTE = Instant.parse("2026-10-28T15:00:00Z");
 
     @TestConfiguration
     static class Tiempo {
         @Bean
         @Primary
         Clock relojAuditoria() {
-            return Clock.fixed(Instant.parse("2026-10-28T15:00:00Z"), LIMA);
+            return Clock.fixed(INSTANTE, LIMA);
         }
     }
 
@@ -72,9 +77,37 @@ class ConfiguracionServiciosApiTest extends ApiPlanificacion {
                 String.class);
     }
 
+    /** Cambios del servicio en la auditoría común de MOD-01 (AV-256). */
     private int auditorias() {
-        return jdbc.getJdbcTemplate()
-                .queryForObject("SELECT count(*) FROM mod05_registroauditoria", Integer.class);
+        return jdbc.queryForObject(
+                "SELECT count(*) FROM core_registro_auditoria WHERE entidad = :entidad"
+                        + " AND registro_id = :id",
+                Map.of("entidad", ConfiguracionServicios.ENTIDAD, "id", servicio),
+                Integer.class);
+    }
+
+    /**
+     * Otro jefe de sección, como los de {@link ApiPlanificacion}: usuario de MOD-05 para HTTP Basic
+     * y cuenta de MOD-01 con el mismo id, porque desde V43 (AV-287) el autor de la configuración y
+     * de la auditoría apunta a {@code core_usuario}.
+     */
+    private long otroJefe() {
+        long id =
+                jdbc.queryForObject(
+                        "INSERT INTO mod05_usuario(usuario,nombre,password_hash,activo)"
+                                + " VALUES ('jefe2','Segundo jefe',:clave,true) RETURNING id",
+                        Map.of("clave", claves.encode(CLAVE)),
+                        Long.class);
+        jdbc.update(
+                "INSERT INTO mod05_usuario_rol(usuario_id,rol) VALUES (:id,'Jefe de sección')",
+                Map.of("id", id));
+        jdbc.update(
+                "INSERT INTO core_usuario (id, nombre_usuario, correo, nombre, credencial_hash,"
+                        + " rol_id) SELECT :id, 'mod05-jefe2', 'mod05-jefe2@prueba.pucp.edu.pe',"
+                        + " 'Segundo jefe', 'sin-clave', r.id FROM core_rol r"
+                        + " WHERE r.codigo = 'jefe-seccion'",
+                Map.of("id", id));
+        return id;
     }
 
     @ParameterizedTest
@@ -167,38 +200,36 @@ class ConfiguracionServiciosApiTest extends ApiPlanificacion {
     void cadaCambioConservaAutorInstanteYValores(String recurso, String tabla, String campo)
             throws Exception {
         guardar("jefe", recurso, "{\"" + campo + "\":10}").andExpect(status().isOk());
-        long otroJefe =
-                jdbc.queryForObject(
-                        "INSERT INTO mod05_usuario(usuario,nombre,password_hash,activo)"
-                                + " VALUES ('jefe2','Segundo jefe',:clave,true) RETURNING id",
-                        Map.of("clave", claves.encode(CLAVE)),
-                        Long.class);
-        jdbc.update(
-                "INSERT INTO mod05_usuario_rol(usuario_id,rol) VALUES (:id,'Jefe de sección')",
-                Map.of("id", otroJefe));
+        long otroJefe = otroJefe();
         guardar("jefe2", recurso, "{\"" + campo + "\":12}").andExpect(status().isOk());
         var historial =
                 jdbc.queryForList(
-                        "SELECT * FROM mod05_registroauditoria WHERE entidad=:tabla ORDER BY id",
-                        Map.of("tabla", tabla));
+                        "SELECT accion, usuario_id, valores_anteriores->>:campo anterior,"
+                                + " valores_nuevos->>:campo nuevo,"
+                                + " fecha_hora = :instante en_hora FROM core_registro_auditoria"
+                                + " WHERE entidad = :entidad AND registro_id = :id ORDER BY id",
+                        Map.of(
+                                "campo",
+                                campo,
+                                "instante",
+                                OffsetDateTime.ofInstant(INSTANTE, LIMA),
+                                "entidad",
+                                ConfiguracionServicios.ENTIDAD,
+                                "id",
+                                servicio));
         assertEquals(2, historial.size());
-        assertNotNull(historial.getFirst().get("fecha_hora"));
-        assertNotNull(historial.getLast().get("fecha_hora"));
-        assertEquals(otroJefe, ((Number) historial.getLast().get("usuario_id")).longValue());
-        assertEquals(
-                10,
-                jdbc.queryForObject(
-                        "SELECT (valores_anteriores->>:campo)::int FROM mod05_registroauditoria"
-                                + " WHERE id=:id",
-                        Map.of("campo", campo, "id", historial.getLast().get("id")),
-                        Integer.class));
-        assertEquals(
-                12,
-                jdbc.queryForObject(
-                        "SELECT (valores_nuevos->>:campo)::int FROM mod05_registroauditoria WHERE"
-                                + " id=:id",
-                        Map.of("campo", campo, "id", historial.getLast().get("id")),
-                        Integer.class));
+        var alta = historial.getFirst();
+        var cambio = historial.getLast();
+        assertEquals("Alta", alta.get("accion"));
+        assertEquals(1L, ((Number) alta.get("usuario_id")).longValue());
+        assertEquals("10", alta.get("nuevo"));
+        assertEquals("Modificacion", cambio.get("accion"));
+        assertEquals(otroJefe, ((Number) cambio.get("usuario_id")).longValue());
+        assertEquals("10", cambio.get("anterior"));
+        assertEquals("12", cambio.get("nuevo"));
+        // El instante de la auditoría sale del reloj de la aplicación, fijado en esta prueba.
+        assertEquals(true, alta.get("en_hora"));
+        assertEquals(true, cambio.get("en_hora"));
         var registro =
                 jdbc.queryForMap(
                         "SELECT * FROM " + tabla + " WHERE tipo_servicio_id=:id",
@@ -207,14 +238,14 @@ class ConfiguracionServiciosApiTest extends ApiPlanificacion {
         assertEquals(otroJefe, ((Number) registro.get("usuario_modificacion_id")).longValue());
         assertNotNull(registro.get("fecha_creacion"));
         assertNotNull(registro.get("fecha_modificacion"));
-        assertEquals(1L, ((Number) historial.getFirst().get("usuario_id")).longValue());
-        assertEquals(
-                true,
-                jdbc.queryForObject(
-                        "SELECT fecha_hora = (valores_nuevos->>'fecha_modificacion')::timestamptz"
-                                + " FROM mod05_registroauditoria WHERE id=:id",
-                        Map.of("id", historial.getLast().get("id")),
-                        Boolean.class));
+        http.perform(get(ruta("historial")).with(httpBasic("ingeniero", CLAVE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].campo").value(campo))
+                .andExpect(jsonPath("$[0].anterior").value("10"))
+                .andExpect(jsonPath("$[0].nuevo").value("12"))
+                .andExpect(jsonPath("$[0].autor").value("Segundo jefe"))
+                .andExpect(jsonPath("$[1].campo").value("inicial"));
     }
 
     @ParameterizedTest
