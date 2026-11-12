@@ -215,9 +215,9 @@ class AuthApiTest extends ApiCore {
                         escribir(
                                 put("/api/v1/core/auth/apariencia/"),
                                 sesion,
-                                "{\"tema\": \"oscuro\", \"acento\": \"verde\"}"))
+                                "{\"tema\": \"calido\", \"acento\": \"verde\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.tema").value("oscuro"));
+                .andExpect(jsonPath("$.tema").value("calido"));
         http.perform(
                         escribir(
                                 put("/api/v1/core/auth/apariencia/"),
@@ -228,7 +228,7 @@ class AuthApiTest extends ApiCore {
         // Otro inicio de sesión (otro dispositivo) la recibe al entrar.
         http.perform(login("jefe" + DOMINIO, CLAVE))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.apariencia.tema").value("oscuro"))
+                .andExpect(jsonPath("$.apariencia.tema").value("calido"))
                 .andExpect(jsonPath("$.apariencia.acento").value("verde"));
         // La de un usuario no toca la de otro.
         http.perform(get("/api/v1/core/auth/sesion/").cookie(sesion("ingeniero")))

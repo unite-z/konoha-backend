@@ -62,8 +62,8 @@ public class AuthController {
     public record Apariencia(
             @NotBlank
                     @Pattern(
-                            regexp = "claro|oscuro|sistema",
-                            message = "El tema es claro, oscuro o sistema")
+                            regexp = "claro|oscuro|calido|sistema",
+                            message = "El tema es claro, oscuro, calido o sistema")
                     String tema,
             @NotBlank
                     @Pattern(
