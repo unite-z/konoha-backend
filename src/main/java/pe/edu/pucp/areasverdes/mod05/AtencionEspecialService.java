@@ -50,7 +50,7 @@ public class AtencionEspecialService {
                     """;
 
     public ConsultasService.Pagina listar(Usuario user, Map<String, String> params, String url) {
-        user.exigir(false);
+        user.exigir(Usuario.REGISTRAR_ATENCION);
         String estado = params.getOrDefault("estado", "").strip();
         // Valor de una lista cerrada: nunca se concatena texto de la petición.
         String where =
@@ -73,7 +73,7 @@ public class AtencionEspecialService {
     }
 
     public Map<String, Object> detalle(Usuario user, long id) {
-        user.exigir(false);
+        user.exigir(Usuario.REGISTRAR_ATENCION);
         return conAplicaciones(repo.one(ESPECIALES + " WHERE ae.id=:id", Map.of("id", id)), id);
     }
 
@@ -92,7 +92,7 @@ public class AtencionEspecialService {
     }
 
     public ConsultasService.Pagina plagas(Usuario user, Map<String, String> params, String url) {
-        user.exigir(false);
+        user.exigir(Usuario.REGISTRAR_ATENCION);
         return queries.list(
                 new ConsultasService.Catalogo(
                         "SELECT id,nombre,activo FROM mod05_plaga",
@@ -106,7 +106,7 @@ public class AtencionEspecialService {
 
     @Transactional
     public Map<String, Object> marcar(EntradasMaestros.AtencionEspecial in, Usuario user) {
-        user.exigir(false);
+        user.exigir(Usuario.REGISTRAR_ATENCION);
         if (repo.rows("SELECT id FROM mod05_ejemplar WHERE id=:id", Map.of("id", in.ejemplar_id()))
                 .isEmpty()) throw ApiError.invalid("El ejemplar no existe");
         var plaga =
@@ -152,7 +152,7 @@ public class AtencionEspecialService {
     @Transactional
     public Map<String, Object> cancelar(
             long id, EntradasMaestros.CancelarAtencionEspecial in, Usuario user) {
-        user.exigir(false);
+        user.exigir(Usuario.REGISTRAR_ATENCION);
         var antes = repo.get("atencion_especial", id);
         if ((boolean) antes.get("cancelado"))
             throw ApiError.conflict("Este seguimiento ya está cancelado");

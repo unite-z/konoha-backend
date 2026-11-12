@@ -265,9 +265,10 @@ public class AdjuntosService {
 
     private void exigirConsulta(
             String entidad, long registroId, Destino destino, UsuarioSesion usuario) {
+        // Sin permiso para ver partes ajenos (el capataz), solo las actividades propias (AV-382).
         if ("actividad".equals(entidad)
                 && usuario != null
-                && UsuarioSesion.CAPATAZ.equals(usuario.rol())) {
+                && !usuario.tiene(Autorizacion.CONSULTAR_PARTES)) {
             autorizacion.exigir(usuario, destino.permisoRegistrar());
             exigirActividadPropia(entidad, registroId, usuario);
         } else {
@@ -278,7 +279,7 @@ public class AdjuntosService {
     private void exigirActividadPropia(String entidad, long registroId, UsuarioSesion usuario) {
         if (!"actividad".equals(entidad)
                 || usuario == null
-                || !UsuarioSesion.CAPATAZ.equals(usuario.rol())) return;
+                || usuario.tiene(Autorizacion.CONSULTAR_PARTES)) return;
         boolean propia =
                 Boolean.TRUE.equals(
                         jdbc.queryForObject(

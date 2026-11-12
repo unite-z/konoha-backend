@@ -9,10 +9,12 @@ import static org.mockito.Mockito.when;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import pe.edu.pucp.areasverdes.mod04.api.Entradas;
 import pe.edu.pucp.areasverdes.mod04.datos.Mod04Repository;
 import pe.edu.pucp.areasverdes.mod04.servicios.CatalogoActividadesService;
+import pe.edu.pucp.areasverdes.mod04.servicios.OperacionCampoService;
 import pe.edu.pucp.areasverdes.mod05.ApiError;
 import pe.edu.pucp.areasverdes.mod05.Usuario;
 
@@ -23,14 +25,30 @@ class CatalogoActividadesServiceTest {
 
     @Test
     void soloElJefePuedeModificarElCatalogo() {
-        var capataz = new Usuario(1, "capataz", "Capataz", "", true, List.of("Capataz"));
+        var capataz =
+                new Usuario(
+                        1,
+                        "capataz",
+                        "Capataz",
+                        "",
+                        true,
+                        List.of("Capataz"),
+                        Set.of("CAM.CUADRILLA.CONSULTAR", "CAM.PARTE.REGISTRAR"));
         assertThrows(ApiError.class, () -> service.guardar(null, entrada, capataz));
         verifyNoInteractions(repo);
     }
 
     @Test
     void rechazaUnaClaseInactiva() {
-        var jefe = new Usuario(1, "jefe", "Jefe", "", true, List.of(Usuario.JEFE));
+        var jefe =
+                new Usuario(
+                        1,
+                        "jefe",
+                        "Jefe",
+                        "",
+                        true,
+                        List.of(Usuario.JEFE),
+                        Set.of(OperacionCampoService.GESTIONAR, OperacionCampoService.CONSULTAR));
         when(repo.get("clase_actividad", 4L, true)).thenReturn(Map.of("activo", false));
         assertEquals(
                 "La clase de actividad debe estar activa",
@@ -40,7 +58,15 @@ class CatalogoActividadesServiceTest {
 
     @Test
     void rechazaNombresDuplicadosDentroDeLaClase() {
-        var jefe = new Usuario(1, "jefe", "Jefe", "", true, List.of(Usuario.JEFE));
+        var jefe =
+                new Usuario(
+                        1,
+                        "jefe",
+                        "Jefe",
+                        "",
+                        true,
+                        List.of(Usuario.JEFE),
+                        Set.of(OperacionCampoService.GESTIONAR, OperacionCampoService.CONSULTAR));
         when(repo.get("clase_actividad", 4L, true)).thenReturn(Map.of("activo", true));
         when(repo.rows(any(), any())).thenReturn(List.of(Map.of("id", 12L)));
         assertEquals(

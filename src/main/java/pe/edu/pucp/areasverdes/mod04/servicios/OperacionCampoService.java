@@ -37,8 +37,19 @@ public class OperacionCampoService implements ConsultaCampo {
         this.clock = clock;
     }
 
+    /** Gestión de cuadrillas, personal y encargos (antes: jefe de sección). */
+    public static final String GESTIONAR = "CAM.CUADRILLA.GESTIONAR";
+
+    public static final String CONSULTAR = "CAM.CUADRILLA.CONSULTAR";
+
+    /** Ver partes y actividades de cualquier cuadrilla (antes: roles de oficina). */
+    public static final String CONSULTAR_PARTES = "CAM.PARTE.CONSULTAR";
+
+    /** Registrar en la propia cuadrilla (antes: capataz). */
+    public static final String REGISTRAR_PARTE = "CAM.PARTE.REGISTRAR";
+
     public static boolean jefe(Usuario user) {
-        return user != null && user.activo() && user.roles().contains(Usuario.JEFE);
+        return user != null && user.puede(GESTIONAR);
     }
 
     public static void exigirJefe(Usuario user) {
@@ -50,11 +61,7 @@ public class OperacionCampoService implements ConsultaCampo {
     }
 
     public void exigirLectura(Usuario user) {
-        if (user == null
-                || !user.activo()
-                || user.roles().stream()
-                        .noneMatch(r -> Usuario.ROLES.contains(r) || CAPATAZ.equals(r)))
-            throw forbidden();
+        if (user == null || !user.puede(CONSULTAR)) throw forbidden();
     }
 
     public Long personalUsuario(Usuario user) {
@@ -98,8 +105,8 @@ public class OperacionCampoService implements ConsultaCampo {
     void exigirCapataz(long capataz, Usuario user, boolean escritura) {
         exigirLectura(user);
         if (jefe(user)) return;
-        if (!escritura && user.roles().stream().anyMatch(Usuario.ROLES::contains)) return;
-        if (!user.roles().contains(CAPATAZ) || !Objects.equals(personalUsuario(user), capataz))
+        if (!escritura && user.puede(CONSULTAR_PARTES)) return;
+        if (!user.puede(REGISTRAR_PARTE) || !Objects.equals(personalUsuario(user), capataz))
             throw forbidden();
     }
 

@@ -338,7 +338,7 @@ public class EjemplaresService {
     public List<EventoHistorial> historialIntervenciones(
             long id, FuenteHistorial fuente, Usuario usuario) {
         AccesoCoberturas.consultar(usuario);
-        if (fuente == FuenteHistorial.fitosanitario) usuario.exigir(false);
+        if (fuente == FuenteHistorial.fitosanitario) usuario.exigir(Usuario.REGISTRAR_ATENCION);
         exigirEjemplar(id);
         String consulta =
                 switch (fuente) {

@@ -66,7 +66,7 @@ public class AtencionController {
             @AuthenticationPrincipal Usuario user,
             @RequestParam Map<String, String> params,
             HttpServletRequest request) {
-        user.exigir(false);
+        user.exigir(Usuario.REGISTRAR_ATENCION);
         return queries.atenciones(params, request.getRequestURL().toString());
     }
 
@@ -80,7 +80,7 @@ public class AtencionController {
     @GetMapping({"/atenciones/{id}/", "/atenciones/{id}"})
     public Map<String, Object> detail(
             @AuthenticationPrincipal Usuario user, @PathVariable long id) {
-        user.exigir(false);
+        user.exigir(Usuario.REGISTRAR_ATENCION);
         return repo.atencion(id);
     }
 
@@ -138,7 +138,7 @@ public class AtencionController {
             @PathVariable long id,
             @RequestParam Map<String, String> params,
             HttpServletRequest request) {
-        user.exigir(false);
+        user.exigir(Usuario.REGISTRAR_ATENCION);
         return queries.reportes(id, params, request.getRequestURL().toString());
     }
 
@@ -153,7 +153,7 @@ public class AtencionController {
             @RequestParam String documentos,
             @RequestPart List<MultipartFile> archivos,
             HttpServletRequest request) {
-        user.exigir(false);
+        user.exigir(Usuario.REGISTRAR_ATENCION);
         var fields = new HashSet<>(request.getParameterMap().keySet());
         fields.removeAll(Set.of("fecha_recepcion", "resumen", "documentos"));
         if (!fields.isEmpty()) throw ApiError.invalid("Campos no admitidos: " + fields);
@@ -181,7 +181,7 @@ public class AtencionController {
             @AuthenticationPrincipal Usuario user,
             @PathVariable long id,
             @PathVariable long reporte) {
-        user.exigir(false);
+        user.exigir(Usuario.REGISTRAR_ATENCION);
         return repo.reporte(id, reporte);
     }
 
@@ -194,7 +194,7 @@ public class AtencionController {
             @PathVariable long id,
             @PathVariable long reporte,
             @PathVariable long documento) {
-        user.exigir(false);
+        user.exigir(Usuario.REGISTRAR_ATENCION);
         var file = repo.archivo(id, reporte, documento);
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType((String) file.get("tipo_mime")))
@@ -217,7 +217,7 @@ public class AtencionController {
             @PathVariable String catalogo,
             @RequestParam Map<String, String> params,
             HttpServletRequest request) {
-        user.exigir(false);
+        user.exigir(Usuario.REGISTRAR_ATENCION);
         return queries.catalogo(catalogo, params, request.getRequestURL().toString());
     }
 }

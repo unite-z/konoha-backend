@@ -63,7 +63,7 @@ public class MaestrosService {
 
     public ConsultasService.Pagina proveedores(
             Usuario user, Map<String, String> params, String url) {
-        user.exigir(false);
+        user.exigir(Usuario.CONSULTAR_CONTRATOS);
         String vinculo = params.getOrDefault("tipo_vinculo", "").strip();
         // El valor sale de una lista cerrada: nunca se concatena texto de la petición.
         String where =
@@ -84,12 +84,12 @@ public class MaestrosService {
     }
 
     public Map<String, Object> proveedor(Usuario user, long id) {
-        user.exigir(false);
+        user.exigir(Usuario.CONSULTAR_CONTRATOS);
         return repo.one(PROVEEDORES + " WHERE p.id=:id", Map.of("id", id));
     }
 
     public ConsultasService.Pagina contratos(Usuario user, Map<String, String> params, String url) {
-        user.exigir(false);
+        user.exigir(Usuario.CONSULTAR_CONTRATOS);
         return queries.list(
                 new ConsultasService.Catalogo(
                         CONTRATOS,
@@ -108,13 +108,13 @@ public class MaestrosService {
     }
 
     public Map<String, Object> contrato(Usuario user, long id) {
-        user.exigir(false);
+        user.exigir(Usuario.CONSULTAR_CONTRATOS);
         return contratoVisible(repo.one(CONTRATOS + " WHERE c.id=:id", Map.of("id", id)), user);
     }
 
     /** RNF-008 y HU-MOD01-007: el monto solo lo ve el jefe de sección; al resto le llega nulo. */
     Map<String, Object> contratoVisible(Map<String, Object> fila, Usuario user) {
-        if (!user.roles().contains(Usuario.JEFE)) fila.put("monto_fijo", null);
+        if (!user.puede(Usuario.VER_MONTOS)) fila.put("monto_fijo", null);
         else if (fila.get("monto_fijo") instanceof BigDecimal monto)
             fila.put("monto_fijo", monto.setScale(2).toPlainString());
         LocalDate hoy = LocalDate.now(clock);
@@ -158,7 +158,7 @@ public class MaestrosService {
 
     @Transactional
     public Map<String, Object> crearProveedor(EntradasMaestros.Proveedor in, Usuario user) {
-        user.exigir(true);
+        user.exigir(Usuario.GESTIONAR_CONTRATOS);
         String tipo = in.tipo_vinculo() == null ? "SinVinculo" : in.tipo_vinculo();
         boolean conRelacionado = tipo.equals("Subsidiaria") || tipo.equals("Vinculada");
         if (conRelacionado && in.proveedor_relacionado_id() == null)
@@ -215,7 +215,7 @@ public class MaestrosService {
     @Transactional
     public Map<String, Object> editarProveedor(
             long id, EntradasMaestros.Proveedor in, Usuario user) {
-        user.exigir(true);
+        user.exigir(Usuario.GESTIONAR_CONTRATOS);
         repo.lock("proveedor", id);
         var antes = repo.one(PROVEEDORES + " WHERE p.id=:id", Map.of("id", id));
         String tipo = in.tipo_vinculo() == null ? "SinVinculo" : in.tipo_vinculo();
@@ -273,7 +273,7 @@ public class MaestrosService {
 
     @Transactional
     public Map<String, Object> cambiarEstadoProveedor(long id, boolean activo, Usuario user) {
-        user.exigir(true);
+        user.exigir(Usuario.GESTIONAR_CONTRATOS);
         repo.lock("proveedor", id);
         var antes = repo.one(PROVEEDORES + " WHERE p.id=:id", Map.of("id", id));
         if ((boolean) antes.get("activo") == activo) return antes;
@@ -324,7 +324,7 @@ public class MaestrosService {
 
     @Transactional
     public Map<String, Object> crearContrato(EntradasMaestros.Contrato in, Usuario user) {
-        user.exigir(true);
+        user.exigir(Usuario.GESTIONAR_CONTRATOS);
         validarProveedorYServicio(in);
         if (in.vigencia_fin().isBefore(in.vigencia_inicio()))
             throw ApiError.invalid("El fin de la vigencia no puede ser anterior al inicio");
@@ -369,7 +369,7 @@ public class MaestrosService {
 
     @Transactional
     public Map<String, Object> editarContrato(long id, EntradasMaestros.Contrato in, Usuario user) {
-        user.exigir(true);
+        user.exigir(Usuario.GESTIONAR_CONTRATOS);
         repo.lock("contrato", id);
         var antes =
                 contratoVisible(repo.one(CONTRATOS + " WHERE c.id=:id", Map.of("id", id)), user);
@@ -416,7 +416,7 @@ public class MaestrosService {
 
     public ConsultasService.Pagina productosAgronomicos(
             Usuario user, Map<String, String> params, String url) {
-        user.exigir(false);
+        user.exigir(Usuario.CONSULTAR_CONTRATOS);
         return queries.list(
                 new ConsultasService.Catalogo(
                         PRODUCTOS,
@@ -429,14 +429,14 @@ public class MaestrosService {
     }
 
     public Map<String, Object> productoAgronomico(Usuario user, long id) {
-        user.exigir(false);
+        user.exigir(Usuario.CONSULTAR_CONTRATOS);
         return repo.one(PRODUCTOS + " WHERE id=:id", Map.of("id", id));
     }
 
     @Transactional
     public Map<String, Object> crearProductoAgronomico(
             EntradasMaestros.ProductoAgronomico in, Usuario user) {
-        user.exigir(true);
+        user.exigir(Usuario.GESTIONAR_CONTRATOS);
         // Serializa registros con el mismo nombre; la restricción UNIQUE de la base es la última
         // defensa.
         repo.jdbc().getJdbcTemplate().execute("SELECT pg_advisory_xact_lock(505104)");
@@ -468,7 +468,7 @@ public class MaestrosService {
     @Transactional
     public Map<String, Object> editarProductoAgronomico(
             long id, EntradasMaestros.ProductoAgronomico in, Usuario user) {
-        user.exigir(true);
+        user.exigir(Usuario.GESTIONAR_CONTRATOS);
         repo.lock("producto_agronomico", id);
         var antes = repo.one(PRODUCTOS + " WHERE id=:id", Map.of("id", id));
         repo.jdbc().getJdbcTemplate().execute("SELECT pg_advisory_xact_lock(505104)");
@@ -498,7 +498,7 @@ public class MaestrosService {
     @Transactional
     public Map<String, Object> cambiarEstadoProductoAgronomico(
             long id, boolean activo, Usuario user) {
-        user.exigir(true);
+        user.exigir(Usuario.GESTIONAR_CONTRATOS);
         repo.lock("producto_agronomico", id);
         var antes = repo.one(PRODUCTOS + " WHERE id=:id", Map.of("id", id));
         if ((boolean) antes.get("activo") == activo) return antes;
