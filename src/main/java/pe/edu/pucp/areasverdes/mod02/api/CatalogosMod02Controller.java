@@ -1,6 +1,7 @@
 package pe.edu.pucp.areasverdes.mod02.api;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -86,6 +87,7 @@ public class CatalogosMod02Controller {
                     String color) {}
 
     @GetMapping("/tipos-uso")
+    @Operation(summary = "Lista los tipos de uso de los espacios verdes")
     public List<Elemento> tiposUso(
             @AuthenticationPrincipal Usuario usuario,
             @RequestParam(name = "incluir_inactivas", defaultValue = "false")
@@ -95,6 +97,7 @@ public class CatalogosMod02Controller {
     }
 
     @PostMapping("/tipos-uso")
+    @Operation(summary = "Crea un tipo de uso")
     public ResponseEntity<Elemento> crearTipoUso(
             @AuthenticationPrincipal Usuario usuario, @Valid @RequestBody NuevoNombre entrada) {
         Elemento creado = catalogos.crearTipoUso(entrada, usuario);
@@ -103,6 +106,7 @@ public class CatalogosMod02Controller {
     }
 
     @PatchMapping("/tipos-uso/{id}")
+    @Operation(summary = "Cambia el nombre, el color o el estado de un tipo de uso")
     public Elemento cambiarTipoUso(
             @AuthenticationPrincipal Usuario usuario,
             @PathVariable long id,
@@ -111,6 +115,7 @@ public class CatalogosMod02Controller {
     }
 
     @GetMapping("/sectores")
+    @Operation(summary = "Lista los sectores del inventario")
     public List<Sector> sectores(
             @AuthenticationPrincipal Usuario usuario,
             @RequestParam(name = "incluir_inactivos", defaultValue = "false")
@@ -120,12 +125,14 @@ public class CatalogosMod02Controller {
     }
 
     @GetMapping("/capataces")
+    @Operation(summary = "Lista los capataces que se pueden asignar a un sector")
     public List<Persona> capataces(@AuthenticationPrincipal Usuario usuario) {
         AccesoCoberturas.consultar(usuario);
         return catalogos.capataces();
     }
 
     @PostMapping("/sectores")
+    @Operation(summary = "Crea un sector")
     public ResponseEntity<Sector> crearSector(
             @AuthenticationPrincipal Usuario usuario, @Valid @RequestBody NuevoSector entrada) {
         Sector creado = catalogos.crearSector(entrada, usuario);
@@ -134,6 +141,7 @@ public class CatalogosMod02Controller {
     }
 
     @PatchMapping("/sectores/{id}")
+    @Operation(summary = "Cambia los datos o el estado de un sector")
     public Sector cambiarSector(
             @AuthenticationPrincipal Usuario usuario,
             @PathVariable long id,
@@ -142,6 +150,7 @@ public class CatalogosMod02Controller {
     }
 
     @PatchMapping("/sectores/{id}/capataz")
+    @Operation(summary = "Asigna el capataz de un sector desde una fecha")
     public Sector asignarCapataz(
             @AuthenticationPrincipal Usuario usuario,
             @PathVariable long id,
@@ -150,6 +159,7 @@ public class CatalogosMod02Controller {
     }
 
     @GetMapping("/sectores/{id}/historial-capataz")
+    @Operation(summary = "Historial de capataces de un sector")
     public List<Asignacion> historialCapataz(
             @AuthenticationPrincipal Usuario usuario, @PathVariable long id) {
         AccesoCoberturas.consultar(usuario);
