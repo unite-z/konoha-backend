@@ -81,43 +81,79 @@ CATEGORIA = {
     # MOD-01
     "core_rol": "seg", "core_permiso": "seg", "core_rol_permiso": "seg", "core_usuario": "seg",
     "core_sesion": "seg", "core_registro_auditoria": "seg", "core_registro_acceso": "seg",
-    "core_archivo": "arch", "core_adjunto": "arch",
+    "core_archivo": "arch", "core_adjunto": "arch", "core_importacion": "arch", "core_importacion_fila": "arch",
+    # MOD-02
+    "mod02_tipo_uso": "cat", "mod02_cobertura_vegetal": "cat", "mod02_cuartel": "cat", "mod02_sector": "cat",
+    "mod02_especie_vegetal": "cat", "mod02_tipo_intervencion": "cat", "mod02_mapa_capa": "cat",
+    "mod02_mapa_uso_fuente": "cat",
+    "mod02_area_verde": "op", "mod02_ejemplar": "op", "mod02_mapa_poligono": "op", "mod02_mapa_geometria": "op",
+    "mod02_historial_area_sector": "op", "mod02_historial_capataz_sector": "op",
+    "mod02_historial_situacion_ejemplar": "op", "mod02_intervencion_arbolado": "op", "mod02_campana_poda": "op",
+    "mod02_campana_ejemplar": "op",
     # MOD-03
     "mod03_frecuencia_servicio": "cat", "mod03_duracion_servicio": "cat", "mod03_tipo_restriccion": "cat",
+    "mod03_valor_inicial_frecuencia": "cat", "mod03_valor_inicial_duracion": "cat", "mod03_tipo_incidencia": "cat",
     "mod03_restriccion_calendario": "op", "mod03_programacion_servicio": "op",
-    "mod03_confirmacion_restriccion": "op",
+    "mod03_confirmacion_restriccion": "op", "mod03_historial_programacion": "op", "mod03_programacion_area": "op",
+    "mod03_ruta_corte": "op", "mod03_observacion_jardin": "op", "mod03_fuera_de_ruta": "op",
+    "mod03_interrupcion_corte": "op", "mod03_limpieza_corte": "op", "mod03_alerta": "op", "mod03_aviso": "op",
+    "mod03_incidencia": "op", "mod03_reporte_incidencia": "op", "mod03_historial_incidencia": "op",
+    "mod03_inspeccion_incidencia": "op", "mod03_requerimiento_incidencia": "op", "mod03_causa_retraso": "op",
+    "mod03_aviso_plazo": "op",
     # MOD-04
     "mod04_personal": "op", "mod04_cuadrilla": "op", "mod04_asignacion_cuadrilla": "op",
-    "mod04_tipo_actividad": "cat", "mod04_encargo": "op", "mod04_parte_diario": "op",
-    "mod04_actividad": "op", "mod04_participacion_actividad": "op", "mod04_idempotencia": "seg",
+    "mod04_tipo_actividad": "cat", "mod04_clase_actividad": "cat", "mod04_material_catalogo": "cat",
+    "mod04_unidad_medida": "cat", "mod04_encargo": "op", "mod04_parte_diario": "op",
+    "mod04_actividad": "op", "mod04_participacion_actividad": "op", "mod04_material_actividad": "op",
+    "mod04_idempotencia": "seg",
     # MOD-05
     "mod05_contrato": "cat", "mod05_contrato_detalle": "cat", "mod05_proveedor": "cat",
     "mod05_proveedor_detalle": "cat", "mod05_tiposervicio": "cat", "mod05_unidadinstitucional": "cat",
-    "mod05_unidadmedida": "cat", "mod05_plaga": "cat",
-    "mod05_areaverde": "prov", "mod05_ejemplar": "prov",
+    "mod05_unidadmedida": "cat", "mod05_plaga": "cat", "mod05_producto_agronomico": "cat",
+    "mod05_formato_reporte_servicio": "cat", "mod05_campo_formato_reporte": "cat",
+    "mod05_areaverde": "prov",
     "mod05_atenciontercerizada": "op", "mod05_alcanceatencion": "op", "mod05_historialestado": "op",
-    "mod05_atencion_especial": "op",
+    "mod05_atencion_especial": "op", "mod05_atencion_plaga": "op", "mod05_atencion_producto": "op",
+    "mod05_observacion_plaga": "op", "mod05_conformidad": "op", "mod05_verificacionseguridad": "op",
     "mod05_reporteproveedor": "arch", "mod05_archivoasociado": "arch", "mod05_archivo": "arch",
     "mod05_usuario": "prov", "mod05_usuario_rol": "prov", "mod05_registroauditoria": "seg",
+    # MOD-06
+    "mod06_reporte_generado": "arch", "mod06_sugerencia_ia": "op",
 }
 
 NOTAS = {
     "mod05_usuario": ["copia de core_usuario: se consolida en AV-287"],
     "mod05_usuario_rol": ["copia de los roles de MOD-01: se consolida en AV-287"],
     "mod05_areaverde": ["copia provisional de MOD-02: se consolida en AV-287"],
-    "mod05_ejemplar": ["copia provisional de MOD-02: se consolida en AV-287"],
     "mod05_historialestado": ["solo inserciones (trigger)"],
     "mod05_registroauditoria": ["solo inserciones (trigger)"],
+    "mod05_conformidad": ["solo inserciones (trigger)"],
     "core_registro_auditoria": ["solo inserciones (trigger)"],
     "core_registro_acceso": ["solo inserciones (trigger)"],
     "core_usuario": ["trigger: el rol asignado tiene que estar activo", "personal_id sin FK (MOD-04)"],
-    "mod03_programacion_servicio": ["cuadrilla_id sin FK (MOD-04)"],
+    "mod02_ejemplar": ["area_verde_id: área de la copia de MOD-05 (AV-287)",
+                       "el área del inventario es area_verde_inventario_id"],
+    "mod03_restriccion_calendario": ["area_verde_id: área de la copia de MOD-05 (AV-287)"],
+    "mod04_actividad": ["trigger: copia el nombre y la clase del tipo al insertar"],
 }
 # índices únicos que no son restricciones (parciales o sobre expresiones)
 UNICOS_EXTRA = {
     "core_usuario": ["U lower(correo), si no es nulo"],
+    "mod02_tipo_uso": ["U lower(nombre)"],
+    "mod02_cobertura_vegetal": ["U lower(nombre)"],
+    "mod02_sector": ["U lower(nombre), si activo"],
+    "mod02_tipo_intervencion": ["U lower(trim(nombre))"],
+    "mod02_especie_vegetal": ["U lower(nombre_cientifico), si no está vacío",
+                              "U lower(nombre_comun), si no hay nombre científico"],
+    "mod02_ejemplar": ["U codigo_catastro, si no está vacío", "U referencia_catastro, si no está vacía"],
+    "mod02_historial_area_sector": ["U area_verde_id, si fecha_fin es nula"],
+    "mod02_historial_capataz_sector": ["U sector_id, si fecha_fin es nula"],
+    "mod02_campana_poda": ["U anio, si es Anual y activa"],
+    "mod03_programacion_servicio": ["U codigo"],
     "mod04_cuadrilla": ["U lower(trim(nombre))", "U capataz_id, si activa"],
     "mod04_asignacion_cuadrilla": ["U operario_id, si fecha_fin es nula"],
+    "mod04_tipo_actividad": ["U (clase_id, lower(trim(nombre)))"],
+    "mod05_formato_reporte_servicio": ["U tipo_servicio_id, si vigente"],
 }
 
 # Reglas CHECK, redactadas para leerlas de un vistazo
@@ -129,88 +165,182 @@ REGLAS = {
         "sesion.canal: oficina o campo",
         "registro_acceso.canal: oficina, campo o api",
         "registro_acceso.resultado: Exitoso, Fallido, Bloqueado, Denegado…",
-        "registro_auditoria.accion: Alta, Modificacion, CambioEstado, CambioRol…",
+        "registro_auditoria.accion: Alta, Modificacion, CambioEstado, CambioRol o BajaLogica",
         "archivo: tamano_bytes > 0",
-        "adjunto.entidad: actividad, atencion, incidencia, ejemplar…",
+        "adjunto.entidad: actividad, atencion, incidencia, ejemplar o intervencion",
+        "importacion.estado: Validada o Confirmada",
+        "importacion_fila.resultado: Alta, Actualización, Sin cambios, Revisar o Error",
+    ],
+    "MOD-02": [
+        "area_verde: superficie_m2 > 0",
+        "tipo_uso, cobertura, cuartel, sector y uso_fuente: nombre no vacío",
+        "tipo_uso.color: #RRGGBB; cuartel.estado: vigente o desaparecido",
+        "especie: nombre común o científico",
+        "ejemplar: cantidad > 0; altura_total_m > 0",
+        "ejemplar.situacion: activo, retirado, muerto, reemplazado o trasladado",
+        "historiales de sector: fecha_fin ≥ fecha_inicio",
+        "campaña: clase Anual o Extraordinaria (esta exige motivo); fecha_fin ≥ fecha_inicio; objetivo_diario > 0",
+        "campaña.estado: Borrador, Planificada, EnEjecucion o Finalizada",
+        "intervención: categoría Menor, MayorCampana o AlturaDemanda; prioridad Alta, Media o Baja",
+        "intervención.motivo: Riesgo, Obstruccion, PlantaMuerta o Reduccion",
+        "intervención: cantidades ≥ 0 y con unidad; reducción de copa 0-100 %; altura de referencia > 0",
+        "mapa_capa: una sola fila",
     ],
     "MOD-03": [
-        "frecuencia: estación Verano, Otoño, Invierno o Primavera",
+        "frecuencia y valor inicial: estación Verano, Otoño, Invierno o Primavera",
         "frecuencia: teórica, práctica y máxima > 0; máxima ≥ práctica (o teórica)",
-        "duración: duracion_maxima_dias > 0; dias_limpieza ≥ 0",
+        "duración y valor inicial: duracion_maxima_dias > 0; dias_limpieza ≥ 0",
         "duración y restricción: hora_fin > hora_inicio",
         "tipo_restriccion.efecto: Prohibicion, Advertencia o Favorable",
         "restricción: fecha_fin ≥ fecha_inicio",
-        "programación: estado Programada, EnCurso, Completada o Cancelada",
+        "programación e historial: estado Programada, EnCurso, Completada o Cancelada",
         "programación: ventana_mes AAAA-MM; fin prevista ≥ inicio prevista",
         "programación: fin real exige inicio real y es ≥ inicio real",
         "confirmación: justificación no vacía",
+        "alerta: tipo FrecuenciaProxima, DuracionProxima o DuracionExcedida; estado Abierta o Atendida",
+        "aviso: a un usuario o a un proveedor, nunca a los dos; texto no vacío",
+        "interrupción: motivo no vacío; minutos_descontados ≥ 0",
+        "ruta_corte.estado: Pendiente o Cortado; observación y fuera de ruta: texto no vacío",
+    ],
+    "MOD-03 incidencias": [
+        "incidencia.canal: App, Web, Telefono, WhatsApp, Correo o Presencial",
+        "incidencia.estado: Registrada, Clasificada, DerivadaInterna, DerivadaTercerizada, EnAtencion, Atendida, Cerrada o Descartada",
+        "incidencia: impacto Alto, Medio o Bajo; severidad Alta, Media o Baja",
+        "incidencia.via: PersonalPropio o Tercerizada",
+        "incidencia: reportante con usuario o con nombre no vacío",
+        "requerimiento.tipo_atencion: Programada o Extraordinaria",
+        "causa_retraso: causa no vacía",
+        "aviso_plazo.nivel: SuperaObjetivo o Vencida",
     ],
     "MOD-04": [
-        "personal: nombres y apellidos no vacíos; tipo Capataz u Operario",
+        "personal: nombres no vacíos; apellidos si no tiene usuario; tipo Capataz u Operario",
         "personal: solo un Capataz puede tener usuario_id",
-        "cuadrilla: nombre no vacío",
+        "cuadrilla y tipo_actividad: nombre no vacío",
         "asignación: fecha_fin ≥ fecha_inicio",
-        "encargo: periodicidad Semanal (< 7 días) o Quincenal (< 14 días)",
+        "encargo: periodicidad Semanal (< 7 días) o Quincenal (< 14 días); descripción no vacía",
         "encargo: fecha_fin ≥ fecha_inicio; plazo_previsto dentro del periodo",
         "parte_diario.estado: Abierto o Cerrado",
+        "actividad: tiempo_minutos entre 1 y 1440; cantidades y superficie ≥ 0",
+        "actividad: las cantidades van con unidad_medida_id",
+        "actividad: verificación completa o vacía; con ejemplar no queda pendiente de vinculación",
+        "material: del catálogo o «otro», nunca los dos; cantidad > 0; origen y destino juntos",
     ],
     "MOD-05": [
         "contrato: vigencia_fin ≥ vigencia_inicio",
-        "contrato_detalle: monto_fijo ≥ 0",
+        "contrato_detalle: monto_fijo ≥ 0; frecuencia de 1 a 365 por Dia, Semana, Mes o Anio (juntas)",
         "proveedor_detalle: SinVinculo o Principal sin proveedor relacionado; Subsidiaria y Vinculada con él",
         "atención: fecha_hora_fin ≥ fecha_hora_inicio",
         "atención: origen SolicitudUnidad exige unidad_solicitante_id; Demanda y ProgramacionEstacional la dejan vacía",
-        "alcance: área verde o ejemplar, nunca los dos",
+        "alcance y observación de plaga: área verde o ejemplar, nunca los dos",
         "alcance: metrado y unidad_medida_id van juntos (metrado ≥ 0)",
         "atención especial: 1 o 2 aplicaciones adicionales; realizadas entre 0 y las adicionales",
         "archivo: tamano_bytes ≥ 0; reporte: revision ≥ 0",
-        "usuario_rol.rol: Jefe de sección, Ingeniero de campo o Practicante autorizado",
+        "reporte: datos_formato es un objeto JSON y exige formato_id",
+        "formato: version > 0; campo: orden > 0, tipo Texto… JSON, subcampos solo en JSON",
+        "conformidad: Conforme u Observada (esta exige comentarios)",
+        "verificación de seguridad: medidas no vacías",
+        "usuario_rol.rol: Jefe de sección, Ingeniero de campo, Practicante autorizado o Capataz",
+    ],
+    "MOD-06": [
+        "reporte: tipo GestionOSG, ServicioTercerizado, MaterialVegetal, DistribucionPersonal, MatrizIncidencias o Listado",
+        "reporte: formato PDF o Excel; filas y archivo_tamano_bytes ≥ 0",
+        "sugerencia: estado Propuesta, Validada o Rechazada; validada o rechazada exige validador y fecha",
+        "sugerencia.tipo: ExtraccionReporte, Priorizacion, Inconsistencia, Cronograma, EstimacionRecursos, ClasificacionIncidencia o EvidenciaFitosanitaria",
+        "sugerencia: entidad y registro_id van juntos",
     ],
 }
 
+# Cada página dibuja las tablas de su prefijo (por defecto, su id) y, con borde discontinuo, las de
+# otros módulos que pongas en sus columnas. MOD-03 ocupa dos páginas (planificación e incidencias).
 PAGINAS = [
     {
-        "id": "mod01", "nombre": "MOD-01 · Core y seguridad",
+        "id": "mod01", "nombre": "MOD-01 · Core y seguridad", "reglas": "MOD-01",
         "titulo": "MOD-01 · Core y seguridad",
-        "texto": "Usuarios, roles, permisos, sesiones, auditoría común y adjuntos (V6 a V10).",
+        "texto": "Usuarios, roles, permisos, sesiones, auditoría común, adjuntos e importaciones.",
         "columnas": [
             ["core_rol", "core_rol_permiso", "core_permiso"],
-            ["core_usuario", "core_sesion"],
+            ["core_usuario", "core_sesion", "core_importacion", "core_importacion_fila"],
             ["core_registro_auditoria", "core_registro_acceso", "core_adjunto", "core_archivo"],
         ],
     },
     {
-        "id": "mod03", "nombre": "MOD-03 · Planificación",
-        "titulo": "MOD-03 · Planificación y corte de césped",
-        "texto": "Frecuencias, duraciones, calendario de restricciones y programaciones (V2 a V4). Todavía referencia las copias de MOD-05 (AV-287).",
+        "id": "mod02", "nombre": "MOD-02 · Inventario", "reglas": "MOD-02",
+        "titulo": "MOD-02 · Inventario de áreas verdes y arbolado",
+        "texto": "Áreas verdes, mapa, sectores, ejemplares, especies, intervenciones de arbolado y campañas de poda.",
         "columnas": [
-            ["mod03_programacion_servicio", "mod03_confirmacion_restriccion", "mod03_restriccion_calendario"],
-            ["mod05_tiposervicio", "mod05_proveedor", "mod03_tipo_restriccion", "mod05_areaverde"],
-            ["mod03_frecuencia_servicio", "mod03_duracion_servicio"],
+            ["mod02_tipo_uso", "mod02_cobertura_vegetal", "mod02_cuartel", "mod02_mapa_uso_fuente",
+             "mod02_mapa_capa", "mod02_mapa_geometria"],
+            ["mod02_area_verde", "mod02_mapa_poligono", "mod02_historial_area_sector", "mod02_sector",
+             "mod02_historial_capataz_sector"],
+            ["mod02_ejemplar", "mod02_especie_vegetal", "mod02_historial_situacion_ejemplar"],
+            ["mod02_intervencion_arbolado", "mod02_tipo_intervencion", "mod02_campana_poda",
+             "mod02_campana_ejemplar", "mod05_atenciontercerizada", "mod03_incidencia", "mod05_unidadmedida"],
         ],
     },
     {
-        "id": "mod04", "nombre": "MOD-04 · Operación de campo",
+        "id": "mod03", "nombre": "MOD-03 · Planificación", "reglas": "MOD-03",
+        "titulo": "MOD-03 · Planificación y corte de césped",
+        "texto": "Frecuencias, duraciones, calendario de restricciones, programaciones, ciclo de corte, alertas y avisos. "
+                 "Las restricciones todavía apuntan a la copia de áreas de MOD-05 (AV-287).",
+        "columnas": [
+            ["mod03_frecuencia_servicio", "mod03_valor_inicial_frecuencia", "mod03_duracion_servicio",
+             "mod03_valor_inicial_duracion", "mod03_alerta"],
+            ["mod05_tiposervicio", "mod05_proveedor", "mod03_aviso", "mod03_tipo_restriccion",
+             "mod03_restriccion_calendario", "mod05_areaverde"],
+            ["mod03_programacion_servicio", "mod03_confirmacion_restriccion", "mod03_historial_programacion",
+             "mod03_interrupcion_corte", "mod03_limpieza_corte"],
+            ["mod03_programacion_area", "mod03_ruta_corte", "mod03_observacion_jardin", "mod03_fuera_de_ruta",
+             "mod02_area_verde"],
+        ],
+    },
+    {
+        "id": "mod03-incidencias", "prefijo": "mod03", "nombre": "MOD-03 · Incidencias", "reglas": "MOD-03 incidencias",
+        "titulo": "MOD-03 · Incidencias",
+        "texto": "Registro, reportes sumados, clasificación, inspección, derivación a MOD-04 o MOD-05, retrasos y avisos de plazo.",
+        "columnas": [
+            ["mod03_tipo_incidencia", "mod02_area_verde", "mod02_ejemplar", "mod04_personal"],
+            ["mod03_incidencia"],
+            ["mod03_reporte_incidencia", "mod03_historial_incidencia", "mod03_inspeccion_incidencia",
+             "mod03_causa_retraso", "mod03_aviso_plazo"],
+            ["mod03_requerimiento_incidencia", "mod05_atenciontercerizada", "mod05_proveedor"],
+        ],
+    },
+    {
+        "id": "mod04", "nombre": "MOD-04 · Operación de campo", "reglas": "MOD-04",
         "titulo": "MOD-04 · Operación de campo",
-        "texto": "Personal, cuadrillas, encargos, partes diarios y actividades (V11).",
+        "texto": "Personal, cuadrillas, encargos, partes diarios, actividades y materiales.",
         "desplazamiento": {1: 100},
         "columnas": [
             ["mod04_cuadrilla", "mod04_asignacion_cuadrilla"],
-            ["mod04_personal", "mod04_encargo", "mod04_tipo_actividad", "mod04_idempotencia"],
+            ["mod04_personal", "mod04_encargo", "mod04_tipo_actividad", "mod04_clase_actividad",
+             "mod04_idempotencia"],
             ["mod04_parte_diario", "mod04_actividad", "mod04_participacion_actividad", "mod05_areaverde"],
+            ["mod04_material_actividad", "mod04_material_catalogo", "mod04_unidad_medida"],
         ],
     },
     {
-        "id": "mod05", "nombre": "MOD-05 · Servicios tercerizados",
+        "id": "mod05", "nombre": "MOD-05 · Servicios tercerizados", "reglas": "MOD-05",
         "titulo": "MOD-05 · Servicios tercerizados",
-        "texto": "Proveedores, contratos, atenciones tercerizadas, reportes y atención especial (V1 y V5). MOD-06 no tiene tablas: lee las de MOD-05 y mock-data/.",
+        "texto": "Proveedores, contratos, atenciones tercerizadas, reportes con formato, conformidad, seguridad, "
+                 "plagas, productos y atención especial.",
         "columnas": [
             ["mod05_proveedor", "mod05_proveedor_detalle", "mod05_contrato", "mod05_contrato_detalle",
              "mod05_tiposervicio", "mod05_unidadinstitucional", "mod05_unidadmedida"],
             ["mod05_atenciontercerizada", "mod05_alcanceatencion", "mod05_reporteproveedor",
-             "mod05_archivoasociado", "mod05_archivo"],
-            ["mod05_areaverde", "mod05_ejemplar", "mod05_atencion_especial", "mod05_plaga", "mod05_historialestado"],
-            ["mod05_usuario", "mod05_usuario_rol", "mod05_registroauditoria"],
+             "mod05_archivoasociado", "mod05_archivo", "mod05_conformidad", "mod05_verificacionseguridad"],
+            ["mod05_areaverde", "mod05_atencion_especial", "mod05_plaga", "mod05_atencion_plaga",
+             "mod05_observacion_plaga", "mod05_historialestado"],
+            ["mod05_producto_agronomico", "mod05_atencion_producto", "mod05_formato_reporte_servicio",
+             "mod05_campo_formato_reporte", "mod05_usuario", "mod05_usuario_rol", "mod05_registroauditoria"],
+        ],
+    },
+    {
+        "id": "mod06", "nombre": "MOD-06 · Reportes e IA", "reglas": "MOD-06",
+        "titulo": "MOD-06 · Reportes, indicadores e IA",
+        "texto": "Reportes generados y sugerencias de la IA pendientes de validar. Los indicadores leen las tablas de los demás módulos.",
+        "columnas": [
+            ["mod06_reporte_generado", "mod06_sugerencia_ia"],
+            ["core_usuario"],
         ],
     },
 ]
@@ -324,7 +454,7 @@ def externa(pid, t, cols_ref, xpos, ypos, ancho):
               f'<span style="display:inline-block;width:46px;color:#555;font-size:10px;">PK</span>'
               f'<span style="font-weight:bold;">{c}</span>', ESTILO_FILA) for c in cols_ref]
     nota = f"tabla de {MODULO_DE(t)}"
-    if t in ("mod05_areaverde", "mod05_ejemplar", "mod05_usuario"):
+    if t in ("mod05_areaverde", "mod05_usuario"):
         nota += " (copia provisional, AV-287)"
     filas.append((f"{pid}_{t}__nota", nota, ESTILO_NOTA.format("#666666")))
     return pintar(pid, t, xpos, ypos, ancho, filas,
@@ -362,7 +492,7 @@ LEYENDA = ('<b>Leyenda</b><br>PK clave primaria · FK clave foránea · U único
            '<span style="color:#999;">→ tabla</span>: FK que no se dibuja como línea (auditoría o tabla de otra página)')
 
 # comprobación: cada tabla de la base está en una página y tiene categoría
-propias_paginas = {t for p in PAGINAS for c in p["columnas"] for t in c if propia(p["id"], t)}
+propias_paginas = {t for p in PAGINAS for c in p["columnas"] for t in c if propia(p.get("prefijo", p["id"]), t)}
 faltan = sorted(set(columnas) - propias_paginas)
 if faltan:
     raise SystemExit(f"Tablas sin colocar en PAGINAS: {', '.join(faltan)}")
@@ -373,11 +503,11 @@ if sin_categoria:
 diagramas = []
 for pag in PAGINAS:
     celdas = ['<mxCell id="0"/>', '<mxCell id="1" parent="0"/>']
-    pid = pag["id"]
+    pid, prefijo = pag["id"], pag.get("prefijo", pag["id"])
     en_pagina = [t for col in pag["columnas"] for t in col]
-    propias = [t for t in en_pagina if propia(pid, t)]
+    propias = [t for t in en_pagina if propia(prefijo, t)]
     # de las tablas de otros módulos solo se dibuja la clave a la que apuntan las FK dibujadas
-    ref_ext = {t: set() for t in en_pagina if not propia(pid, t)}
+    ref_ext = {t: set() for t in en_pagina if not propia(prefijo, t)}
     for t in propias:
         for f in fks.get(t, []):
             if dibujar_fk(pid, t, f, en_pagina) and f["ref"] in ref_ext:
@@ -393,10 +523,10 @@ for pag in PAGINAS:
     xpos, top, gap_x, gap_y = 40, 150, 120, 40
     alturas = []
     for i, col in enumerate(pag["columnas"]):
-        ancho = max(ancho_tabla(t, en_pagina, pid) if propia(pid, t) else 300 for t in col)
+        ancho = max(ancho_tabla(t, en_pagina, pid) if propia(prefijo, t) else 300 for t in col)
         y = top + pag.get("desplazamiento", {}).get(i, 0)
         for t in col:
-            if propia(pid, t):
+            if propia(prefijo, t):
                 y += tabla(pid, t, xpos, y, ancho, en_pagina) + gap_y
             else:
                 y += externa(pid, t, sorted(ref_ext[t]), xpos, y, ancho) + gap_y
@@ -406,7 +536,7 @@ for pag in PAGINAS:
     xl, al, yl = min(alturas, key=lambda a: a[2])
     al = max(al, 360)
     caja(f"{pid}_leyenda", LEYENDA, xl, yl, al, 135)
-    reglas = REGLAS[pid.upper().replace("MOD", "MOD-")]
+    reglas = REGLAS[pag["reglas"]]
     por_linea = (al - 20) / 6.0
     alto_reglas = 36 + 13 * sum(1 + int(len(r) / por_linea) for r in reglas)
     caja(f"{pid}_reglas", "<b>Reglas de la base de datos (CHECK)</b><br>" + "<br>".join(x(r) for r in reglas),

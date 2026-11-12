@@ -109,7 +109,7 @@ Ningún PR puede ampliar estas brechas (por ejemplo, abrir más rutas sin autent
 - Dos configuraciones de seguridad (`mod05/Seguridad` y `mod06/config/SeguridadMod06`) y la zona `LIMA` definida dos veces (`AreasVerdesApplication` y `Mod05Application`).
 - Variables con prefijo de módulo (`MOD05_DB_*`) para una base compartida.
 - MOD-05 en `/api/tercerizados/`, fuera de `/api/v1/`.
-- `V1__mod05.sql` duplica entidades ajenas (`mod05_usuario`, `mod05_usuario_rol`, `mod05_areaverde`, `mod05_ejemplar`). Objetivo: consolidarlas en las tablas de su dueño.
+- `V1__mod05.sql` duplica entidades ajenas (`mod05_usuario`, `mod05_usuario_rol`, `mod05_areaverde`; `mod05_ejemplar` ya es `mod02_ejemplar` desde `V15`). Objetivo: consolidarlas en las tablas de su dueño (AV-287).
 - Formato: está previsto un PR único de `spotless:apply` sobre todo el código (ver `CONTRIBUTING.md`).
 
 ## Qué no entra al repo
