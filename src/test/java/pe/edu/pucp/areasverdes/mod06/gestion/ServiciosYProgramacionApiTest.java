@@ -1,6 +1,7 @@
 package pe.edu.pucp.areasverdes.mod06.gestion;
 
 import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -10,6 +11,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.test.web.servlet.ResultActions;
+import pe.edu.pucp.areasverdes.mod06.gestion.servicios.ReporteServicioService;
 
 /**
  * RF-REP-008 y RF-REP-010 sobre {@code escenario-gestion.sql} y {@code
@@ -57,6 +59,59 @@ class ServiciosYProgramacionApiTest extends ApiGestion {
                 .andExpect(
                         jsonPath("$.atenciones[?(@.codigo == 'AT-001')].con_evidencia").value(true))
                 .andExpect(jsonPath("$.rendimiento.sin_datos").value(true));
+    }
+
+    /**
+     * Metrado: AT-001 (ejecutada) y AT-004 (pendiente) prevén 100 m2 cada una; el informe de AT-001
+     * declara 80. Plazo: AT-001 viene de la programación 901 (fin previsto 10/10); AT-004 no tiene.
+     * Al final, AT-004 se queda sin metrado: una atención sin metrado no es «otra unidad».
+     */
+    @Test
+    void elMetradoEjecutadoSaleDelInformeYElPlazoDeLaProgramacion() throws Exception {
+        String[] sql = {
+            "INSERT INTO mod05_unidadmedida (id, nombre, simbolo) VALUES (9401, 'Metro cuadrado',"
+                    + " 'm2')",
+            "UPDATE mod05_alcanceatencion SET metrado = 100, unidad_medida_id = 9401 WHERE id IN"
+                    + " (1, 6)",
+            "INSERT INTO mod05_formato_reporte_servicio (id, tipo_servicio_id, version) VALUES"
+                    + " (9401, 2, 1)",
+            "UPDATE mod05_reporteproveedor SET formato_id = 9401, datos_formato = '{\"Metrado\":"
+                    + " 80, \"Ruta recorrida\": \"Norte\"}' WHERE id = 1",
+        };
+        for (String s : sql) jdbc.getJdbcTemplate().update(s);
+
+        // Sin fin real y con el 10/10 ya pasado, AT-001 va fuera de plazo; AT-004 no tiene plazo.
+        como("jefe", "servicios-tercerizados/" + PERIODO + "&tipo_servicio_id=2")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.avance.metrado_previsto").value("200"))
+                .andExpect(jsonPath("$.avance.metrado_ejecutado").value("80"))
+                .andExpect(jsonPath("$.avance.unidad_metrado").value("m2"))
+                .andExpect(jsonPath("$.atenciones[?(@.codigo == 'AT-001')].metrado").value("80"))
+                .andExpect(jsonPath("$.rendimiento.atenciones_fuera_de_plazo").value(1))
+                .andExpect(jsonPath("$.notas", hasItem(ReporteServicioService.NOTA_PLAZO)));
+
+        // Terminada antes del fin previsto: dentro de plazo.
+        jdbc.getJdbcTemplate()
+                .update(
+                        "UPDATE mod05_atenciontercerizada SET fecha_hora_fin = '2026-10-08"
+                                + " 12:00-05' WHERE id = 1");
+        como("jefe", "servicios-tercerizados/" + PERIODO + "&tipo_servicio_id=2")
+                .andExpect(jsonPath("$.rendimiento.atenciones_fuera_de_plazo").value(0))
+                .andExpect(jsonPath("$.rendimiento.rendimiento_por_hora").exists());
+
+        jdbc.getJdbcTemplate()
+                .update(
+                        "UPDATE mod05_alcanceatencion SET metrado = NULL, unidad_medida_id = NULL"
+                                + " WHERE id = 6");
+        como("jefe", "servicios-tercerizados/" + PERIODO + "&tipo_servicio_id=2")
+                .andExpect(jsonPath("$.avance.metrado_previsto").value("100"))
+                .andExpect(jsonPath("$.avance.metrado_ejecutado").value("80"))
+                .andExpect(jsonPath("$.avance.unidad_metrado").value("m2"))
+                .andExpect(
+                        jsonPath(
+                                "$.notas",
+                                org.hamcrest.Matchers.not(
+                                        hasItem(ReporteServicioService.NOTA_UNIDADES))));
     }
 
     @Test
