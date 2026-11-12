@@ -4,8 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import io.swagger.v3.oas.annotations.Hidden;
 import io.swagger.v3.oas.annotations.Operation;
-import java.io.IOException;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -15,15 +13,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.http.server.PathContainer;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 import org.springframework.web.util.pattern.PathPattern;
 import org.springframework.web.util.pattern.PathPatternParser;
 import pe.edu.pucp.areasverdes.mod01.Mod01PermisosApiTest;
@@ -42,8 +34,7 @@ import pe.edu.pucp.areasverdes.mod06.gestion.MatrizPermisosMod06ApiTest;
  * módulo nuevo. Los handlers {@code @Hidden} (los 405 de MOD-06 y el comodín de {@code /api/v1}) no
  * son contrato y se saltan.
  */
-@SpringBootTest
-class ContratoRutasApiTest {
+class ContratoRutasApiTest extends BasePruebaGlobal {
 
     /** Endpoint registrado: método, patrón sin barra final, controlador y si lleva @Operation. */
     record Endpoint(String metodo, String patron, String controlador, boolean conOperation) {
@@ -99,17 +90,6 @@ class ContratoRutasApiTest {
                     "TiposIntervencionController",
                     // MOD-04: no tiene matriz
                     "OperacionCampoController");
-
-    @DynamicPropertySource
-    static void baseDePruebas(DynamicPropertyRegistry p) throws IOException {
-        BaseDePruebas.registrar(p);
-        String archivos = Files.createTempDirectory("contrato-rutas-").toString();
-        p.add("mod05.archivos", () -> archivos);
-    }
-
-    @Autowired
-    @Qualifier("requestMappingHandlerMapping")
-    RequestMappingHandlerMapping rutas;
 
     @Test
     void todoEndpointCumpleElContrato() {
