@@ -54,7 +54,10 @@ Todos bajo `/api/v1/core/`, con y sin barra final. Errores en `{codigo, detalle}
 | `POST usuarios/{id}/contrasena-temporal/` | Jefe | Alternativa a la recuperación por correo |
 | `GET usuarios/{id}/historial/` | Jefe | Altas, cambios de datos, de rol y de estado |
 | `GET` y `PUT usuarios/{id}/rol/` | Jefe | PUT `{rol, motivo}`. 409 `rol-no-habilitado`, `rol-sin-cambio`, `ultimo-jefe-seccion` o `capataz-con-cuadrilla` |
-| `GET roles/` | Jefe | Roles con sus permisos. El operario sale con `activo: false` |
+| `GET roles/` | Jefe | Roles con sus permisos. El operario sale con `activo: false`. El superadministrador no sale |
+| `GET permisos/` | Jefe y superadministrador | Catálogo de permisos: `codigo`, `modulo`, `descripcion`, `es_sensible` (AV-381) |
+| `GET roles/{codigo}/permisos/` | Superadministrador | Permisos del rol y sus cambios con autor, fecha y motivo (AV-381) |
+| `PUT roles/{codigo}/permisos/` | Superadministrador | `{permisos, motivo}` sustituye todos los permisos del rol; valen desde la siguiente petición. 400 `permiso-desconocido` o `motivo-obligatorio`; 404 si el rol no existe o es el superadministrador; 409 `permisos-sin-cambio` o `permiso-reservado` (`CORE.ROL.GESTIONAR` no se cede) |
 | `GET accesos/` | Jefe | Filtros `usuario_id`, `usuario` (texto en el nombre, la cuenta o el identificador escrito), `canal` (`oficina`, `campo`, `api`), `desde` y `hasta` (días en hora de Lima, ambos incluidos; 400 `periodo-invalido` si están invertidos) y `resultado` (`Exitoso`, `Fallido`, `Bloqueado`, `Denegado`, `SinPermiso`, `CierreSesion`) |
 | `GET historial/?entidad=&registro_id=` | Según la entidad | `actividad`, `atencion`, `incidencia`, `ejemplar` y `usuario`. Los importes no salen para quien no tiene `SER.CONTRATO.VER_MONTOS` |
 | `POST adjuntos/` | Según la entidad | Multipart `entidad`, `registro_id`, `descripcion` y `archivo`, con la cabecera `Idempotency-Key` (UUID). 201 si es nuevo, 200 si es un reintento, 409 `archivo-duplicado` o `entidad-no-disponible` |
@@ -93,18 +96,25 @@ Ejemplo de error:
 - `alcanceCuadrillas(usuario)` y `exigirCuadrilla(usuario, id)`: el capataz solo actúa sobre su cuadrilla. Las cuadrillas las aporta `ConsultaCampo`. Hasta que MOD-04 publique su implementación con `@Primary`, ningún capataz tiene cuadrilla.
 - `RegistradorAuditoria.registrarAlta` y `registrarCambio`: el único punto de escritura de la auditoría común. Se llama dentro de la transacción del cambio.
 
-Códigos de permiso (`core_permiso`, matriz fija en esta fase, supuesto ACC-S8). Los marcados con † son sensibles y solo los tiene el jefe de sección.
+Códigos de permiso (`core_permiso`). Desde AV-381 la matriz la edita el superadministrador en «Roles y permisos» (antes era fija, supuesto ACC-S8). Los marcados con † son sensibles y solo los tiene el jefe de sección.
 
 | Módulo | Códigos |
 |---|---|
-| MOD-01 | `CORE.USUARIO.GESTIONAR`†, `CORE.CATALOGO.GESTIONAR`, `CORE.CATALOGO.CONSULTAR`, `CORE.REPOSITORIO.CONSULTAR`, `CORE.HISTORIAL.CONSULTAR`, `CORE.PERSONAL.VER_DATOS`† |
+| MOD-01 | `CORE.ROL.GESTIONAR`† (solo superadministrador), `CORE.USUARIO.GESTIONAR`†, `CORE.CATALOGO.GESTIONAR`, `CORE.CATALOGO.CONSULTAR`, `CORE.REPOSITORIO.CONSULTAR`, `CORE.HISTORIAL.CONSULTAR`, `CORE.PERSONAL.VER_DATOS`† |
 | MOD-02 | `INV.INVENTARIO.REGISTRAR`, `INV.INVENTARIO.CONSULTAR`, `INV.PODA.PLANIFICAR`, `INV.PODA.REGISTRAR` |
 | MOD-03 | `PLA.PLANIFICACION.GESTIONAR`, `PLA.PLANIFICACION.CONSULTAR`, `PLA.ENCARGO.ACTUALIZAR_ESTADO`, `PLA.CORTE.PLANIFICAR`, `PLA.CORTE.REGISTRAR`, `PLA.CORTE.LIMPIEZA`, `PLA.INCIDENCIA.REGISTRAR`, `PLA.INCIDENCIA.CLASIFICAR` |
 | MOD-04 | `CAM.CUADRILLA.GESTIONAR`†, `CAM.CUADRILLA.CONSULTAR`, `CAM.PARTE.REGISTRAR`, `CAM.PARTE.CONSULTAR`, `CAM.PARTE.VERIFICAR` |
 | MOD-05 | `SER.CONTRATO.GESTIONAR`†, `SER.CONTRATO.CONSULTAR`, `SER.CONTRATO.VER_MONTOS`†, `SER.ATENCION.GESTIONAR`, `SER.ATENCION.REGISTRAR`, `SER.CONFORMIDAD.REGISTRAR` |
 | MOD-06 | `REP.INDICADOR.CONSULTAR`, `REP.INDICADOR.EXPORTAR`, `REP.MAPA_ATENCIONES.CONSULTAR`, `IA.PROPUESTA.PROPONER`, `IA.PROPUESTA.VALIDAR` |
 
-La asignación por rol sigue la matriz de las Historias de Usuario (sección 2.1) y está en `V9__core_permisos.sql`.
+La asignación inicial por rol sigue la matriz de las Historias de Usuario (sección 2.1) y está en `V9__core_permisos.sql`.
+
+### Superadministrador (AV-381)
+
+- Rol `superadmin`, oculto: no sale en `GET roles/` ni se puede asignar, y su cuenta no aparece en `GET usuarios/` ni se gestiona desde la API (404).
+- Tiene siempre todos los permisos, también los que se añadan después (`RolesRepository.permisos`).
+- En los módulos que deciden por nombre de rol (MOD-05 y partes de MOD-02 y MOD-04) actúa como jefe de sección (`SesionCompartida.comoUsuarioMod05`, `SeguridadMod02`). Editar la matriz no cambia esas comprobaciones: se migran a permisos en un ticket aparte.
+- La cuenta `superadmin` (`superadmin@pucp.edu.pe`, id 999999) nace en `V75` con una contraseña temporal que obliga a cambiarla al entrar. La contraseña inicial no está en el repo: la tiene el responsable de MOD-01.
 
 ## Cuentas
 

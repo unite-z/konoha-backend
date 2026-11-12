@@ -98,7 +98,8 @@ public class SesionCompartida {
 
     /** El usuario de MOD-05 equivalente: mismo id, rol de MOD-01. */
     public static Usuario comoUsuarioMod05(UsuarioSesion u) {
-        String rol = ROL_MOD05.get(u.rol());
+        // El superadmin (AV-381) actúa como jefe de sección en los módulos que deciden por rol.
+        String rol = u.esSuperadmin() ? Usuario.JEFE : ROL_MOD05.get(u.rol());
         return new Usuario(
                 u.id(),
                 u.nombreUsuario(),

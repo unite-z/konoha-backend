@@ -50,11 +50,11 @@ class CoreMigracionIntegrationTest extends ApiCore {
                         """
                         SELECT count(*) FROM core_rol_permiso rp
                         JOIN core_rol r ON r.id = rp.rol_id JOIN core_permiso p ON p.id = rp.permiso_id
-                        WHERE r.codigo <> 'jefe-seccion' AND p.es_sensible
+                        WHERE r.codigo NOT IN ('jefe-seccion', 'superadmin') AND p.es_sensible
                         """,
                         Map.of(),
                         Integer.class),
-                "Ningún permiso sensible fuera del jefe de sección (RNF-008)");
+                "Ningún permiso sensible fuera del jefe de sección y el superadmin (RNF-008)");
     }
 
     private int permisos(String rol) {

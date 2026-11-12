@@ -44,16 +44,36 @@ public class RolesRepository {
                 .findFirst();
     }
 
+    /**
+     * Permisos del rol. El superadmin (AV-381) tiene siempre todos, también los que se añadan
+     * después.
+     */
     public Set<String> permisos(long rolId) {
         return new TreeSet<>(
                 jdbc.queryForList(
                         """
-                        SELECT p.codigo FROM core_rol_permiso rp
-                        JOIN core_permiso p ON p.id = rp.permiso_id
-                        WHERE rp.rol_id = :rol
+                        SELECT p.codigo FROM core_permiso p
+                        WHERE EXISTS (SELECT 1 FROM core_rol_permiso rp
+                                      WHERE rp.rol_id = :rol AND rp.permiso_id = p.id)
+                           OR EXISTS (SELECT 1 FROM core_rol r
+                                      WHERE r.id = :rol AND r.codigo = 'superadmin')
                         """,
                         Map.of("rol", rolId),
                         String.class));
+    }
+
+    /**
+     * Sustituye los permisos del rol por {@code codigos} (AV-381). Los códigos ya están validados.
+     */
+    public void reemplazarPermisos(long rolId, Set<String> codigos) {
+        jdbc.update("DELETE FROM core_rol_permiso WHERE rol_id = :rol", Map.of("rol", rolId));
+        if (codigos.isEmpty()) return;
+        jdbc.update(
+                """
+                INSERT INTO core_rol_permiso (rol_id, permiso_id)
+                SELECT :rol, id FROM core_permiso WHERE codigo IN (:codigos)
+                """,
+                Map.of("rol", rolId, "codigos", codigos));
     }
 
     public List<Permiso> catalogoPermisos() {
