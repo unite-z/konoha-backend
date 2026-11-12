@@ -49,6 +49,8 @@ class MaterialVegetalApiTest extends ApiGestion {
                 .andExpect(jsonPath("$.comparacion.length()").value(3))
                 .andExpect(jsonPath("$.comparacion[*].sin_datos", everyItem(is(true))))
                 .andExpect(jsonPath("$.productos_proveedor.sin_datos").value(true))
+                .andExpect(jsonPath("$.productos_proveedor.mensaje_sin_datos").isNotEmpty())
+                .andExpect(jsonPath("$.productos_proveedor.productos").isEmpty())
                 .andExpect(jsonPath("$.generado_en").isNotEmpty());
     }
 

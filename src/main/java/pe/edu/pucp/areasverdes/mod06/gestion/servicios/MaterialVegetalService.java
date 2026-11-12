@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import pe.edu.pucp.areasverdes.mod06.gestion.RangoFechas;
 import pe.edu.pucp.areasverdes.mod06.gestion.datos.Disponibilidad;
 import pe.edu.pucp.areasverdes.mod06.gestion.datos.FuenteMovimientosMaterial;
+import pe.edu.pucp.areasverdes.mod06.gestion.datos.FuenteProductosProveedor;
 import pe.edu.pucp.areasverdes.mod06.gestion.datos.MovimientoMaterial;
 import pe.edu.pucp.areasverdes.mod06.gestion.datos.TipoMovimiento;
 
@@ -28,7 +29,8 @@ import pe.edu.pucp.areasverdes.mod06.gestion.datos.TipoMovimiento;
  * </ol>
  *
  * <p>La exportación a Excel o PDF es RF-REP-009 (fuera de este reporte). Los productos aplicados
- * por el proveedor (3a) van en una vista aparte, hoy sin datos.
+ * por el proveedor (3a) van en una vista aparte, que no depende de que haya material de las
+ * cuadrillas.
  */
 @Service
 @Transactional(readOnly = true)
@@ -36,9 +38,8 @@ public class MaterialVegetalService {
 
     public static final String MENSAJE_SIN_DATOS_MES =
             "No hay movimientos de material en el mes elegido";
-    public static final String MOTIVO_PRODUCTOS_PROVEEDOR =
-            "Los productos agronómicos aplicados por el proveedor todavía no se registran en el"
-                    + " sistema";
+    public static final String MENSAJE_SIN_PRODUCTOS =
+            "No hay productos agronómicos aplicados por proveedores en el mes elegido";
     // CONFIRMADO: Modelo BD v1, enumerado TipoMovimiento = Consumo; Propagacion; Traslado, y
     // CU-MOD05-029 paso 3.
     public static final String NOTA_SEPARACION =
@@ -50,11 +51,13 @@ public class MaterialVegetalService {
     private static final List<String> NOTAS = List.of(NOTA_SEPARACION, NOTA_UNIDADES);
 
     private final FuenteMovimientosMaterial fuente;
+    private final FuenteProductosProveedor productos;
     private final Clock reloj;
     private final int mesesComparacion;
 
     public MaterialVegetalService(
             FuenteMovimientosMaterial fuente,
+            FuenteProductosProveedor productos,
             Clock reloj,
             // CONFIRMADO: 3 meses (decisión del responsable, 28/10/2026).
             @Value("${mod06.gestion.meses-comparacion:3}") int mesesComparacion) {
@@ -63,6 +66,7 @@ public class MaterialVegetalService {
                     "mod06.gestion.meses-comparacion tiene que ser 1 o más: " + mesesComparacion);
         }
         this.fuente = fuente;
+        this.productos = productos;
         this.reloj = reloj;
         this.mesesComparacion = mesesComparacion;
     }
@@ -74,10 +78,7 @@ public class MaterialVegetalService {
         RangoFechas periodo = RangoFechas.delMes(mes);
         var filtros = new FiltrosMaterialVegetal(mes.toString(), areaVerdeId);
         OffsetDateTime generadoEn = OffsetDateTime.now(reloj);
-        // TODO: cuando exista AplicacionProducto (CU-MOD05-025), leerla en solo lectura de la
-        // tabla de su módulo dueño, en una vista aparte, sin mezclarla con el material de las
-        // cuadrillas.
-        var productosProveedor = new SeccionNoDisponible(true, MOTIVO_PRODUCTOS_PROVEEDOR);
+        var productosProveedor = productosProveedor(periodo, areaVerdeId);
 
         Disponibilidad disponibilidad = fuente.disponibilidad();
         if (!disponibilidad.disponible()) {
@@ -124,6 +125,15 @@ public class MaterialVegetalService {
                 List.copyOf(comparacion),
                 productosProveedor,
                 NOTAS);
+    }
+
+    /** Flujo 3a: productos aplicados por los proveedores en el mes, en una vista aparte. */
+    private ProductosProveedor productosProveedor(RangoFechas periodo, Long areaVerdeId) {
+        List<TotalProductoProveedor> totales =
+                AgrupadorProductos.porProductoYProveedor(
+                        productos.aplicaciones(periodo, areaVerdeId));
+        return new ProductosProveedor(
+                totales.isEmpty(), totales.isEmpty() ? MENSAJE_SIN_PRODUCTOS : null, totales);
     }
 
     /** Un mes sin movimientos va sin datos y con listas vacías, nunca con totales en 0. */
