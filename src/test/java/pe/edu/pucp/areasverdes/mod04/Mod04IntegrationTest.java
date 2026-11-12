@@ -999,6 +999,79 @@ class Mod04IntegrationTest {
         http.perform(get(BASE + "/me/").cookie(sesion)).andExpect(status().isUnauthorized());
     }
 
+    @Test
+    void capatazTieneConsultaYRegistroSinPermisosDeJefatura() {
+        List<String> permisos =
+                repo.jdbc()
+                        .queryForList(
+                                """
+                                SELECT p.codigo FROM core_permiso p
+                                JOIN core_rol_permiso rp ON rp.permiso_id=p.id
+                                JOIN core_rol r ON r.id=rp.rol_id
+                                WHERE r.codigo='capataz' AND p.modulo='MOD-04'
+                                ORDER BY p.codigo
+                                """,
+                                Map.of(),
+                                String.class);
+
+        assertEquals(
+                List.of("CAM.CUADRILLA.CONSULTAR", "CAM.PARTE.CONSULTAR", "CAM.PARTE.REGISTRAR"),
+                permisos);
+    }
+
+    @Test
+    void cookieDeCapatazConsultaYRegistraSoloEnSuCuadrilla() throws Exception {
+        long propia = cuadrilla(c1, o1), ajena = cuadrilla(c2, o2);
+        long actividad = actividad(propia);
+        postJson("/encargos", encargo(propia, "Semanal", 7), "jefe", 201);
+        Cookie sesion = sesionCore("capataz1");
+
+        for (String recurso : List.of("cuadrillas", "encargos", "partes", "actividades")) {
+            http.perform(get(BASE + "/" + recurso + "/").cookie(sesion))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.count").value(1));
+        }
+        http.perform(
+                        put(BASE + "/actividades/" + actividad + "/participantes/")
+                                .cookie(sesion)
+                                .with(csrf())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(json.writeValueAsBytes(values("operarios", List.of(o1)))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cantidad_operarios").value(1));
+        http.perform(get(BASE + "/cuadrillas/" + ajena).cookie(sesion))
+                .andExpect(status().isForbidden());
+        http.perform(
+                        post(BASE + "/cuadrillas/")
+                                .cookie(sesion)
+                                .with(csrf())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(json.writeValueAsBytes(squad(c1, o1))))
+                .andExpect(status().isForbidden());
+        http.perform(
+                        put(BASE + "/actividades/" + actividad + "/verificacion/")
+                                .cookie(sesion)
+                                .with(csrf())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(
+                                        json.writeValueAsBytes(
+                                                values("observaciones", "No autorizado"))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void capatazSinFichaObtieneListadosVaciosSinAccederADatosAjenos() throws Exception {
+        cuadrilla(c1, o1);
+        cuenta("capataz-sin-ficha", "Capataz");
+        Cookie sesion = sesionCore("capataz-sin-ficha");
+
+        for (String recurso : List.of("cuadrillas", "encargos", "partes", "actividades")) {
+            http.perform(get(BASE + "/" + recurso + "/").cookie(sesion))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.count").value(0));
+        }
+    }
+
     @Autowired
     @org.springframework.beans.factory.annotation.Qualifier("requestMappingHandlerMapping")
     org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping rutas;

@@ -54,7 +54,7 @@ public class ExportacionesService {
                                 to_char(a.fecha_hora_actividad AT TIME ZONE 'America/Lima',
                                     'YYYY-MM-DD HH24:MI') fecha,
                                 t.nombre tipo, v.nombre area, c.nombre cuadrilla, p.estado,
-                                a.observaciones
+                                a.observaciones, p.cuadrilla_id
                             FROM mod04_actividad a
                             JOIN mod04_parte_diario p ON p.id = a.parte_id
                             JOIN mod04_tipo_actividad t ON t.id = a.tipo_actividad_id
@@ -166,10 +166,10 @@ public class ExportacionesService {
             throw ErrorCore.conflicto(
                     "entidad-no-disponible", "El módulo de " + tipo + " aún no está disponible");
         }
-        return new Archivo(tipo + ".xlsx", libro(listado));
+        return new Archivo(tipo + ".xlsx", libro(listado, usuario));
     }
 
-    private byte[] libro(Listado listado) {
+    private byte[] libro(Listado listado, UsuarioSesion usuario) {
         var salida = new ByteArrayOutputStream();
         try (Workbook libro = new Workbook(salida, "Areas Verdes", "1.0")) {
             Worksheet hoja = libro.newWorksheet(listado.hoja());
@@ -178,10 +178,24 @@ public class ExportacionesService {
                 hoja.value(0, c, columnas.get(c).cabecera());
                 hoja.style(0, c).bold().set();
             }
+            String consulta = listado.sql();
+            Map<String, ?> parametros = Map.of();
+            if ("CAM.PARTE.CONSULTAR".equals(listado.permiso())) {
+                var alcance = autorizacion.alcanceCuadrillas(usuario);
+                if (alcance.isPresent()) {
+                    consulta =
+                            "SELECT * FROM ("
+                                    + consulta
+                                    + ") actividades WHERE cuadrilla_id IN (:cuadrillas)";
+                    // NamedParameterJdbcTemplate no admite una colección vacía en IN.
+                    parametros =
+                            Map.of(
+                                    "cuadrillas",
+                                    alcance.get().isEmpty() ? List.of(-1L) : alcance.get());
+                }
+            }
             jdbc.query(
-                    listado.sql(),
-                    Map.of(),
-                    (ResultSet fila) -> escribirFila(hoja, fila, columnas));
+                    consulta, parametros, (ResultSet fila) -> escribirFila(hoja, fila, columnas));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }

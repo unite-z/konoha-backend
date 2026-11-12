@@ -136,9 +136,15 @@ public class ConsultasCampoService {
         if (soloCapataz
                 && Set.of("cuadrillas", "encargos", "partes", "actividades").contains(recurso)) {
             Long personal = service.personalUsuario(user);
-            if (personal == null) throw OperacionCampoService.forbidden();
-            where.append(" AND capataz_id=:propio");
-            args.put("propio", personal);
+            // Una cuenta de capataz todavía no vinculada no tiene alcance de campo. Los listados
+            // deben quedar vacíos, no fallar con 403: el detalle y las escrituras siguen
+            // rechazando cualquier cuadrilla que no sea propia.
+            if (personal == null) {
+                where.append(" AND false");
+            } else {
+                where.append(" AND capataz_id=:propio");
+                args.put("propio", personal);
+            }
         }
         if (recurso.equals("encargos")) {
             LocalDate desde = null, hasta = null;
