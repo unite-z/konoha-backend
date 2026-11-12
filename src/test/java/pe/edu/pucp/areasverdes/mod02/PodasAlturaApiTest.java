@@ -16,23 +16,17 @@ import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
-import pe.edu.pucp.areasverdes.comun.BaseDePruebas;
+import pe.edu.pucp.areasverdes.comun.BasePruebaGlobal;
 import pe.edu.pucp.areasverdes.mod01.config.SeguridadMod01;
 
-/** Poda de altura a demanda vinculada al ejemplar (AV-312, HU-MOD02-024, RF-POD-005). */
-@SpringBootTest
-@AutoConfigureMockMvc
-public class PodasAlturaApiTest {
+/**
+ * Poda de altura a demanda vinculada al ejemplar (AV-312, HU-MOD02-024, RF-POD-005). Usa el
+ * contexto compartido de {@link BasePruebaGlobal}: es además la matriz de permisos de su
+ * controlador, y así no abre otro contexto de Spring ni otro pool de conexiones.
+ */
+public class PodasAlturaApiTest extends BasePruebaGlobal {
 
     private static final String CLAVE = "prueba-integration-local";
     private static final String DOMINIO = "@altura.prueba.pucp.edu.pe";
@@ -40,15 +34,6 @@ public class PodasAlturaApiTest {
     private static final String INTERVENCIONES = "/api/v1/inventario/intervenciones-poda/";
     private static final List<String> ROLES =
             List.of("jefe-seccion", "ingeniero-campo", "practicante", "capataz");
-
-    @DynamicPropertySource
-    static void baseDePruebas(DynamicPropertyRegistry propiedades) {
-        BaseDePruebas.registrar(propiedades);
-    }
-
-    @Autowired MockMvc http;
-    @Autowired NamedParameterJdbcTemplate jdbc;
-    @Autowired PasswordEncoder claves;
 
     private long alto;
     private long bajo;
