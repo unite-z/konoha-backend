@@ -44,7 +44,7 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
  * <p>Se entra con la cookie de sesión de MOD-01. {@code inactivo} da 401: MOD-01 deja de aceptar la
  * sesión de una cuenta desactivada antes de llegar a {@code AccesoGestion}.
  */
-class MatrizPermisosGestionApiTest extends ApiGestion {
+public class MatrizPermisosGestionApiTest extends ApiGestion {
 
     static final String ANONIMO = "anónimo";
     static final List<String> USUARIOS =
@@ -111,6 +111,11 @@ class MatrizPermisosGestionApiTest extends ApiGestion {
             "{\"tipo\": \"ServicioTercerizado\", \"formato\": \"Excel\", \"parametros\":"
                 + " {\"desde\": \"2025-01-01\", \"hasta\": \"2025-01-31\", \"tipo_servicio_id\":"
                 + " 1}}";
+
+    /** Endpoints de la matriz («MÉTODO url»), para la prueba global de contrato de rutas. */
+    public static List<String> endpointsCubiertos() {
+        return MATRIZ.stream().map(f -> f.endpoint().split(" ")[0] + " " + f.ejemplo()).toList();
+    }
 
     @Autowired
     @Qualifier("requestMappingHandlerMapping")
