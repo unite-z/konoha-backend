@@ -3,6 +3,7 @@ package pe.edu.pucp.areasverdes.mod06.fuentesdatos;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,6 +15,8 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.annotation.Transactional;
 import pe.edu.pucp.areasverdes.comun.BaseDePruebas;
+import pe.edu.pucp.areasverdes.mod06.gestion.RangoFechas;
+import pe.edu.pucp.areasverdes.mod06.gestion.datos.FuenteOperacionCampoMod04;
 
 /**
  * {@link FuenteDatosBD}: las correspondencias que no son directas entre las tablas reales y las
@@ -69,6 +72,9 @@ class FuenteDatosBDIntegrationTest {
             VALUES (9001, 9001, 9001, 9101, '2026-10-05T08:00:00-05:00', 90, 9001),
                    (9002, 9001, 9001, 9102, '2026-10-05T10:00:00-05:00', 30, 9001)
             """,
+            "UPDATE mod04_actividad SET estado_actividad='Anulada', anulada_en=now(),"
+                    + " anulada_por_usuario_id=9001, anulacion_motivo='Registro inválido'"
+                    + " WHERE id=9002",
             "INSERT INTO mod05_tiposervicio (id, nombre, ejecutor, es_riesgo, activo) VALUES (9001,"
                     + " 'Corte 9001', 'Tercerizado', false, true)",
             """
@@ -114,8 +120,13 @@ class FuenteDatosBDIntegrationTest {
     @Test
     void laActividadSeUbicaEnElAreaDeInventarioPorNombre() {
         assertEquals(9001L, registro("Actividad", 9001).get("area_verde_id"));
-        assertNull(registro("Actividad", 9002).get("area_verde_id"));
+        assertNull(registro("Actividad", 9002));
         assertEquals(90L, registro("Actividad", 9001).get("tiempo_minutos"));
+        var operacion = new FuenteOperacionCampoMod04(jdbc);
+        var periodo = new RangoFechas(LocalDate.of(2026, 10, 5), LocalDate.of(2026, 10, 5));
+        assertEquals(
+                List.of(9001L),
+                operacion.actividades(periodo, null).stream().map(a -> a.id()).toList());
     }
 
     @Test

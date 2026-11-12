@@ -113,6 +113,17 @@ public class Mod04Repository {
         }
     }
 
+    public void auditExplicit(
+            String entity,
+            long id,
+            String action,
+            long user,
+            Map<String, ?> before,
+            Map<String, ?> after,
+            String reason) {
+        auditoria.registrarCambio(entity, id, action, before, after, reason, user);
+    }
+
     public static long number(Map<String, Object> row, String key) {
         return ((Number) row.get(key)).longValue();
     }

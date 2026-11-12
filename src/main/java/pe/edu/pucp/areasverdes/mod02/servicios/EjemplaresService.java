@@ -217,7 +217,7 @@ public class EjemplaresService {
         return jdbc.query(
                 """
                 SELECT a.id actividad_id,a.fecha_hora_actividad,coalesce(a.tipo_actividad_nombre,t.nombre) tipo_actividad,
-                    a.observaciones,a.pendiente_vinculacion
+                    a.observaciones,a.pendiente_vinculacion,a.estado_actividad
                 FROM mod04_actividad a
                 JOIN mod04_tipo_actividad t ON t.id=a.tipo_actividad_id
                 WHERE a.ejemplar_id=:id ORDER BY a.fecha_hora_actividad DESC,a.id DESC
@@ -344,9 +344,14 @@ public class EjemplaresService {
                 switch (fuente) {
                     case podas ->
                             """
-                            SELECT a.id, a.fecha_hora_actividad momento, 'Poda menor' tipo,
+                            SELECT a.id, a.fecha_hora_actividad momento,
+                                   CASE WHEN a.estado_actividad='Anulada' THEN 'Poda menor (Anulada)'
+                                        ELSE 'Poda menor' END tipo,
                                    'Operación de campo' origen, 'actividad' entidad,
-                                   coalesce(equipo.operarios, c.nombre) ejecutor, a.observaciones detalle
+                                   coalesce(equipo.operarios, c.nombre) ejecutor,
+                                   CASE WHEN a.estado_actividad='Anulada'
+                                        THEN 'Anulada: ' || a.anulacion_motivo
+                                        ELSE a.observaciones END detalle
                             FROM mod04_actividad a
                             JOIN mod04_tipo_actividad t ON t.id = a.tipo_actividad_id
                             JOIN mod04_parte_diario parte ON parte.id = a.parte_id
@@ -585,7 +590,8 @@ public class EjemplaresService {
             java.time.OffsetDateTime fechaHoraActividad,
             String tipoActividad,
             String observaciones,
-            boolean pendienteVinculacion) {}
+            boolean pendienteVinculacion,
+            String estadoActividad) {}
 
     public enum FuenteHistorial {
         podas,

@@ -90,6 +90,7 @@ class ExportacionesApiTest extends ApiCore {
         assertEquals(2, resultado.size());
         assertEquals(String.valueOf(propia), resultado.get(1).getCellText(0));
         assertEquals("Cuadrilla Propia", resultado.get(1).getCellText(4));
+        assertEquals("Registrada", resultado.get(1).getCellText(6));
     }
 
     @Test

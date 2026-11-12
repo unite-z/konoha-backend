@@ -112,7 +112,7 @@ public class EstimacionesService {
                                         : "%" + q.strip().toLowerCase(Locale.ROOT) + "%");
         String filtro =
                 """
-                 WHERE a.tiempo_minutos IS NULL
+                 WHERE a.estado_actividad <> 'Anulada' AND a.tiempo_minutos IS NULL
                    AND (CAST(:q AS varchar) IS NULL OR lower(a.tipo_actividad_nombre) LIKE :q
                         OR lower(v.nombre) LIKE :q OR ('act-' || a.id) LIKE :q)
                 """;
@@ -365,7 +365,7 @@ public class EstimacionesService {
         if (cuerpo.get("actividad_id") instanceof Number n) {
             List<Map<String, Object>> filas =
                     jdbc.query(
-                            ACTIVIDAD + " WHERE a.id = :id",
+                            ACTIVIDAD + " WHERE a.estado_actividad <> 'Anulada' AND a.id = :id",
                             Map.of("id", n.longValue()),
                             (rs, i) -> {
                                 Map<String, Object> a = estimable(rs);
@@ -405,7 +405,8 @@ public class EstimacionesService {
                        v.nombre AS espacio, (SELECT count(*) FROM mod04_participacion_actividad p WHERE p.actividad_id = a.id)::int AS operarios,
                        round(a.tiempo_minutos / 60.0, 2) AS duracion_horas
                 FROM mod04_actividad a LEFT JOIN mod05_areaverde v ON v.id = a.area_verde_id
-                WHERE a.tiempo_minutos IS NOT NULL AND (CAST(:actividad AS bigint) IS NULL OR a.id <> :actividad)
+                WHERE a.estado_actividad <> 'Anulada' AND a.tiempo_minutos IS NOT NULL
+                  AND (CAST(:actividad AS bigint) IS NULL OR a.id <> :actividad)
                   AND ((CAST(:tipo AS bigint) IS NOT NULL AND a.tipo_actividad_id = :tipo)
                        OR (CAST(:tipo AS bigint) IS NULL AND a.area_verde_id = :area))
                 ORDER BY a.fecha_hora_actividad DESC LIMIT 10

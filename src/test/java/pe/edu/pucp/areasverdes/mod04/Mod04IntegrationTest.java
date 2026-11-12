@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -42,6 +43,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -555,6 +557,212 @@ class Mod04IntegrationTest {
                                         + " entidad='Actividad' AND accion='Modificacion' AND"
                                         + " registro_id=:id AND usuario_id=:u",
                                 Map.of("id", actividad, "u", jefe),
+                                Integer.class));
+    }
+
+    @Test
+    void jefeAnulaActividadConMotivoYConservaSusDatos() throws Exception {
+        long equipo = cuadrilla(c1, o1), actividad = actividad(equipo);
+        putJson(
+                "/actividades/" + actividad + "/participantes/",
+                values("operarios", List.of(o1)),
+                "capataz1",
+                200);
+        var material = values("material_id", 1, "cantidad", 2, "unidad_medida_id", 1);
+        postJson("/actividades/" + actividad + "/materiales/", material, "capataz1", 201);
+        long archivo =
+                repo.jdbc()
+                        .queryForObject(
+                                "INSERT INTO core_archivo (nombre_original,tipo_mime,tamano_bytes,"
+                                        + " hash_contenido,clave) VALUES ('foto.png','image/png',1,"
+                                        + " :hash,:clave) RETURNING id",
+                                Map.of(
+                                        "hash",
+                                        "a".repeat(64),
+                                        "clave",
+                                        "prueba-av384-" + UUID.randomUUID()),
+                                Long.class);
+        repo.jdbc()
+                .update(
+                        "INSERT INTO core_adjunto (uuid_cliente,entidad,registro_id,archivo_id,"
+                                + " hash_contenido,usuario_creacion_id) VALUES (:uuid,'actividad',"
+                                + " :actividad,:archivo,:hash,:usuario)",
+                        Map.of(
+                                "uuid", UUID.randomUUID(),
+                                "actividad", actividad,
+                                "archivo", archivo,
+                                "hash", "a".repeat(64),
+                                "usuario", jefe));
+
+        var anulacion = values("motivo", "  Registro duplicado en el parte  ");
+        putJson("/actividades/" + actividad + "/anulacion/", anulacion, "capataz1", 403);
+        putJson("/actividades/" + actividad + "/anulacion/", anulacion, "ingeniero", 403);
+        putJson("/actividades/" + actividad + "/anulacion/", values("motivo", "   "), "jefe", 400);
+        putJson("/actividades/" + actividad + "/anulacion/", anulacion, "jefe", 200);
+
+        http.perform(get(BASE + "/actividades/" + actividad).with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estado_actividad").value("Anulada"))
+                .andExpect(jsonPath("$.anulacion_motivo").value("Registro duplicado en el parte"))
+                .andExpect(jsonPath("$.anulada_por_usuario_id").value(jefe))
+                .andExpect(jsonPath("$.anulada_por_nombre").value("jefe"))
+                .andExpect(jsonPath("$.anulada_en").isNotEmpty());
+        assertEquals(1, repo.participantes(actividad).get("cantidad_operarios"));
+        assertEquals(
+                1,
+                repo.rows(
+                                "SELECT id FROM mod04_material_actividad WHERE actividad_id=:id",
+                                Map.of("id", actividad))
+                        .size());
+        assertEquals(
+                1,
+                repo.jdbc()
+                        .queryForObject(
+                                "SELECT count(*) FROM core_adjunto WHERE entidad='actividad' AND"
+                                        + " registro_id=:id",
+                                Map.of("id", actividad),
+                                Integer.class));
+        var auditoria =
+                repo.one(
+                        "SELECT accion,motivo,valores_anteriores,valores_nuevos FROM"
+                                + " core_registro_auditoria WHERE entidad='Actividad' AND"
+                                + " registro_id=:id AND accion='Anulacion'",
+                        Map.of("id", actividad));
+        assertEquals("Registro duplicado en el parte", auditoria.get("motivo"));
+        assertTrue(String.valueOf(auditoria.get("valores_anteriores")).contains("Registrada"));
+        assertTrue(String.valueOf(auditoria.get("valores_nuevos")).contains("Anulada"));
+
+        putJson(
+                "/actividades/" + actividad + "/verificacion/",
+                values("observaciones", "Conforme"),
+                "jefe",
+                409);
+        putJson(
+                "/actividades/" + actividad + "/participantes/",
+                values("operarios", List.of()),
+                "capataz1",
+                409);
+        postJson("/actividades/" + actividad + "/materiales/", material, "capataz1", 409);
+        http.perform(
+                        multipart("/api/v1/core/adjuntos/")
+                                .file(
+                                        new MockMultipartFile(
+                                                "archivo",
+                                                "nueva.png",
+                                                "image/png",
+                                                new byte[] {
+                                                    (byte) 137, 80, 78, 71, 13, 10, 26, 10
+                                                }))
+                                .param("entidad", "actividad")
+                                .param("registro_id", String.valueOf(actividad))
+                                .header("Idempotency-Key", UUID.randomUUID().toString())
+                                .cookie(sesionCore("capataz1"))
+                                .with(csrf()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("actividad-anulada"));
+
+        putJson("/actividades/" + actividad + "/anulacion/", anulacion, "jefe", 200);
+        putJson(
+                "/actividades/" + actividad + "/anulacion/",
+                values("motivo", "Otro motivo"),
+                "jefe",
+                409);
+        assertEquals(
+                1,
+                repo.jdbc()
+                        .queryForObject(
+                                "SELECT count(*) FROM core_registro_auditoria WHERE"
+                                        + " entidad='Actividad' AND registro_id=:id AND"
+                                        + " accion='Anulacion'",
+                                Map.of("id", actividad),
+                                Integer.class));
+    }
+
+    @Test
+    void verificadaNoPuedeAnularseYLosFiltrosCuentanSoloRegistradas() throws Exception {
+        long equipo = cuadrilla(c1, o1);
+        long registrada = actividad(equipo);
+        long verificada =
+                postJson(
+                                "/actividades",
+                                values(
+                                        "parte_id",
+                                        repo.get("actividad", registrada, false).get("parte_id"),
+                                        "tipo_actividad_id",
+                                        tipo,
+                                        "area_verde_id",
+                                        area,
+                                        "fecha_hora_actividad",
+                                        "2026-10-22T09:00:00-05:00"),
+                                "capataz1",
+                                201)
+                        .path("id")
+                        .asLong();
+        putJson(
+                "/actividades/" + verificada + "/verificacion/",
+                values("observaciones", "Conforme"),
+                "jefe",
+                200);
+        putJson(
+                "/actividades/" + verificada + "/anulacion/",
+                values("motivo", "No corresponde"),
+                "jefe",
+                409);
+
+        http.perform(
+                        get(BASE + "/actividades/")
+                                .param("estado_actividad", "Registrada")
+                                .with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(1))
+                .andExpect(jsonPath("$.pendientes_verificacion").value(1))
+                .andExpect(jsonPath("$.results[0].id").value(registrada));
+        http.perform(
+                        get(BASE + "/actividades/")
+                                .param("estado_actividad", "Verificada")
+                                .with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(1))
+                .andExpect(jsonPath("$.pendientes_verificacion").value(1))
+                .andExpect(jsonPath("$.results[0].id").value(verificada));
+    }
+
+    @Test
+    void anulacionesSimultaneasNoDuplicanAuditoria() throws Exception {
+        long equipo = cuadrilla(c1, o1), actividad = actividad(equipo);
+        var inicio = new CountDownLatch(1);
+        try (var ejecutor = Executors.newFixedThreadPool(2)) {
+            List<Future<Integer>> tareas = new ArrayList<>();
+            for (int i = 0; i < 2; i++)
+                tareas.add(
+                        ejecutor.submit(
+                                () -> {
+                                    inicio.await();
+                                    return http.perform(
+                                                    put(BASE
+                                                                    + "/actividades/"
+                                                                    + actividad
+                                                                    + "/anulacion")
+                                                            .with(httpBasic("jefe", PASSWORD))
+                                                            .contentType(MediaType.APPLICATION_JSON)
+                                                            .content(
+                                                                    "{\"motivo\":\"Registro"
+                                                                            + " duplicado\"}"))
+                                            .andReturn()
+                                            .getResponse()
+                                            .getStatus();
+                                }));
+            inicio.countDown();
+            for (var tarea : tareas) assertEquals(200, tarea.get(15, TimeUnit.SECONDS));
+        }
+        assertEquals(
+                1,
+                repo.jdbc()
+                        .queryForObject(
+                                "SELECT count(*) FROM core_registro_auditoria WHERE"
+                                        + " entidad='Actividad' AND registro_id=:id AND"
+                                        + " accion='Anulacion'",
+                                Map.of("id", actividad),
                                 Integer.class));
     }
 
@@ -1358,6 +1566,13 @@ class Mod04IntegrationTest {
                                 "PUT",
                                 "/actividades/" + act + "/verificacion",
                                 values("observaciones", "Conforme en campo"),
+                                true,
+                                false),
+                        new Fila(
+                                "anularActividad",
+                                "PUT",
+                                "/actividades/" + act + "/anulacion",
+                                values("motivo", "Registro inválido"),
                                 true,
                                 false));
         var registrados = new HashSet<String>();

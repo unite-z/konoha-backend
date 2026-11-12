@@ -58,6 +58,8 @@ public final class Entradas {
 
     public record Verificacion(@NotBlank @Size(max = 1000) String observaciones) {}
 
+    public record Anulacion(@NotBlank @Size(max = 1000) String motivo) {}
+
     public record Parte(@NotNull @Positive Long cuadrillaId, @NotNull LocalDate fecha) {}
 
     public record Actividad(

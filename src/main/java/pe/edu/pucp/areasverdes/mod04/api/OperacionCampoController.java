@@ -242,6 +242,15 @@ public class OperacionCampoController {
         return service.verificarActividad(id, body, user);
     }
 
+    @PutMapping({"/actividades/{id}/anulacion", "/actividades/{id}/anulacion/"})
+    @Operation(summary = "AV-384: anular una actividad pendiente de verificación")
+    public Map<String, Object> anularActividad(
+            @PathVariable long id,
+            @Valid @RequestBody Entradas.Anulacion body,
+            @AuthenticationPrincipal Usuario user) {
+        return service.anularActividad(id, body, user);
+    }
+
     @GetMapping({"/actividades/{id}/materiales", "/actividades/{id}/materiales/"})
     @Operation(summary = "RF-ACT-005: consultar insumos y material vegetal de la actividad")
     public List<Map<String, Object>> materiales(
