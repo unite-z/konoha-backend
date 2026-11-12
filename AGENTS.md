@@ -56,7 +56,7 @@ Es lo mismo que exige `ci-ok`:
 - **Nunca se edita una migración ya fusionada.** Se corrige con una nueva (`higiene` lo rechaza en el PR). Toda migración tiene que ser compatible con la versión anterior de la api (expand/contract).
 - **Cada entidad tiene un módulo dueño** (usuarios y roles: MOD-01 con tablas `core_`; áreas verdes y ejemplares: MOD-02). Nunca crees una copia de una tabla ajena: referénciala. Ver `docs/estandares/base-datos.md`.
 - **SQL siempre parametrizado.** Ninguna entrada del usuario se concatena en una consulta.
-- **El backend decide los permisos.** Todo endpoint nuevo entra en la matriz de permisos por rol, o CI falla.
+- **El backend decide los permisos.** Todo endpoint nuevo cuelga de `/api/v1/<modulo>/`, lleva `@Operation` y entra en la matriz de permisos de su módulo (`comun/ContratoRutasApiTest`), o CI falla.
 - **Las pruebas nunca llaman a Gemini.** Se usa `ClienteIAFalso`.
 - **Ningún secreto en el repo.** `.env.example` lleva los valores vacíos.
 - Cada endpoint nuevo:

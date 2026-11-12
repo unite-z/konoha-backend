@@ -262,7 +262,10 @@ public class Mod05Repository {
     public static final String REPORTES =
             """
             SELECT r.id,r.atencion_id,r.revision,r.fecha_recepcion,r.resumen,r.usuario_creacion_id,
-                u.nombre usuario_creacion_nombre,r.fecha_creacion
+                u.nombre usuario_creacion_nombre,r.fecha_creacion,r.formato_id,
+                (SELECT f.version FROM mod05_formato_reporte_servicio f WHERE f.id=r.formato_id)
+                    formato_version,
+                r.datos_formato::text datos_formato
             FROM mod05_reporteproveedor r JOIN mod05_usuario u ON u.id=r.usuario_creacion_id
             """;
 
@@ -292,6 +295,15 @@ public class Mod05Repository {
                                     Map.of("id", archivo)));
                 });
         reporte.put("documentos", docs);
+        // Datos del informe final (AV-320): jsonb leído como texto; null en las revisiones sin
+        // datos.
+        if (reporte.get("datos_formato") instanceof String datos) {
+            try {
+                reporte.put("datos_formato", json.readValue(datos, LinkedHashMap.class));
+            } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+                throw new IllegalStateException("Datos del informe final ilegibles", e);
+            }
+        }
         return reporte;
     }
 

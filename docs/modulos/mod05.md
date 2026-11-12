@@ -69,11 +69,14 @@ El frontend conserva `VITE_API_TERCERIZADOS_URL=/api/tercerizados`. Su proxy Vit
 | `atenciones/{id}/origen/` | PATCH | Jefe |
 | `atenciones/{id}/acuerdo-unidad/` | PATCH | Jefe |
 | `atenciones/{id}/conformidad/` | POST | Jefe |
+| `atenciones/{id}/formato-reporte/` | GET | No aplica |
 | `atenciones/{id}/reportes/` | GET, POST multipart | Los tres roles |
 | `atenciones/{id}/reportes/{reporte}/` | GET | No aplica |
 | `atenciones/{id}/reportes/{reporte}/documentos/{documento}/descarga/` | GET | No aplica |
 
 Los grupos conservan exactamente los nombres `Jefe de sección`, `Ingeniero de campo`, `Practicante autorizado`. Solo estos tres roles pueden consultar el módulo; `/me/` admite a cualquier usuario activo autenticado para informar si tiene acceso.
+
+**Datos del informe final (RF-SER-009, AV-320).** `atenciones/{id}/formato-reporte/` devuelve `{formato, datos_anteriores}`: el formato estándar vigente del tipo de servicio de la atención (`{id, version, tipo_servicio_id, tipo_servicio_nombre, campos: [{nombre_campo, tipo_dato, obligatorio, orden, subcampos}]}`, o `null` si el tipo no tiene formato) y los datos de la última revisión registrada con ese mismo formato (`{revision, datos}` o `null`), para proponerlos en la siguiente. Al adjuntar el reporte, el campo multipart opcional `datos_formato` lleva un objeto JSON `{nombre_campo: valor}`: si llega, se valida entero contra el formato vigente (tipos, campos ajenos y obligatorios; un fallo es un 400 que no registra nada) y la revisión guarda `formato_id` y los datos normalizados. Si no llega, la revisión se registra sin datos, como antes. Las revisiones devuelven `formato_id`, `formato_version` y `datos_formato` (`null` si no tienen), y los datos entran en la huella de idempotencia.
 
 El monto de un contrato es confidencial (RNF-008): `monto_fijo` solo llega con valor al jefe de sección. A los demás roles la clave les llega con `null`, así que un cliente no debe interpretar el nulo como «contrato sin monto».
 
