@@ -454,7 +454,7 @@ public class Incidencias {
      * La bandeja de la oficina, de la más reciente a la más antigua. {@code grupo}: abiertas, en
      * proceso o cerradas (AV-279); sin él, todas.
      */
-    public List<Resumen> bandeja(String grupo, UsuarioPlanificacion usuario) {
+    public List<Resumen> bandeja(String grupo, String q, UsuarioPlanificacion usuario) {
         Acceso.consultarIncidencias(usuario);
         derivacion.sincronizar();
         interna.sincronizar();
@@ -462,14 +462,48 @@ public class Incidencias {
             throw new ErrorPlanificacion(
                     400, "grupo-invalido", "El grupo es abiertas, en_proceso o cerradas");
         }
+        String termino = q == null ? "" : q.strip();
+        if (termino.length() > 100) {
+            throw new ErrorPlanificacion(
+                    400, "busqueda-invalida", "La búsqueda es demasiado larga");
+        }
         return jdbc.query(
                 RESUMEN
                         + " WHERE (CAST(:todas AS boolean) OR i.estado IN (:estados))"
+                        + " AND (CAST(:veTodas AS boolean) OR "
+                        + ALCANCE_PROPIO
+                        + ") AND (:q = '' OR i.codigo ILIKE :patron OR t.nombre ILIKE :patron"
+                        + " OR a.nombre ILIKE :patron OR i.descripcion ILIKE :patron)"
                         + " ORDER BY i.fecha_registro DESC, i.id DESC",
                 new MapSqlParameterSource()
                         .addValue("todas", grupo == null)
-                        .addValue("estados", grupo == null ? List.of("") : GRUPOS.get(grupo)),
+                        .addValue("estados", grupo == null ? List.of("") : GRUPOS.get(grupo))
+                        .addValue("veTodas", Acceso.veTodasLasIncidencias(usuario))
+                        .addValue("usuario", usuario.id())
+                        .addValue("q", termino)
+                        .addValue("patron", "%" + escaparComodines(termino) + "%"),
                 Incidencias::resumen);
+    }
+
+    /**
+     * Lo que ve quien no gestiona incidencias (AV-407): las que reportó, las que tiene asignadas
+     * como capataz y las de los encargos de su cuadrilla.
+     */
+    static final String ALCANCE_PROPIO =
+            """
+            (i.reportante_usuario_id = :usuario
+                OR i.capataz_id IN (SELECT p.id FROM mod04_personal p WHERE p.usuario_id = :usuario)
+                OR EXISTS (
+                    SELECT 1 FROM mod03_encargo_incidencia ei
+                    JOIN mod04_encargo en ON en.id = ei.encargo_id
+                    JOIN mod04_cuadrilla cu ON cu.id = en.cuadrilla_id
+                    JOIN mod04_personal pc ON pc.id = cu.capataz_id
+                    WHERE ei.incidencia_id = i.id AND pc.usuario_id = :usuario))
+            """;
+
+    /** Los comodines de LIKE escritos por la persona se buscan literalmente. */
+    private static String escaparComodines(String texto) {
+        return texto.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }
 
     /** Las que reportó el usuario (HU-024). */
@@ -489,7 +523,22 @@ public class Incidencias {
         Acceso.consultarIncidencias(usuario);
         derivacion.sincronizar();
         interna.sincronizar();
+        if (!Acceso.veTodasLasIncidencias(usuario) && !esDeSuAlcance(id, usuario)) {
+            // Ni siquiera se confirma que existe (AV-407).
+            throw new ErrorPlanificacion(
+                    404, "incidencia-no-encontrada", "No existe esa incidencia");
+        }
         return ficha(id);
+    }
+
+    private boolean esDeSuAlcance(long id, UsuarioPlanificacion usuario) {
+        Integer visibles =
+                jdbc.queryForObject(
+                        "SELECT count(*) FROM mod03_incidencia i WHERE i.id = :id AND "
+                                + ALCANCE_PROPIO,
+                        Map.of("id", id, "usuario", usuario.id()),
+                        Integer.class);
+        return visibles != null && visibles > 0;
     }
 
     /** La ficha recién registrada, para quien la registró (aunque no gestione la bandeja). */

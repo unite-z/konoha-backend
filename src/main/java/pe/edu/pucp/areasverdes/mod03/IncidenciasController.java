@@ -256,8 +256,10 @@ public class IncidenciasController {
     @Operation(summary = "Bandeja de incidencias de la oficina (jefe)")
     @GetMapping({"", "/"})
     public List<Resumen> bandeja(
-            UsuarioPlanificacion usuario, @RequestParam(required = false) String grupo) {
-        return incidencias.bandeja(grupo, usuario);
+            UsuarioPlanificacion usuario,
+            @RequestParam(required = false) String grupo,
+            @RequestParam(required = false) String q) {
+        return incidencias.bandeja(grupo, q, usuario);
     }
 
     @Operation(summary = "Las incidencias que reportó el usuario")
