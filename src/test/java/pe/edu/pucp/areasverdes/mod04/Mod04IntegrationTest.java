@@ -434,6 +434,193 @@ class Mod04IntegrationTest {
     }
 
     @Test
+    void laJefaturaReprogramaUnEncargoVivoConJustificacionYQuedaEnElHistorial() throws Exception {
+        long equipo = cuadrilla(c1, o1);
+        long id =
+                postJson("/encargos/", encargo(equipo, "Semanal", 7), "jefe", 201)
+                        .path("id")
+                        .asLong();
+        String ruta = "/encargos/" + id + "/reprogramacion/";
+        var nueva =
+                values(
+                        "fecha_inicio",
+                        HOY.plusDays(2).toString(),
+                        "fecha_fin",
+                        HOY.plusDays(8).toString(),
+                        "plazo_previsto",
+                        HOY.plusDays(8).toString(),
+                        "justificacion",
+                        "  Lluvias en la zona ");
+
+        postJson(ruta, nueva, "capataz1", 403);
+        postJson(ruta, nueva, "ingeniero", 403);
+
+        var reprogramado = postJson(ruta, nueva, "jefe", 200);
+        assertEquals(HOY.plusDays(2).toString(), reprogramado.path("fecha_inicio").asText());
+        assertEquals(HOY.plusDays(8).toString(), reprogramado.path("fecha_fin").asText());
+        assertEquals(HOY.plusDays(8).toString(), reprogramado.path("plazo_previsto").asText());
+        var historial = reprogramado.path("reprogramaciones").get(0);
+        assertEquals("Lluvias en la zona", historial.path("justificacion").asText());
+        assertEquals(HOY.toString(), historial.path("fecha_inicio_anterior").asText());
+        assertEquals(HOY.plusDays(2).toString(), historial.path("fecha_inicio_nueva").asText());
+        assertEquals(HOY.toString(), historial.path("plazo_anterior").asText());
+        assertEquals(HOY.plusDays(8).toString(), historial.path("plazo_nuevo").asText());
+        assertTrue(historial.hasNonNull("autor"));
+        http.perform(get(BASE + "/encargos/" + id).with(httpBasic("jefe", PASSWORD)))
+                .andExpect(jsonPath("$.reprogramaciones.length()").value(1));
+    }
+
+    @Test
+    void laReprogramacionAplicaLasReglasDelEncargoYNoToleraCambiosVacios() throws Exception {
+        long equipo = cuadrilla(c1, o1);
+        long id =
+                postJson("/encargos/", encargo(equipo, "Semanal", 7), "jefe", 201)
+                        .path("id")
+                        .asLong();
+        String ruta = "/encargos/" + id + "/reprogramacion/";
+        var igual =
+                values(
+                        "fecha_inicio",
+                        HOY.toString(),
+                        "fecha_fin",
+                        HOY.plusDays(6).toString(),
+                        "plazo_previsto",
+                        HOY.toString(),
+                        "justificacion",
+                        "Sin cambios");
+        postJson(ruta, igual, "jefe", 400);
+
+        var sinJustificar = new HashMap<>(igual);
+        sinJustificar.put("plazo_previsto", HOY.plusDays(1).toString());
+        sinJustificar.put("justificacion", "   ");
+        postJson(ruta, sinJustificar, "jefe", 400);
+
+        var muyLargo = new HashMap<>(igual);
+        muyLargo.put("fecha_fin", HOY.plusDays(7).toString());
+        muyLargo.put("justificacion", "Más días");
+        postJson(ruta, muyLargo, "jefe", 400);
+
+        var plazoFuera = new HashMap<>(igual);
+        plazoFuera.put("plazo_previsto", HOY.plusDays(9).toString());
+        plazoFuera.put("justificacion", "Plazo fuera");
+        postJson(ruta, plazoFuera, "jefe", 400);
+
+        var sinPeriodo = values("plazo_previsto", HOY.plusDays(1).toString(), "justificacion", "x");
+        postJson(ruta, sinPeriodo, "jefe", 400);
+        postJson("/encargos/999999/reprogramacion/", igual, "jefe", 404);
+    }
+
+    @Test
+    void noSeReprogramaUnEncargoCerradoNiDejaActividadesFueraDelNuevoPeriodo() throws Exception {
+        long equipo = cuadrilla(c1, o1);
+        long id =
+                postJson("/encargos/", encargo(equipo, "Semanal", 7), "jefe", 201)
+                        .path("id")
+                        .asLong();
+        long parte =
+                postJson("/partes", values("cuadrilla_id", equipo, "fecha", HOY), "capataz1", 201)
+                        .path("id")
+                        .asLong();
+        postJson(
+                "/actividades",
+                values(
+                        "parte_id",
+                        parte,
+                        "tipo_actividad_id",
+                        tipo,
+                        "area_verde_id",
+                        area,
+                        "fecha_hora_actividad",
+                        "2026-10-22T08:00:00-05:00",
+                        "encargo_id",
+                        id),
+                "capataz1",
+                201);
+        String ruta = "/encargos/" + id + "/reprogramacion/";
+        // La actividad del día HOY quedaría fuera del periodo que empieza dos días después.
+        var corrido =
+                values(
+                        "fecha_inicio",
+                        HOY.plusDays(2).toString(),
+                        "fecha_fin",
+                        HOY.plusDays(8).toString(),
+                        "plazo_previsto",
+                        HOY.plusDays(8).toString(),
+                        "justificacion",
+                        "Mover");
+        postJson(ruta, corrido, "jefe", 409);
+        // Alargar el periodo manteniendo la actividad dentro sí se puede, aunque ya tenga
+        // ejecución.
+        var alargado = new HashMap<>(corrido);
+        alargado.put("fecha_inicio", HOY.toString());
+        alargado.put("fecha_fin", HOY.plusDays(6).toString());
+        alargado.put("plazo_previsto", HOY.plusDays(3).toString());
+        alargado.put("justificacion", "Alargar");
+        postJson(ruta, alargado, "jefe", 200);
+
+        postJson(
+                "/encargos/" + id + "/estado/",
+                values(
+                        "estado_anterior",
+                        "Por completar",
+                        "estado",
+                        "Cancelado",
+                        "observaciones",
+                        "Ya no hace falta"),
+                "jefe",
+                200);
+        var otro = new HashMap<>(alargado);
+        otro.put("plazo_previsto", HOY.plusDays(4).toString());
+        postJson(ruta, otro, "jefe", 409);
+    }
+
+    @Test
+    void elEncargoDirectoSoloCambiaElPlazo() throws Exception {
+        long equipo = cuadrilla(c1, o1);
+        var directo =
+                values(
+                        "cuadrilla_id",
+                        equipo,
+                        "tipo_actividad_id",
+                        tipo,
+                        "area_verde_id",
+                        area,
+                        "descripcion",
+                        "Encargo directo",
+                        "periodicidad",
+                        "Directo",
+                        "plazo_previsto",
+                        LocalDate.now().plusDays(20).toString());
+        long id = postJson("/encargos/", directo, "jefe", 201).path("id").asLong();
+        String ruta = "/encargos/" + id + "/reprogramacion/";
+        postJson(
+                ruta,
+                values(
+                        "fecha_inicio",
+                        HOY.toString(),
+                        "plazo_previsto",
+                        LocalDate.now().plusDays(30).toString(),
+                        "justificacion",
+                        "x"),
+                "jefe",
+                400);
+        postJson(
+                ruta,
+                values("plazo_previsto", "2000-01-01", "justificacion", "Antes del inicio"),
+                "jefe",
+                400);
+        var plazo = LocalDate.now().plusDays(30).toString();
+        var reprogramado =
+                postJson(
+                        ruta,
+                        values("plazo_previsto", plazo, "justificacion", "Más tiempo"),
+                        "jefe",
+                        200);
+        assertEquals(plazo, reprogramado.path("plazo_previsto").asText());
+        assertEquals(plazo, reprogramado.path("fecha_fin").asText());
+    }
+
+    @Test
     void filtrosPaginacionValidacionYDocumentacion() throws Exception {
         long id = cuadrilla(c1, o1);
         postJson("/encargos", encargo(id, "Quincenal", 14), "jefe", 201);
@@ -1718,6 +1905,21 @@ class Mod04IntegrationTest {
                                         HOY + "T08:00:00-05:00"),
                                 false,
                                 true),
+                        new Fila(
+                                "reprogramarEncargo",
+                                "POST",
+                                "/encargos/" + enc + "/reprogramacion",
+                                values(
+                                        "fecha_inicio",
+                                        HOY.toString(),
+                                        "fecha_fin",
+                                        HOY.plusDays(5).toString(),
+                                        "plazo_previsto",
+                                        HOY.plusDays(1).toString(),
+                                        "justificacion",
+                                        "Cambio de planificación"),
+                                true,
+                                false),
                         new Fila(
                                 "cambiarEstadoEncargo",
                                 "POST",

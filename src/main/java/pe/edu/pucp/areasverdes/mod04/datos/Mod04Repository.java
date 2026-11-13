@@ -63,6 +63,7 @@ public class Mod04Repository {
                     "material_actividad",
                     "encargo",
                     "encargo_cambio_estado",
+                    "encargo_reprogramacion",
                     "parte_diario",
                     "actividad",
                     "participacion_actividad" ->
@@ -179,6 +180,20 @@ public class Mod04Repository {
                 FROM mod04_encargo_cambio_estado h
                 JOIN core_usuario u ON u.id=h.usuario_id
                 WHERE h.encargo_id=:id ORDER BY h.id DESC
+                """,
+                Map.of("id", id));
+    }
+
+    /** Reprogramaciones del encargo, de la más reciente a la más antigua (AV-405). */
+    public List<Map<String, Object>> reprogramacionesEncargo(long id) {
+        return rows(
+                """
+                SELECT r.id,r.fecha_inicio_anterior,r.fecha_fin_anterior,r.plazo_anterior,
+                    r.fecha_inicio_nueva,r.fecha_fin_nueva,r.plazo_nuevo,r.justificacion,
+                    u.nombre autor,r.fecha
+                FROM mod04_encargo_reprogramacion r
+                JOIN core_usuario u ON u.id=r.usuario_id
+                WHERE r.encargo_id=:id ORDER BY r.id DESC
                 """,
                 Map.of("id", id));
     }

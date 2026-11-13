@@ -70,6 +70,16 @@ public final class Entradas {
 
     public record Anulacion(@NotBlank @Size(max = 1000) String motivo) {}
 
+    /**
+     * Reprogramación de un encargo (AV-405). En un encargo periódico van las dos fechas del
+     * periodo; en uno directo solo el plazo.
+     */
+    public record Reprogramacion(
+            LocalDate fechaInicio,
+            LocalDate fechaFin,
+            @NotNull LocalDate plazoPrevisto,
+            @NotBlank @Size(max = 1000) String justificacion) {}
+
     public record Parte(@NotNull @Positive Long cuadrillaId, @NotNull LocalDate fecha) {}
 
     public record Actividad(

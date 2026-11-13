@@ -190,6 +190,17 @@ public class OperacionCampoController {
         return service.cambiarEstadoEncargo(id, body, user);
     }
 
+    @PostMapping({"/encargos/{id}/reprogramacion", "/encargos/{id}/reprogramacion/"})
+    @Operation(
+            summary =
+                    "Reprogramar un encargo vivo: nuevo periodo o plazo, con justificación (jefe)")
+    public Map<String, Object> reprogramarEncargo(
+            @PathVariable long id,
+            @Valid @RequestBody Entradas.Reprogramacion body,
+            @AuthenticationPrincipal Usuario user) {
+        return service.reprogramarEncargo(id, body, user);
+    }
+
     @GetMapping({"/encargos/{id}", "/encargos/{id}/"})
     @Operation(summary = "Consultar encargo")
     public Map<String, Object> encargo(
