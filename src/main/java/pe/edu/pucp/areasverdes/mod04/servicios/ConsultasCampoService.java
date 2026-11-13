@@ -100,7 +100,15 @@ public class ConsultasCampoService {
                                     "periodo");
                     case "partes" -> Map.of("cuadrilla_id", "id", "fecha", "date");
                     case "actividades" ->
-                            Map.of("cuadrilla_id", "id", "parte_id", "id", "fecha", "date");
+                            Map.of(
+                                    "cuadrilla_id",
+                                    "id",
+                                    "parte_id",
+                                    "id",
+                                    "fecha",
+                                    "date",
+                                    "encargo_id",
+                                    "id");
                     case "unidades-medida" -> Map.of();
                     default -> Map.of("activo", "bool");
                 };
