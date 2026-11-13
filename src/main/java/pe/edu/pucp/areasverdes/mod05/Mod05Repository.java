@@ -209,7 +209,7 @@ public class Mod05Repository {
         var alcances =
                 rows(
                         """
-                        SELECT al.id,al.area_verde_id,av.nombre area_verde_nombre,al.ejemplar_id,e.codigo ejemplar_codigo,
+                        SELECT al.id,al.area_verde_id,av.nombre area_verde_nombre,al.ejemplar_id,e.codigo ejemplar_codigo,e.alias ejemplar_alias,
                             ea.nombre ejemplar_area_verde_nombre,al.metrado,al.unidad_medida_id,
                             um.nombre unidad_medida_nombre,um.simbolo unidad_medida_simbolo
                         FROM mod05_alcanceatencion al LEFT JOIN mod05_areaverde av ON av.id=al.area_verde_id

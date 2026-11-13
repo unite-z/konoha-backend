@@ -89,7 +89,7 @@ public class Incidencias {
             Long minutosCierre,
             String nivelPlazo) {}
 
-    public record Ejemplar(String codigo, String especie, Double alturaM) {}
+    public record Ejemplar(String codigo, String alias, String especie, Double alturaM) {}
 
     /** Una transición: «Registrada · Ana Q.», de la más reciente a la más antigua. */
     public record Evento(String texto, OffsetDateTime fechaHora) {}
@@ -498,6 +498,7 @@ public class Incidencias {
                 jdbc.query(
                         """
                         SELECT r.*, s.nombre zona, i.descripcion, e.codigo ejemplar_codigo,
+                            e.alias ejemplar_alias,
                             coalesce(ev.nombre_comun, ev.nombre_cientifico) especie,
                             coalesce(u.nombre, i.reportante_nombre) reportado_por, i.impacto
                         FROM (%s WHERE i.id = :id) r
@@ -520,6 +521,7 @@ public class Incidencias {
                                                 ? null
                                                 : new Ejemplar(
                                                         rs.getString("ejemplar_codigo"),
+                                                        rs.getString("ejemplar_alias"),
                                                         rs.getString("especie"),
                                                         null),
                                         rs.getString("reportado_por"),

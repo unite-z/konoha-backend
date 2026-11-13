@@ -527,12 +527,14 @@ public class OperacionCampoService implements ConsultaCampo {
         if (ejemplarId != null) {
             var ejemplar =
                     repo.one(
-                            "SELECT codigo,altura_total_m FROM mod02_ejemplar WHERE id=:id",
+                            "SELECT codigo,alias,altura_total_m FROM mod02_ejemplar WHERE id=:id",
                             Map.of("id", ejemplarId));
             result.put("ejemplar_codigo", ejemplar.get("codigo"));
+            result.put("ejemplar_alias", ejemplar.get("alias"));
             result.put("ejemplar_altura_m", ejemplar.get("altura_total_m"));
         } else {
             result.put("ejemplar_codigo", null);
+            result.put("ejemplar_alias", null);
             result.put("ejemplar_altura_m", null);
         }
         Object verificador = result.get("verificado_por_usuario_id");

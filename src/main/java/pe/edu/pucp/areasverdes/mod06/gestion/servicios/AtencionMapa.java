@@ -23,4 +23,5 @@ public record AtencionMapa(
         String espacio,
         Long ejemplarId,
         String ejemplarCodigo,
+        String ejemplarAlias,
         long archivosAsociados) {}

@@ -169,6 +169,7 @@ public class AtencionesTercerizadasRepository {
                        av.nombre AS espacio,
                        al.ejemplar_id,
                        e.codigo AS ejemplar_codigo,
+                       e.alias AS ejemplar_alias,
                        (SELECT count(*) FROM mod05_archivoasociado aa
                           JOIN mod05_reporteproveedor r ON r.id = aa.reporte_id
                          WHERE r.atencion_id = a.id) AS archivos_asociados
