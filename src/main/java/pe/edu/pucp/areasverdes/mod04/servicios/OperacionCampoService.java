@@ -467,10 +467,120 @@ public class OperacionCampoService implements ConsultaCampo {
         return encargo(id, user);
     }
 
+    /**
+     * Cambia el periodo y el plazo de un encargo vivo con una justificación que queda en su
+     * historial (AV-405). Sigue las reglas de {@link #guardarEncargo}, pero sin la restricción de
+     * no tener ejecución: lo ya registrado debe quedar dentro del nuevo periodo.
+     */
+    @Transactional
+    public Map<String, Object> reprogramarEncargo(
+            long id, Entradas.Reprogramacion body, Usuario user) {
+        exigirJefe(user);
+        var before = repo.get("encargo", id, true);
+        String estado = String.valueOf(before.get("estado"));
+        if (!Set.of("Por completar", "En curso", "Observado").contains(estado))
+            throw ApiError.conflict(
+                    "Solo se reprograma un encargo por completar, en curso u observado");
+        boolean directo = "Directo".equals(before.get("periodicidad"));
+        LocalDate inicio = (LocalDate) before.get("fecha_inicio");
+        LocalDate fin;
+        LocalDate plazo = body.plazoPrevisto();
+        if (directo) {
+            if (body.fechaInicio() != null || body.fechaFin() != null)
+                throw ApiError.invalid("El encargo directo solo cambia el plazo");
+            fin = plazo;
+            if (fin.isBefore(inicio))
+                throw ApiError.invalid("El plazo no puede ser anterior al inicio del encargo");
+        } else {
+            if (body.fechaInicio() == null || body.fechaFin() == null)
+                throw ApiError.invalid("Indica el inicio y el fin del periodo");
+            inicio = body.fechaInicio();
+            fin = body.fechaFin();
+            long dias = ChronoUnit.DAYS.between(inicio, fin) + 1;
+            int max = "Semanal".equals(before.get("periodicidad")) ? 7 : 14;
+            if (dias < 1 || dias > max)
+                throw ApiError.invalid(
+                        "El periodo debe tener entre 1 y " + max + " días, incluidos inicio y fin");
+            if (plazo.isBefore(inicio) || plazo.isAfter(fin))
+                throw ApiError.invalid("El plazo debe estar dentro del periodo de planificación");
+            LocalDate reunion = (LocalDate) before.get("fecha_reunion");
+            if (reunion != null && reunion.isAfter(fin))
+                throw ApiError.invalid("La reunión no puede ser posterior al periodo");
+        }
+        if (inicio.equals(before.get("fecha_inicio"))
+                && fin.equals(before.get("fecha_fin"))
+                && plazo.equals(before.get("plazo_previsto")))
+            throw ApiError.invalid("Cambia alguna fecha para reprogramar");
+        long fuera =
+                repo.jdbc()
+                        .queryForObject(
+                                """
+                                SELECT count(*) FROM mod04_actividad
+                                WHERE encargo_id=:id AND estado_actividad<>'Anulada'
+                                  AND (fecha_hora_actividad AT TIME ZONE 'America/Lima')::date
+                                      NOT BETWEEN :inicio AND :fin
+                                """,
+                                Map.of("id", id, "inicio", inicio, "fin", fin),
+                                Long.class);
+        if (fuera > 0)
+            throw ApiError.conflict(
+                    "Hay actividades registradas fuera del nuevo periodo; no se puede reprogramar"
+                            + " así");
+        var fecha = OffsetDateTime.now(clock);
+        repo.update(
+                "encargo",
+                id,
+                values(
+                        "fecha_inicio",
+                        inicio,
+                        "fecha_fin",
+                        fin,
+                        "plazo_previsto",
+                        plazo,
+                        "fecha_modificacion",
+                        fecha,
+                        "usuario_modificacion_id",
+                        user.id()));
+        repo.insert(
+                "encargo_reprogramacion",
+                values(
+                        "encargo_id",
+                        id,
+                        "fecha_inicio_anterior",
+                        before.get("fecha_inicio"),
+                        "fecha_fin_anterior",
+                        before.get("fecha_fin"),
+                        "plazo_anterior",
+                        before.get("plazo_previsto"),
+                        "fecha_inicio_nueva",
+                        inicio,
+                        "fecha_fin_nueva",
+                        fin,
+                        "plazo_nuevo",
+                        plazo,
+                        "justificacion",
+                        body.justificacion().strip(),
+                        "usuario_id",
+                        user.id(),
+                        "fecha",
+                        fecha));
+        var after = repo.encargo(id);
+        repo.auditExplicit(
+                "Encargo",
+                id,
+                "Modificacion",
+                user.id(),
+                before,
+                after,
+                body.justificacion().strip());
+        return encargo(id, user);
+    }
+
     public Map<String, Object> encargo(long id, Usuario user) {
         var result = repo.encargo(id);
         exigirCapataz(number(result, "capataz_id"), user, false);
         result.put("historial_estados", repo.historialEncargo(id));
+        result.put("reprogramaciones", repo.reprogramacionesEncargo(id));
         return result;
     }
 
