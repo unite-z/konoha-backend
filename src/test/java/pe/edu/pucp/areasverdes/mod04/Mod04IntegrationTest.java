@@ -381,6 +381,58 @@ class Mod04IntegrationTest {
     }
 
     @Test
+    void losEncargosVencidosSeMarcanYSeFiltran() throws Exception {
+        long equipo = cuadrilla(c1, o1);
+        // Vencido: el plazo (HOY, en el pasado) ya pasó y sigue abierto.
+        long vencido =
+                postJson("/encargos/", encargo(equipo, "Semanal", 7), "jefe", 201)
+                        .path("id")
+                        .asLong();
+        // Cancelado con el plazo pasado: ya no cuenta como vencido.
+        long cancelado =
+                postJson("/encargos/", encargo(equipo, "Semanal", 7), "jefe", 201)
+                        .path("id")
+                        .asLong();
+        postJson(
+                "/encargos/" + cancelado + "/estado/",
+                values(
+                        "estado_anterior",
+                        "Por completar",
+                        "estado",
+                        "Cancelado",
+                        "observaciones",
+                        "Ya no hace falta"),
+                "jefe",
+                200);
+        // Vigente: el plazo está lejos en el futuro.
+        var futuro = encargo(equipo, "Semanal", 7);
+        futuro.put("fecha_reunion", "2099-06-01");
+        futuro.put("fecha_inicio", "2099-06-01");
+        futuro.put("fecha_fin", "2099-06-07");
+        futuro.put("plazo_previsto", "2099-06-07");
+        long vigente = postJson("/encargos/", futuro, "jefe", 201).path("id").asLong();
+
+        var jefe = httpBasic("jefe", PASSWORD);
+        http.perform(get(BASE + "/encargos/" + vencido).with(jefe))
+                .andExpect(jsonPath("$.vencido").value(true));
+        http.perform(get(BASE + "/encargos/" + cancelado).with(jefe))
+                .andExpect(jsonPath("$.vencido").value(false));
+        http.perform(get(BASE + "/encargos/" + vigente).with(jefe))
+                .andExpect(jsonPath("$.vencido").value(false));
+
+        http.perform(get(BASE + "/encargos?vencidos=true").with(jefe))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(1))
+                .andExpect(jsonPath("$.results[0].id").value(vencido))
+                .andExpect(jsonPath("$.results[0].vencido").value(true));
+        http.perform(get(BASE + "/encargos?vencidos=false").with(jefe))
+                .andExpect(jsonPath("$.count").value(2));
+        http.perform(get(BASE + "/encargos").with(jefe)).andExpect(jsonPath("$.count").value(3));
+        http.perform(get(BASE + "/encargos?vencidos=quizas").with(jefe))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void filtrosPaginacionValidacionYDocumentacion() throws Exception {
         long id = cuadrilla(c1, o1);
         postJson("/encargos", encargo(id, "Quincenal", 14), "jefe", 201);

@@ -53,7 +53,9 @@ public class ConsultasCampoService {
                     case "encargos" ->
                             "SELECT"
                                 + " id,cuadrilla_id,capataz_id,periodicidad,fecha_inicio,fecha_fin,descripcion"
-                                + " texto FROM mod04_encargo";
+                                + " texto,(plazo_previsto < (now() AT TIME ZONE"
+                                + " 'America/Lima')::date AND estado NOT IN"
+                                + " ('Completado','Cancelado')) vencido FROM mod04_encargo";
                     case "partes" ->
                             "SELECT id,cuadrilla_id,capataz_id,fecha,estado,estado texto FROM"
                                     + " mod04_parte_diario";
@@ -106,7 +108,7 @@ public class ConsultasCampoService {
                 };
         Set<String> allowed = new HashSet<>(filters.keySet());
         allowed.addAll(List.of("q", "page"));
-        if (recurso.equals("encargos")) allowed.addAll(List.of("desde", "hasta"));
+        if (recurso.equals("encargos")) allowed.addAll(List.of("desde", "hasta", "vencidos"));
         if (recurso.equals("actividades")) allowed.add("estado_actividad");
         if (!allowed.containsAll(params.keySet()))
             throw ApiError.invalid("Filtros no admitidos para " + recurso);
@@ -172,6 +174,17 @@ public class ConsultasCampoService {
             }
             if (desde != null && hasta != null && desde.isAfter(hasta))
                 throw ApiError.invalid("desde no puede ser posterior a hasta");
+            // AV-403: solo los vencidos (plazo pasado sin completar ni cancelar) o solo los que no.
+            String vencidos = params.getOrDefault("vencidos", "").strip();
+            if (!vencidos.isEmpty()) {
+                boolean soloVencidos =
+                        switch (vencidos.toLowerCase(Locale.ROOT)) {
+                            case "true", "1" -> true;
+                            case "false", "0" -> false;
+                            default -> throw ApiError.invalid("Booleano inválido");
+                        };
+                where.append(soloVencidos ? " AND vencido" : " AND NOT vencido");
+            }
         }
         Long pendientesVerificacion = null;
         if (recurso.equals("actividades")) {
