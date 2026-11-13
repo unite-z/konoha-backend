@@ -491,6 +491,80 @@ class Mod04IntegrationTest {
     }
 
     @Test
+    void aceptarConObservacionesCreaElEncargoDeSeguimientoVinculado() throws Exception {
+        long equipo = cuadrilla(c1, o1);
+        long actividad = actividad(equipo);
+        var seguimiento =
+                values(
+                        "descripcion",
+                        "  Terminar el borde norte ",
+                        "plazo_previsto",
+                        LocalDate.now().plusDays(10).toString());
+
+        // Sin permiso de verificar no se puede, y un plazo pasado deja la actividad como estaba.
+        putJson(
+                "/actividades/" + actividad + "/verificacion/",
+                values("observaciones", "Falta el borde", "encargo_seguimiento", seguimiento),
+                "capataz1",
+                403);
+        var pasado = values("descripcion", "Terminar", "plazo_previsto", "2000-01-01");
+        putJson(
+                "/actividades/" + actividad + "/verificacion/",
+                values("observaciones", "Falta el borde", "encargo_seguimiento", pasado),
+                "jefe",
+                400);
+        http.perform(get(BASE + "/actividades/" + actividad).with(httpBasic("jefe", PASSWORD)))
+                .andExpect(jsonPath("$.estado_actividad").value("Registrada"))
+                .andExpect(jsonPath("$.encargo_seguimiento_id").isEmpty());
+        assertEquals(
+                0L,
+                repo.jdbc()
+                        .queryForObject(
+                                "SELECT count(*) FROM mod04_encargo", Map.of(), Long.class));
+
+        var observada =
+                putJson(
+                        "/actividades/" + actividad + "/verificacion/",
+                        values(
+                                "observaciones",
+                                "Falta el borde",
+                                "encargo_seguimiento",
+                                seguimiento),
+                        "jefe",
+                        200);
+        assertEquals("Observada", observada.path("estado_actividad").asText());
+        long encargo = observada.path("encargo_seguimiento_id").asLong();
+        assertTrue(encargo > 0);
+
+        http.perform(get(BASE + "/encargos/" + encargo).with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.actividad_origen_id").value(actividad))
+                .andExpect(jsonPath("$.periodicidad").value("Directo"))
+                .andExpect(jsonPath("$.descripcion").value("Terminar el borde norte"))
+                .andExpect(jsonPath("$.cuadrilla_id").value(equipo))
+                .andExpect(jsonPath("$.tipo_actividad_id").value(tipo))
+                .andExpect(jsonPath("$.area_verde_id").value(area))
+                .andExpect(jsonPath("$.estado").value("Por completar"));
+        http.perform(
+                        get(BASE + "/actividades/?estado_actividad=Observada")
+                                .with(httpBasic("jefe", PASSWORD)))
+                .andExpect(jsonPath("$.count").value(1))
+                .andExpect(jsonPath("$.results[0].encargo_seguimiento_id").value(encargo));
+
+        // Ya tiene su seguimiento: no se vuelve a verificar ni se anula.
+        putJson(
+                "/actividades/" + actividad + "/verificacion/",
+                values("observaciones", "Otra vez"),
+                "jefe",
+                409);
+        putJson(
+                "/actividades/" + actividad + "/anulacion/",
+                values("motivo", "Registro duplicado"),
+                "jefe",
+                409);
+    }
+
+    @Test
     void opcionesYDetalleDeActividadRespetanPertenenciaYRol() throws Exception {
         long squad = cuadrilla(c1, o1, o2), act = actividad(squad);
         http.perform(get(BASE + "/actividades/" + act).with(httpBasic("capataz1", PASSWORD)))

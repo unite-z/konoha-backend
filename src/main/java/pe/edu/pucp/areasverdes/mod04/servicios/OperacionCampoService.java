@@ -555,6 +555,13 @@ public class OperacionCampoService implements ConsultaCampo {
                                         "SELECT nombre FROM core_usuario WHERE id=:id",
                                         Map.of("id", anulador))
                                 .get("nombre"));
+        var seguimiento =
+                repo.rows(
+                        "SELECT id FROM mod04_encargo WHERE actividad_origen_id=:id",
+                        Map.of("id", id));
+        result.put(
+                "encargo_seguimiento_id",
+                seguimiento.isEmpty() ? null : seguimiento.get(0).get("id"));
         return result;
     }
 
@@ -565,6 +572,32 @@ public class OperacionCampoService implements ConsultaCampo {
         var before = repo.get("actividad", id, true);
         if ("Anulada".equals(before.get("estado_actividad")))
             throw ApiError.conflict("Una actividad anulada no puede verificarse");
+        if ("Observada".equals(before.get("estado_actividad")))
+            throw ApiError.conflict(
+                    "La actividad ya se verificó con observaciones y tiene su encargo de"
+                            + " seguimiento");
+        // «Aceptar con observaciones» obliga a crear el encargo de seguimiento, en la misma
+        // transacción:
+        // si el encargo no es válido, la actividad no cambia de estado (AV-402).
+        var seguimiento = body.encargoSeguimiento();
+        if (seguimiento != null) {
+            var parte = repo.get("parte_diario", number(before, "parte_id"), false);
+            var encargo =
+                    guardarEncargo(
+                            null,
+                            new Entradas.Encargo(
+                                    number(parte, "cuadrilla_id"),
+                                    number(before, "tipo_actividad_id"),
+                                    number(before, "area_verde_id"),
+                                    seguimiento.descripcion(),
+                                    "Directo",
+                                    null,
+                                    null,
+                                    null,
+                                    seguimiento.plazoPrevisto()),
+                            user);
+            repo.update("encargo", number(encargo, "id"), values("actividad_origen_id", id));
+        }
         repo.update(
                 "actividad",
                 id,
@@ -576,7 +609,7 @@ public class OperacionCampoService implements ConsultaCampo {
                         "fecha_verificacion",
                         OffsetDateTime.now(clock),
                         "estado_actividad",
-                        "Verificada"));
+                        seguimiento == null ? "Verificada" : "Observada"));
         var after = repo.get("actividad", id, false);
         repo.audit("Actividad", id, "Verificar", user.id(), before, after);
         return actividad(id, user);
@@ -588,7 +621,7 @@ public class OperacionCampoService implements ConsultaCampo {
         String motivo = body.motivo().strip();
         var before = repo.get("actividad", id, true);
         String estado = String.valueOf(before.get("estado_actividad"));
-        if ("Verificada".equals(estado))
+        if ("Verificada".equals(estado) || "Observada".equals(estado))
             throw ApiError.conflict("Una actividad verificada no puede anularse");
         if ("Anulada".equals(estado)) {
             if (motivo.equals(before.get("anulacion_motivo"))) return actividad(id, user);
