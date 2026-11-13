@@ -67,7 +67,8 @@ public class ConsultasCampoService {
                                 e.codigo ejemplar_codigo,e.alias ejemplar_alias,e.altura_total_m ejemplar_altura_m,
                                 (SELECT min(r.fecha_hora) FROM core_registro_auditoria r
                                  WHERE r.entidad='Actividad' AND r.registro_id=a.id AND r.accion='Alta'
-                                   AND r.usuario_id=a.usuario_creacion_id) fecha_hora_registro
+                                   AND r.usuario_id=a.usuario_creacion_id) fecha_hora_registro,
+                                (SELECT en.id FROM mod04_encargo en WHERE en.actividad_origen_id=a.id) encargo_seguimiento_id
                             FROM mod04_actividad a
                             JOIN mod04_parte_diario p ON p.id=a.parte_id JOIN mod04_tipo_actividad t ON t.id=a.tipo_actividad_id
                             JOIN mod05_areaverde av ON av.id=a.area_verde_id JOIN mod04_cuadrilla c ON c.id=p.cuadrilla_id
@@ -209,7 +210,9 @@ public class ConsultasCampoService {
             if (!estado.isEmpty()) {
                 args.put(
                         "estado_actividad",
-                        option(estado, List.of("Registrada", "Verificada", "Anulada")));
+                        option(
+                                estado,
+                                List.of("Registrada", "Verificada", "Observada", "Anulada")));
                 where.append(" AND estado_actividad=:estado_actividad");
             }
         }

@@ -1,6 +1,7 @@
 package pe.edu.pucp.areasverdes.mod04.api;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
@@ -56,7 +57,16 @@ public final class Entradas {
     public record Participantes(
             @NotNull @Size(max = 200) List<@NotNull @Positive Long> operarios) {}
 
-    public record Verificacion(@NotBlank @Size(max = 1000) String observaciones) {}
+    /**
+     * Verificación de una actividad. Con {@code encargoSeguimiento} queda «verificada con
+     * observaciones» y se crea ese encargo, vinculado a la actividad (AV-402).
+     */
+    public record Verificacion(
+            @NotBlank @Size(max = 1000) String observaciones,
+            @Valid EncargoSeguimiento encargoSeguimiento) {}
+
+    public record EncargoSeguimiento(
+            @NotBlank @Size(max = 1000) String descripcion, @NotNull LocalDate plazoPrevisto) {}
 
     public record Anulacion(@NotBlank @Size(max = 1000) String motivo) {}
 
