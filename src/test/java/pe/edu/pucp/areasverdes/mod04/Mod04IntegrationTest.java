@@ -25,6 +25,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -381,6 +382,58 @@ class Mod04IntegrationTest {
     }
 
     @Test
+    void losEncargosVencidosSeMarcanYSeFiltran() throws Exception {
+        long equipo = cuadrilla(c1, o1);
+        // Vencido: el plazo (HOY, en el pasado) ya pasó y sigue abierto.
+        long vencido =
+                postJson("/encargos/", encargo(equipo, "Semanal", 7), "jefe", 201)
+                        .path("id")
+                        .asLong();
+        // Cancelado con el plazo pasado: ya no cuenta como vencido.
+        long cancelado =
+                postJson("/encargos/", encargo(equipo, "Semanal", 7), "jefe", 201)
+                        .path("id")
+                        .asLong();
+        postJson(
+                "/encargos/" + cancelado + "/estado/",
+                values(
+                        "estado_anterior",
+                        "Por completar",
+                        "estado",
+                        "Cancelado",
+                        "observaciones",
+                        "Ya no hace falta"),
+                "jefe",
+                200);
+        // Vigente: el plazo está lejos en el futuro.
+        var futuro = encargo(equipo, "Semanal", 7);
+        futuro.put("fecha_reunion", "2099-06-01");
+        futuro.put("fecha_inicio", "2099-06-01");
+        futuro.put("fecha_fin", "2099-06-07");
+        futuro.put("plazo_previsto", "2099-06-07");
+        long vigente = postJson("/encargos/", futuro, "jefe", 201).path("id").asLong();
+
+        var jefe = httpBasic("jefe", PASSWORD);
+        http.perform(get(BASE + "/encargos/" + vencido).with(jefe))
+                .andExpect(jsonPath("$.vencido").value(true));
+        http.perform(get(BASE + "/encargos/" + cancelado).with(jefe))
+                .andExpect(jsonPath("$.vencido").value(false));
+        http.perform(get(BASE + "/encargos/" + vigente).with(jefe))
+                .andExpect(jsonPath("$.vencido").value(false));
+
+        http.perform(get(BASE + "/encargos?vencidos=true").with(jefe))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(1))
+                .andExpect(jsonPath("$.results[0].id").value(vencido))
+                .andExpect(jsonPath("$.results[0].vencido").value(true));
+        http.perform(get(BASE + "/encargos?vencidos=false").with(jefe))
+                .andExpect(jsonPath("$.count").value(2));
+        http.perform(get(BASE + "/encargos").with(jefe)).andExpect(jsonPath("$.count").value(3));
+        http.perform(get(BASE + "/encargos?vencidos=quizas").with(jefe))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void filtrosPaginacionValidacionYDocumentacion() throws Exception {
         long id = cuadrilla(c1, o1);
         postJson("/encargos", encargo(id, "Quincenal", 14), "jefe", 201);
@@ -488,6 +541,50 @@ class Mod04IntegrationTest {
                 .andExpect(jsonPath("$.count").value(0));
         http.perform(get(consulta).with(httpBasic("sinrol", PASSWORD)))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void lasActividadesSeFiltranPorEncargoParaLlegarDelEncargoASusTareas() throws Exception {
+        long equipo = cuadrilla(c1, o1);
+        long encargo =
+                postJson("/encargos/", encargo(equipo, "Semanal", 7), "jefe", 201)
+                        .path("id")
+                        .asLong();
+        long parte =
+                postJson("/partes", values("cuadrilla_id", equipo, "fecha", HOY), "capataz1", 201)
+                        .path("id")
+                        .asLong();
+        var vinculada =
+                values(
+                        "parte_id",
+                        parte,
+                        "tipo_actividad_id",
+                        tipo,
+                        "area_verde_id",
+                        area,
+                        "fecha_hora_actividad",
+                        "2026-10-22T08:00:00-05:00",
+                        "encargo_id",
+                        encargo);
+        long deEncargo = postJson("/actividades", vinculada, "capataz1", 201).path("id").asLong();
+        var sinEncargo = new HashMap<>(vinculada);
+        sinEncargo.remove("encargo_id");
+        postJson("/actividades", sinEncargo, "capataz1", 201);
+
+        Cookie sesion = sesionCore("ingeniero");
+        http.perform(get(BASE + "/actividades/?encargo_id=" + encargo).cookie(sesion))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(1))
+                .andExpect(jsonPath("$.results[0].id").value(deEncargo))
+                .andExpect(jsonPath("$.results[0].encargo_id").value(encargo));
+        http.perform(get(BASE + "/actividades/?encargo_id=" + (encargo + 1000)).cookie(sesion))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(0));
+        http.perform(get(BASE + "/actividades/?encargo_id=abc").cookie(sesion))
+                .andExpect(status().isBadRequest());
+        // Sin el filtro, las dos actividades de la cuadrilla.
+        http.perform(get(BASE + "/actividades/?cuadrilla_id=" + equipo).cookie(sesion))
+                .andExpect(jsonPath("$.count").value(2));
     }
 
     @Test
