@@ -62,7 +62,7 @@ public class ConsultasCampoService {
                             SELECT a.*,p.cuadrilla_id,p.capataz_id,p.fecha,p.estado,t.nombre texto,
                                 COALESCE(a.tipo_actividad_nombre,t.nombre) tipo_actividad_nombre,av.nombre area_verde_nombre,c.nombre cuadrilla_nombre,
                                 u.nombre verificado_por_nombre,anulador.nombre anulada_por_nombre,
-                                e.codigo ejemplar_codigo,e.altura_total_m ejemplar_altura_m,
+                                e.codigo ejemplar_codigo,e.alias ejemplar_alias,e.altura_total_m ejemplar_altura_m,
                                 (SELECT min(r.fecha_hora) FROM core_registro_auditoria r
                                  WHERE r.entidad='Actividad' AND r.registro_id=a.id AND r.accion='Alta'
                                    AND r.usuario_id=a.usuario_creacion_id) fecha_hora_registro

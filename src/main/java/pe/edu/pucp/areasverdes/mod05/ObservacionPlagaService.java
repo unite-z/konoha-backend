@@ -27,7 +27,7 @@ public class ObservacionPlagaService {
 
     static final String OBSERVACIONES =
             """
-            SELECT o.id,o.area_verde_id,av.nombre area_verde_nombre,o.ejemplar_id,e.codigo ejemplar_codigo,
+            SELECT o.id,o.area_verde_id,av.nombre area_verde_nombre,o.ejemplar_id,e.codigo ejemplar_codigo,e.alias ejemplar_alias,
                 o.plaga_id,pl.nombre plaga_nombre,o.descripcion,o.fecha_observacion,
                 o.usuario_creacion_id,u.nombre usuario_creacion_nombre,o.fecha_creacion
             FROM mod05_observacion_plaga o
@@ -47,6 +47,7 @@ public class ObservacionPlagaService {
                                 "plaga_nombre",
                                 "area_verde_nombre",
                                 "ejemplar_codigo",
+                                "ejemplar_alias",
                                 "descripcion"),
                         Map.of("area_verde_id", "id", "ejemplar_id", "id", "plaga_id", "id")),
                 params,

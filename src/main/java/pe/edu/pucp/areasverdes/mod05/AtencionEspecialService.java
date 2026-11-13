@@ -36,7 +36,7 @@ public class AtencionEspecialService {
                     + " completas' ELSE 'En seguimiento' END";
     static final String ESPECIALES =
             """
-            SELECT ae.id,ae.ejemplar_id,e.codigo ejemplar_codigo,e.area_verde_id,av.nombre area_verde_nombre,ae.plaga_id,pl.nombre plaga_nombre,
+            SELECT ae.id,ae.ejemplar_id,e.codigo ejemplar_codigo,e.alias ejemplar_alias,e.area_verde_id,av.nombre area_verde_nombre,ae.plaga_id,pl.nombre plaga_nombre,
                 ae.aplicaciones_adicionales,ae.aplicaciones_realizadas,
             """
                     + CASE_ESTADO
@@ -66,7 +66,11 @@ public class AtencionEspecialService {
                 new ConsultasService.Catalogo(
                         ESPECIALES + where,
                         "fecha_creacion DESC,id DESC",
-                        List.of("ejemplar_codigo", "plaga_nombre", "area_verde_nombre"),
+                        List.of(
+                                "ejemplar_codigo",
+                                "ejemplar_alias",
+                                "plaga_nombre",
+                                "area_verde_nombre"),
                         Map.of("plaga_id", "id")),
                 params,
                 url,

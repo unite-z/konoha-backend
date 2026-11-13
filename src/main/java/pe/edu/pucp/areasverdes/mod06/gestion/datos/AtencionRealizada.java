@@ -20,4 +20,5 @@ public record AtencionRealizada(
         String espacio,
         Long ejemplarId,
         String ejemplarCodigo,
+        String ejemplarAlias,
         long archivosAsociados) {}
