@@ -351,7 +351,8 @@ class ConfiguracionServiciosApiTest extends ApiPlanificacion {
                 1,
                 jdbc.queryForObject(
                         "SELECT count(*) FROM mod03_frecuencia_servicio WHERE tipo_servicio_id=:id"
-                                + " AND frecuencia_practica_dias IS NULL AND frecuencia_maxima_dias IS NULL",
+                            + " AND frecuencia_practica_dias IS NULL AND frecuencia_maxima_dias IS"
+                            + " NULL",
                         Map.of("id", servicio),
                         Integer.class));
     }
