@@ -682,15 +682,35 @@ public class OperacionCampoService implements ConsultaCampo {
         var before = repo.get("actividad", id, true);
         if ("Anulada".equals(before.get("estado_actividad")))
             throw ApiError.conflict("Una actividad anulada no puede verificarse");
-        if ("Observada".equals(before.get("estado_actividad")))
-            throw ApiError.conflict(
-                    "La actividad ya se verificó con observaciones y tiene su encargo de"
-                            + " seguimiento");
-        // «Aceptar con observaciones» obliga a crear el encargo de seguimiento, en la misma
-        // transacción:
-        // si el encargo no es válido, la actividad no cambia de estado (AV-402).
-        var seguimiento = body.encargoSeguimiento();
-        if (seguimiento != null) {
+
+        var seguimientoSolicitado = body.encargoSeguimiento();
+        boolean conObservaciones =
+                body.conObservaciones() != null
+                        ? body.conObservaciones()
+                        : seguimientoSolicitado != null;
+        String observaciones = Objects.toString(body.observaciones(), "").strip();
+        if (conObservaciones && observaciones.isEmpty())
+            throw ApiError.invalid("Escribe las observaciones de la verificación");
+        if (!conObservaciones
+                && Boolean.FALSE.equals(body.conObservaciones())
+                && !observaciones.isEmpty())
+            throw ApiError.invalid("La verificación sin observaciones no admite observaciones");
+        if (!conObservaciones && seguimientoSolicitado != null)
+            throw ApiError.invalid(
+                    "Un encargo de seguimiento solo corresponde a una verificación con"
+                            + " observaciones");
+
+        // La fila de actividad queda bloqueada durante toda la decisión. El índice único de
+        // actividad_origen_id refuerza que dos verificaciones concurrentes no creen seguimientos
+        // duplicados (AV-402).
+        var seguimientos =
+                repo.rows(
+                        "SELECT id FROM mod04_encargo WHERE actividad_origen_id=:id FOR UPDATE",
+                        Map.of("id", id));
+        if (conObservaciones && seguimientos.isEmpty()) {
+            if (seguimientoSolicitado == null)
+                throw ApiError.invalid(
+                        "Crea el encargo de seguimiento de la verificación con observaciones");
             var parte = repo.get("parte_diario", number(before, "parte_id"), false);
             var encargo =
                     guardarEncargo(
@@ -699,30 +719,93 @@ public class OperacionCampoService implements ConsultaCampo {
                                     number(parte, "cuadrilla_id"),
                                     number(before, "tipo_actividad_id"),
                                     number(before, "area_verde_id"),
-                                    seguimiento.descripcion(),
+                                    seguimientoSolicitado.descripcion(),
                                     "Directo",
                                     null,
                                     null,
                                     null,
-                                    seguimiento.plazoPrevisto()),
+                                    seguimientoSolicitado.plazoPrevisto()),
                             user);
             repo.update("encargo", number(encargo, "id"), values("actividad_origen_id", id));
+        } else if (conObservaciones && seguimientoSolicitado != null) {
+            throw ApiError.invalid(
+                    "La actividad ya tiene un encargo de seguimiento; se reutiliza el existente");
         }
+
+        // El cliente nuevo envía con_observaciones=false y no conserva texto residual. Las
+        // restricciones históricas V58/V85/V95 exigen un valor no nulo cuando la actividad está
+        // verificada, por lo que la cadena vacía representa «sin observaciones» en persistencia.
+        // La rama compatible permite desplegar el backend antes que el frontend antiguo.
+        Object observacionesGuardadas =
+                conObservaciones
+                        ? observaciones
+                        : body.conObservaciones() == null && !observaciones.isEmpty()
+                                ? observaciones
+                                : "";
         repo.update(
                 "actividad",
                 id,
                 values(
                         "verificacion_observaciones",
-                        body.observaciones().strip(),
+                        observacionesGuardadas,
                         "verificado_por_usuario_id",
                         user.id(),
                         "fecha_verificacion",
                         OffsetDateTime.now(clock),
                         "estado_actividad",
-                        seguimiento == null ? "Verificada" : "Observada"));
+                        conObservaciones ? "Observada" : "Verificada"));
+        iniciarEncargoDeActividad(before, id, user);
         var after = repo.get("actividad", id, false);
         repo.audit("Actividad", id, "Verificar", user.id(), before, after);
         return actividad(id, user);
+    }
+
+    /**
+     * Verificar confirma que el trabajo del encargo ya tuvo ejecución. Solo avanza «Por completar»
+     * a «En curso»: conserva los estados terminales o observados y nunca completa el encargo por
+     * verificar una actividad.
+     */
+    private void iniciarEncargoDeActividad(
+            Map<String, Object> actividad, long actividadId, Usuario user) {
+        if (actividad.get("encargo_id") == null) return;
+        long encargoId = number(actividad, "encargo_id");
+        var before = repo.get("encargo", encargoId, true);
+        if (!"Por completar".equals(before.get("estado"))) return;
+        var fecha = OffsetDateTime.now(clock);
+        repo.update(
+                "encargo",
+                encargoId,
+                values(
+                        "estado",
+                        "En curso",
+                        "fecha_modificacion",
+                        fecha,
+                        "usuario_modificacion_id",
+                        user.id()));
+        String motivo = "Actividad " + actividadId + " verificada";
+        repo.insert(
+                "encargo_cambio_estado",
+                values(
+                        "encargo_id",
+                        encargoId,
+                        "estado_anterior",
+                        "Por completar",
+                        "estado_nuevo",
+                        "En curso",
+                        "observaciones",
+                        motivo,
+                        "usuario_id",
+                        user.id(),
+                        "fecha",
+                        fecha));
+        repo.auditExplicit(
+                "Encargo",
+                encargoId,
+                "CambioEstado",
+                user.id(),
+                before,
+                repo.get("encargo", encargoId, false),
+                motivo);
     }
 
     @Transactional
