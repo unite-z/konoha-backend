@@ -142,7 +142,14 @@ class ConfiguracionServiciosApiTest extends ApiPlanificacion {
                 "{\"frecuencia_teorica_dias\":0}",
                 "{\"frecuencia_teorica_dias\":-1}",
                 "{\"frecuencia_teorica_dias\":21,\"frecuencia_practica_dias\":0}",
-                "{\"frecuencia_teorica_dias\":21,\"frecuencia_maxima_dias\":-1}"
+                "{\"frecuencia_teorica_dias\":21,\"frecuencia_maxima_dias\":-1}",
+                "{\"frecuencia_teorica_dias\":1.5}",
+                "{\"frecuencia_teorica_dias\":21,\"frecuencia_practica_dias\":30.5}",
+                "{\"frecuencia_teorica_dias\":21,\"frecuencia_maxima_dias\":45.5}",
+                "{}",
+                "{\"frecuencia_teorica_dias\":\"abc\"}",
+                "{\"frecuencia_teorica_dias\":21,\"frecuencia_practica_dias\":-1}",
+                "{\"frecuencia_teorica_dias\":21,\"frecuencia_maxima_dias\":0}"
             })
     void frecuenciaInvalidaConservaFilaCompletaYAuditoria(String cuerpo) throws Exception {
         guardar("jefe", "frecuencias/Verano", FRECUENCIA).andExpect(status().isOk());
@@ -319,6 +326,35 @@ class ConfiguracionServiciosApiTest extends ApiPlanificacion {
         http.perform(get(ruta("propuesta")).with(httpBasic("ingeniero", CLAVE)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.fecha_inicio").value("2026-11-29"));
+    }
+
+    @Test
+    void practicaYMaximaSonOpcionalesYLaHabitualNoExigeSuperarLaTeorica() throws Exception {
+        guardar(
+                        "jefe",
+                        "frecuencias/Primavera",
+                        "{\"frecuencia_teorica_dias\":50,\"frecuencia_practica_dias\":20,\"frecuencia_maxima_dias\":20}")
+                .andExpect(status().isOk());
+        guardar(
+                        "jefe",
+                        "frecuencias/Primavera",
+                        "{\"frecuencia_teorica_dias\":21,\"frecuencia_practica_dias\":null,\"frecuencia_maxima_dias\":null}")
+                .andExpect(status().isOk());
+        assertEquals(
+                21,
+                jdbc.queryForObject(
+                        "SELECT frecuencia_teorica_dias FROM mod03_frecuencia_servicio"
+                                + " WHERE tipo_servicio_id=:id AND estacion='Primavera'",
+                        Map.of("id", servicio),
+                        Integer.class));
+        assertEquals(
+                1,
+                jdbc.queryForObject(
+                        "SELECT count(*) FROM mod03_frecuencia_servicio WHERE tipo_servicio_id=:id"
+                            + " AND frecuencia_practica_dias IS NULL AND frecuencia_maxima_dias IS"
+                            + " NULL",
+                        Map.of("id", servicio),
+                        Integer.class));
     }
 
     @ParameterizedTest

@@ -96,4 +96,14 @@ final class Programador {
                             .formatted(dias, maxima, limpieza));
         }
     }
+
+    static void exigirEspacioLimpieza(long dias, int limpieza, boolean corte) {
+        if (corte && dias < limpieza + 1) {
+            throw new ErrorPlanificacion(
+                    400,
+                    "periodo-sin-limpieza",
+                    "Reserva al menos un día de corte y %d de limpieza en jornadas posteriores"
+                            .formatted(limpieza));
+        }
+    }
 }

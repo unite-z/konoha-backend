@@ -21,8 +21,8 @@ class EstadosProgramacionApiTest extends ApiPlanificacion {
                 .execute(
                         new ClassPathResource("mod03/escenario-programacion.sql")
                                         .getContentAsString(StandardCharsets.UTF_8)
-                                + "UPDATE mod03_programacion_servicio SET estado = 'Programada'"
-                                + " WHERE id = 1;");
+                                + "UPDATE mod03_programacion_servicio SET estado = 'Programada',"
+                                + " tipo_servicio_id = 2 WHERE id = 1;");
     }
 
     ResultActions registrar(String usuario, String accion, String fecha) throws Exception {

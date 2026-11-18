@@ -7,3 +7,6 @@ target/
 .notas/
 
 .env
+
+# Adjuntos locales generados por la aplicación: no se versionan
+private-media/

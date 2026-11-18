@@ -95,6 +95,7 @@ public final class Serializadores {
                     .campo("dias_limpieza_maximo", entero().nulo())
                     .campo("maximo_total", entero().nulo())
                     .campo("estado_duracion", texto())
+                    .campo("estado_limpieza", texto())
                     .campo("faltantes", lista(texto()));
 
     public static final Serializador RESUMEN_CUMPLIMIENTO =
