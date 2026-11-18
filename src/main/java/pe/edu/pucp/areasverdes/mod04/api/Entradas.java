@@ -58,11 +58,13 @@ public final class Entradas {
             @NotNull @Size(max = 200) List<@NotNull @Positive Long> operarios) {}
 
     /**
-     * Verificación de una actividad. Con {@code encargoSeguimiento} queda «verificada con
-     * observaciones» y se crea ese encargo, vinculado a la actividad (AV-402).
+     * Verificación de una actividad. {@code conObservaciones} conserva el resultado separado de las
+     * notas: cuando es {@code true}, las observaciones son obligatorias y se crea o reutiliza el
+     * encargo de seguimiento vinculado (AV-402).
      */
     public record Verificacion(
-            @NotBlank @Size(max = 1000) String observaciones,
+            Boolean conObservaciones,
+            @Size(max = 1000) String observaciones,
             @Valid EncargoSeguimiento encargoSeguimiento) {}
 
     public record EncargoSeguimiento(

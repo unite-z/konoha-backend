@@ -441,14 +441,16 @@ class Mod04IntegrationTest {
                         .path("id")
                         .asLong();
         String ruta = "/encargos/" + id + "/reprogramacion/";
+        var inicioNuevo = LocalDate.of(2099, 6, 1);
+        var finNuevo = inicioNuevo.plusDays(6);
         var nueva =
                 values(
                         "fecha_inicio",
-                        HOY.plusDays(2).toString(),
+                        inicioNuevo.toString(),
                         "fecha_fin",
-                        HOY.plusDays(8).toString(),
+                        finNuevo.toString(),
                         "plazo_previsto",
-                        HOY.plusDays(8).toString(),
+                        finNuevo.toString(),
                         "justificacion",
                         "  Lluvias en la zona ");
 
@@ -456,15 +458,16 @@ class Mod04IntegrationTest {
         postJson(ruta, nueva, "ingeniero", 403);
 
         var reprogramado = postJson(ruta, nueva, "jefe", 200);
-        assertEquals(HOY.plusDays(2).toString(), reprogramado.path("fecha_inicio").asText());
-        assertEquals(HOY.plusDays(8).toString(), reprogramado.path("fecha_fin").asText());
-        assertEquals(HOY.plusDays(8).toString(), reprogramado.path("plazo_previsto").asText());
+        assertEquals(inicioNuevo.toString(), reprogramado.path("fecha_inicio").asText());
+        assertEquals(finNuevo.toString(), reprogramado.path("fecha_fin").asText());
+        assertEquals(finNuevo.toString(), reprogramado.path("plazo_previsto").asText());
+        assertEquals(false, reprogramado.path("vencido").asBoolean());
         var historial = reprogramado.path("reprogramaciones").get(0);
         assertEquals("Lluvias en la zona", historial.path("justificacion").asText());
         assertEquals(HOY.toString(), historial.path("fecha_inicio_anterior").asText());
-        assertEquals(HOY.plusDays(2).toString(), historial.path("fecha_inicio_nueva").asText());
+        assertEquals(inicioNuevo.toString(), historial.path("fecha_inicio_nueva").asText());
         assertEquals(HOY.toString(), historial.path("plazo_anterior").asText());
-        assertEquals(HOY.plusDays(8).toString(), historial.path("plazo_nuevo").asText());
+        assertEquals(finNuevo.toString(), historial.path("plazo_nuevo").asText());
         assertTrue(historial.hasNonNull("autor"));
         http.perform(get(BASE + "/encargos/" + id).with(httpBasic("jefe", PASSWORD)))
                 .andExpect(jsonPath("$.reprogramaciones.length()").value(1));
@@ -788,13 +791,25 @@ class Mod04IntegrationTest {
         // Sin permiso de verificar no se puede, y un plazo pasado deja la actividad como estaba.
         putJson(
                 "/actividades/" + actividad + "/verificacion/",
-                values("observaciones", "Falta el borde", "encargo_seguimiento", seguimiento),
+                values(
+                        "con_observaciones",
+                        true,
+                        "observaciones",
+                        "Falta el borde",
+                        "encargo_seguimiento",
+                        seguimiento),
                 "capataz1",
                 403);
         var pasado = values("descripcion", "Terminar", "plazo_previsto", "2000-01-01");
         putJson(
                 "/actividades/" + actividad + "/verificacion/",
-                values("observaciones", "Falta el borde", "encargo_seguimiento", pasado),
+                values(
+                        "con_observaciones",
+                        true,
+                        "observaciones",
+                        "Falta el borde",
+                        "encargo_seguimiento",
+                        pasado),
                 "jefe",
                 400);
         http.perform(get(BASE + "/actividades/" + actividad).with(httpBasic("jefe", PASSWORD)))
@@ -810,6 +825,8 @@ class Mod04IntegrationTest {
                 putJson(
                         "/actividades/" + actividad + "/verificacion/",
                         values(
+                                "con_observaciones",
+                                true,
                                 "observaciones",
                                 "Falta el borde",
                                 "encargo_seguimiento",
@@ -835,17 +852,151 @@ class Mod04IntegrationTest {
                 .andExpect(jsonPath("$.count").value(1))
                 .andExpect(jsonPath("$.results[0].encargo_seguimiento_id").value(encargo));
 
-        // Ya tiene su seguimiento: no se vuelve a verificar ni se anula.
+        // Las actualizaciones reutilizan el seguimiento y conservan cada cambio en auditoría.
+        var actualizada =
+                putJson(
+                        "/actividades/" + actividad + "/verificacion/",
+                        values(
+                                "con_observaciones",
+                                true,
+                                "observaciones",
+                                "Corregir también el sur"),
+                        "jefe",
+                        200);
+        assertEquals("Observada", actualizada.path("estado_actividad").asText());
+        assertEquals(encargo, actualizada.path("encargo_seguimiento_id").asLong());
+        assertEquals(
+                1L,
+                repo.jdbc()
+                        .queryForObject(
+                                "SELECT count(*) FROM mod04_encargo WHERE actividad_origen_id=:id",
+                                Map.of("id", actividad),
+                                Long.class));
+
+        // Volver a «Verificada» limpia el valor vigente, pero no borra ni cancela en silencio el
+        // seguimiento histórico. Si vuelve a «Observada», reutiliza el mismo encargo.
+        var conforme =
+                putJson(
+                        "/actividades/" + actividad + "/verificacion/",
+                        values("con_observaciones", false),
+                        "jefe",
+                        200);
+        assertEquals("Verificada", conforme.path("estado_actividad").asText());
+        assertTrue(conforme.path("verificacion_observaciones").asText().isEmpty());
+        assertEquals(encargo, conforme.path("encargo_seguimiento_id").asLong());
+        http.perform(get(BASE + "/encargos/" + encargo).with(httpBasic("jefe", PASSWORD)))
+                .andExpect(jsonPath("$.estado").value("Por completar"));
+
+        var observadaDeNuevo =
+                putJson(
+                        "/actividades/" + actividad + "/verificacion/",
+                        values("con_observaciones", true, "observaciones", "Revisar otra vez"),
+                        "jefe",
+                        200);
+        assertEquals("Observada", observadaDeNuevo.path("estado_actividad").asText());
+        assertEquals(encargo, observadaDeNuevo.path("encargo_seguimiento_id").asLong());
         putJson(
                 "/actividades/" + actividad + "/verificacion/",
-                values("observaciones", "Otra vez"),
+                values(
+                        "con_observaciones",
+                        true,
+                        "observaciones",
+                        "No duplicar",
+                        "encargo_seguimiento",
+                        seguimiento),
                 "jefe",
-                409);
+                400);
+        assertEquals(
+                4,
+                repo.jdbc()
+                        .queryForObject(
+                                "SELECT count(*) FROM core_registro_auditoria WHERE"
+                                        + " entidad='Actividad' AND registro_id=:id AND"
+                                        + " accion='Modificacion'",
+                                Map.of("id", actividad),
+                                Integer.class));
+
+        // La anulación sigue prohibida después de cualquier resultado de verificación.
         putJson(
                 "/actividades/" + actividad + "/anulacion/",
                 values("motivo", "Registro duplicado"),
                 "jefe",
                 409);
+    }
+
+    @Test
+    void verificacionValidaLaModalidadYNoAceptaTextoResidual() throws Exception {
+        long actividad = actividad(cuadrilla(c1, o1));
+        putJson(
+                "/actividades/" + actividad + "/verificacion/",
+                values("con_observaciones", true, "observaciones", "   "),
+                "jefe",
+                400);
+        putJson(
+                "/actividades/" + actividad + "/verificacion/",
+                values("con_observaciones", true, "observaciones", "Falta corregir"),
+                "jefe",
+                400);
+        putJson(
+                "/actividades/" + actividad + "/verificacion/",
+                values("con_observaciones", false, "observaciones", "Texto que no corresponde"),
+                "jefe",
+                400);
+        http.perform(get(BASE + "/actividades/" + actividad).with(httpBasic("jefe", PASSWORD)))
+                .andExpect(jsonPath("$.estado_actividad").value("Registrada"));
+    }
+
+    @Test
+    void verificacionesConcurrentesNoDuplicanElSeguimiento() throws Exception {
+        long actividad = actividad(cuadrilla(c1, o1));
+        var seguimiento =
+                values(
+                        "descripcion",
+                        "Terminar el borde",
+                        "plazo_previsto",
+                        LocalDate.now().plusDays(10).toString());
+        var cuerpo =
+                values(
+                        "con_observaciones",
+                        true,
+                        "observaciones",
+                        "Falta el borde",
+                        "encargo_seguimiento",
+                        seguimiento);
+        var inicio = new CountDownLatch(1);
+        try (var ejecutor = Executors.newFixedThreadPool(2)) {
+            List<Future<Integer>> tareas = new ArrayList<>();
+            for (int i = 0; i < 2; i++)
+                tareas.add(
+                        ejecutor.submit(
+                                () -> {
+                                    inicio.await();
+                                    return http.perform(
+                                                    put(BASE
+                                                                    + "/actividades/"
+                                                                    + actividad
+                                                                    + "/verificacion")
+                                                            .with(httpBasic("jefe", PASSWORD))
+                                                            .contentType(MediaType.APPLICATION_JSON)
+                                                            .content(
+                                                                    json.writeValueAsBytes(cuerpo)))
+                                            .andReturn()
+                                            .getResponse()
+                                            .getStatus();
+                                }));
+            inicio.countDown();
+            var estados = new ArrayList<Integer>();
+            for (var tarea : tareas) estados.add(tarea.get(15, TimeUnit.SECONDS));
+            Collections.sort(estados);
+            assertEquals(List.of(200, 400), estados);
+        }
+        assertEquals(
+                1L,
+                repo.jdbc()
+                        .queryForObject(
+                                "SELECT count(*) FROM mod04_encargo WHERE actividad_origen_id=:id",
+                                Map.of("id", actividad),
+                                Long.class));
     }
 
     @Test
@@ -892,7 +1043,7 @@ class Mod04IntegrationTest {
     @Test
     void jefeVerificaActividadYSeConservanAutorFechaYAuditoria() throws Exception {
         long equipo = cuadrilla(c1, o1), actividad = actividad(equipo);
-        var verificacion = values("observaciones", "Ejecución conforme; retirar ramas del sendero");
+        var verificacion = values("con_observaciones", false);
 
         putJson("/actividades/" + actividad + "/verificacion/", verificacion, "capataz1", 403);
         putJson("/actividades/" + actividad + "/verificacion/", verificacion, "ingeniero", 403);
@@ -901,9 +1052,8 @@ class Mod04IntegrationTest {
         http.perform(get(BASE + "/actividades/" + actividad).with(httpBasic("jefe", PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.observaciones").doesNotExist())
-                .andExpect(
-                        jsonPath("$.verificacion_observaciones")
-                                .value(verificacion.get("observaciones")))
+                .andExpect(jsonPath("$.verificacion_observaciones").isEmpty())
+                .andExpect(jsonPath("$.estado_actividad").value("Verificada"))
                 .andExpect(jsonPath("$.verificado_por_usuario_id").value(jefe))
                 .andExpect(jsonPath("$.verificado_por_nombre").value("jefe"))
                 .andExpect(jsonPath("$.fecha_verificacion").isNotEmpty());
@@ -916,6 +1066,63 @@ class Mod04IntegrationTest {
                                         + " registro_id=:id AND usuario_id=:u",
                                 Map.of("id", actividad, "u", jefe),
                                 Integer.class));
+    }
+
+    @Test
+    void verificarActividadIniciaSuEncargoSinCompletarlo() throws Exception {
+        long equipo = cuadrilla(c1, o1);
+        long encargo =
+                postJson("/encargos/", encargo(equipo, "Semanal", 7), "jefe", 201)
+                        .path("id")
+                        .asLong();
+        long parte =
+                postJson("/partes", values("cuadrilla_id", equipo, "fecha", HOY), "capataz1", 201)
+                        .path("id")
+                        .asLong();
+        long actividad =
+                postJson(
+                                "/actividades",
+                                values(
+                                        "parte_id",
+                                        parte,
+                                        "tipo_actividad_id",
+                                        tipo,
+                                        "area_verde_id",
+                                        area,
+                                        "fecha_hora_actividad",
+                                        "2026-10-22T08:00:00-05:00",
+                                        "encargo_id",
+                                        encargo),
+                                "capataz1",
+                                201)
+                        .path("id")
+                        .asLong();
+
+        putJson(
+                "/actividades/" + actividad + "/verificacion/",
+                values("con_observaciones", false),
+                "jefe",
+                200);
+
+        http.perform(get(BASE + "/encargos/" + encargo).with(httpBasic("jefe", PASSWORD)))
+                .andExpect(jsonPath("$.estado").value("En curso"))
+                .andExpect(jsonPath("$.historial_estados.length()").value(1))
+                .andExpect(
+                        jsonPath("$.historial_estados[0].estado_anterior").value("Por completar"))
+                .andExpect(jsonPath("$.historial_estados[0].estado_nuevo").value("En curso"))
+                .andExpect(
+                        jsonPath("$.historial_estados[0].observaciones")
+                                .value("Actividad " + actividad + " verificada"));
+
+        // Actualizar la misma verificación no duplica la transición ni completa el encargo.
+        putJson(
+                "/actividades/" + actividad + "/verificacion/",
+                values("con_observaciones", false),
+                "jefe",
+                200);
+        http.perform(get(BASE + "/encargos/" + encargo).with(httpBasic("jefe", PASSWORD)))
+                .andExpect(jsonPath("$.estado").value("En curso"))
+                .andExpect(jsonPath("$.historial_estados.length()").value(1));
     }
 
     @Test
