@@ -1,6 +1,7 @@
 package pe.edu.pucp.areasverdes.mod04.api;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
@@ -42,16 +43,42 @@ public final class Entradas {
             @NotNull @Positive Long tipoActividadId,
             @NotNull @Positive Long areaVerdeId,
             @NotBlank @Size(max = 1000) String descripcion,
-            @NotBlank @Pattern(regexp = "Semanal|Quincenal") String periodicidad,
-            @NotNull LocalDate fechaReunion,
-            @NotNull LocalDate fechaInicio,
-            @NotNull LocalDate fechaFin,
+            @NotBlank @Pattern(regexp = "Semanal|Quincenal|Directo") String periodicidad,
+            LocalDate fechaReunion,
+            LocalDate fechaInicio,
+            LocalDate fechaFin,
             @NotNull LocalDate plazoPrevisto) {}
+
+    public record CambioEstadoEncargo(
+            @NotBlank String estadoAnterior,
+            @NotBlank String estado,
+            @Size(max = 1000) String observaciones) {}
 
     public record Participantes(
             @NotNull @Size(max = 200) List<@NotNull @Positive Long> operarios) {}
 
-    public record Verificacion(@NotBlank @Size(max = 1000) String observaciones) {}
+    /**
+     * Verificación de una actividad. Con {@code encargoSeguimiento} queda «verificada con
+     * observaciones» y se crea ese encargo, vinculado a la actividad (AV-402).
+     */
+    public record Verificacion(
+            @NotBlank @Size(max = 1000) String observaciones,
+            @Valid EncargoSeguimiento encargoSeguimiento) {}
+
+    public record EncargoSeguimiento(
+            @NotBlank @Size(max = 1000) String descripcion, @NotNull LocalDate plazoPrevisto) {}
+
+    public record Anulacion(@NotBlank @Size(max = 1000) String motivo) {}
+
+    /**
+     * Reprogramación de un encargo (AV-405). En un encargo periódico van las dos fechas del
+     * periodo; en uno directo solo el plazo.
+     */
+    public record Reprogramacion(
+            LocalDate fechaInicio,
+            LocalDate fechaFin,
+            @NotNull LocalDate plazoPrevisto,
+            @NotBlank @Size(max = 1000) String justificacion) {}
 
     public record Parte(@NotNull @Positive Long cuadrillaId, @NotNull LocalDate fecha) {}
 

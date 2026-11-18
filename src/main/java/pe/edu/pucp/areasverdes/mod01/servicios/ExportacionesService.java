@@ -48,12 +48,14 @@ public class ExportacionesService {
                                     new Columna("area", "Área verde"),
                                     new Columna("cuadrilla", "Cuadrilla"),
                                     new Columna("estado", "Estado del parte"),
+                                    new Columna("estado_actividad", "Estado de la actividad"),
                                     new Columna("observaciones", "Observaciones")),
                             """
                             SELECT a.id,
                                 to_char(a.fecha_hora_actividad AT TIME ZONE 'America/Lima',
                                     'YYYY-MM-DD HH24:MI') fecha,
                                 t.nombre tipo, v.nombre area, c.nombre cuadrilla, p.estado,
+                                a.estado_actividad,
                                 a.observaciones, p.cuadrilla_id
                             FROM mod04_actividad a
                             JOIN mod04_parte_diario p ON p.id = a.parte_id

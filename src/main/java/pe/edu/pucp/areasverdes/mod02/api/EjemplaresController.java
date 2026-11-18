@@ -40,6 +40,7 @@ public class EjemplaresController {
     }
 
     public record NuevoEjemplar(
+            @Size(max = 40) String alias,
             @Size(max = 80) String codigoPlacaAntigua,
             Long especieId,
             @Size(max = 80) String tipoVegetacion,
@@ -51,6 +52,7 @@ public class EjemplaresController {
             @Positive Long areaVerdeId) {}
 
     public record CambioEjemplar(
+            @Size(max = 40) String alias,
             @Size(max = 80) String codigoPlacaAntigua,
             Long especieId,
             @Size(max = 80) String tipoVegetacion,
@@ -80,6 +82,7 @@ public class EjemplaresController {
         Ejemplar creado =
                 ejemplares.crear(
                         new EjemplaresService.NuevoEjemplar(
+                                entrada.alias(),
                                 entrada.codigoPlacaAntigua(),
                                 entrada.especieId(),
                                 entrada.tipoVegetacion(),
@@ -103,6 +106,7 @@ public class EjemplaresController {
         return ejemplares.cambiar(
                 id,
                 new EjemplaresService.CambioEjemplar(
+                        cambio.alias(),
                         cambio.codigoPlacaAntigua(),
                         cambio.especieId(),
                         cambio.tipoVegetacion(),

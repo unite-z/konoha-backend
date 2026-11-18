@@ -1,14 +1,14 @@
 # Modelo entidad-relación
 
-Esquema **real** de PostgreSQL tal como queda tras las migraciones de Flyway de `main` (`V1` a `V80`), sacado el 12-11-2026: 96 tablas. Hay una página por módulo en `modelo-er.drawio` (MOD-03 ocupa dos) y un PNG por página:
+Esquema **real** de PostgreSQL tal como queda tras las migraciones de Flyway de `main` (`V1` a `V84`), sacado el 12-11-2026: 99 tablas. Hay una página por módulo en `modelo-er.drawio` (MOD-03 ocupa dos) y un PNG por página:
 
 | Módulo | Migraciones | Tablas | Diagrama |
 |---|---|---|---|
 | MOD-01 · Core y seguridad | `V6` a `V10`, `V23`, `V24`, `V75` y `V76` | 11 (`core_`) | [modelo-er-mod01.png](modelo-er-mod01.png) |
-| MOD-02 · Inventario | `V12` a `V22`, `V45`, `V46`, `V59`, `V62` a `V67`, `V71` y `V80` | 18 | [modelo-er-mod02.png](modelo-er-mod02.png) |
+| MOD-02 · Inventario | `V12` a `V22`, `V45`, `V46`, `V59`, `V62` a `V67`, `V71`, `V80` y `V81` | 19 | [modelo-er-mod02.png](modelo-er-mod02.png) |
 | MOD-03 · Planificación y corte | `V2` a `V4` y `V25` a `V44` | 17 | [modelo-er-mod03.png](modelo-er-mod03.png) |
-| MOD-03 · Incidencias | `V25` a `V44` y `V79` | 8 | [modelo-er-mod03-incidencias.png](modelo-er-mod03-incidencias.png) |
-| MOD-04 · Operación de campo | `V11`, `V54` a `V58`, `V60`, `V61`, `V68`, `V69` y `V78` | 13 | [modelo-er-mod04.png](modelo-er-mod04.png) |
+| MOD-03 · Incidencias | `V25` a `V44`, `V79` y `V84` | 9 | [modelo-er-mod03-incidencias.png](modelo-er-mod03-incidencias.png) |
+| MOD-04 · Operación de campo | `V11`, `V54` a `V58`, `V60`, `V61`, `V68`, `V69`, `V78`, `V82` y `V83` | 14 | [modelo-er-mod04.png](modelo-er-mod04.png) |
 | MOD-05 · Servicios tercerizados | `V1`, `V5`, `V47` a `V53`, `V70`, `V73`, `V74` y `V77` | 27 | [modelo-er-mod05.png](modelo-er-mod05.png) |
 | MOD-06 · Reportes e IA | `V72` | 2 | [modelo-er-mod06.png](modelo-er-mod06.png) |
 

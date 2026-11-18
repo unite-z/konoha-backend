@@ -26,7 +26,7 @@ public class EjemplaresService {
 
     private static final String CONSULTA =
             """
-            SELECT e.id, e.codigo, e.referencia_catastro, e.codigo_catastro,
+            SELECT e.id, e.codigo, e.alias, e.referencia_catastro, e.codigo_catastro,
                    e.codigo_placa_antigua, e.especie_id, s.nombre_comun especie_nombre_comun,
                    s.nombre_cientifico especie_nombre_cientifico,
                    s.forma_biologica especie_forma_biologica, e.tipo_vegetacion, e.ubicacion,
@@ -89,13 +89,14 @@ public class EjemplaresService {
                         .addValue("offset", (page - 1) * 25);
         return jdbc.query(
                 CONSULTA
-                        + " WHERE (:q = '' OR e.codigo ILIKE '%' || :q || '%' OR"
-                        + " e.referencia_catastro ILIKE '%' || :q || '%' OR e.codigo_placa_antigua"
-                        + " ILIKE '%' || :q || '%' OR s.nombre_comun ILIKE '%' || :q || '%' OR"
-                        + " s.nombre_cientifico ILIKE '%' || :q || '%') AND (:referencia = '' OR"
-                        + " e.referencia_catastro = :referencia) AND (CAST(:area AS bigint) IS NULL"
-                        + " OR e.area_verde_inventario_id = :area) AND (:codigo IS NULL OR e.codigo"
-                        + " = :codigo) ORDER BY e.id LIMIT :limite OFFSET :offset",
+                        + " WHERE (:q = '' OR e.codigo ILIKE '%' || :q || '%' OR e.alias ILIKE '%'"
+                        + " || :q || '%' OR e.referencia_catastro ILIKE '%' || :q || '%' OR"
+                        + " e.codigo_placa_antigua ILIKE '%' || :q || '%' OR s.nombre_comun ILIKE"
+                        + " '%' || :q || '%' OR s.nombre_cientifico ILIKE '%' || :q || '%') AND"
+                        + " (:referencia = '' OR e.referencia_catastro = :referencia) AND"
+                        + " (CAST(:area AS bigint) IS NULL OR e.area_verde_inventario_id = :area)"
+                        + " AND (:codigo IS NULL OR e.codigo = :codigo) ORDER BY e.id LIMIT :limite"
+                        + " OFFSET :offset",
                 parametros,
                 new DataClassRowMapper<>(Ejemplar.class));
     }
@@ -120,17 +121,19 @@ public class EjemplaresService {
         validarParCoordenadas(entrada.latitud(), entrada.longitud());
         validarEspecie(entrada.especieId());
         validarArea(entrada.areaVerdeId());
+        validarAlias(null, entrada.alias());
         if (entrada.areaVerdeId() != null && entrada.latitud() != null) geometria.bloquearCambios();
         long id =
                 jdbc.queryForObject(
-                        "INSERT INTO mod02_ejemplar (codigo_placa_antigua, especie_id,"
-                            + " tipo_vegetacion, ubicacion, ubicacion_geografica, cantidad,"
-                            + " altura_total_m, area_verde_inventario_id) VALUES (:placa, :especie,"
-                            + " :vegetacion, :ubicacion, CASE WHEN CAST(:latitud AS numeric) IS"
-                            + " NULL THEN NULL ELSE ST_SetSRID (ST_MakePoint(CAST(:longitud AS"
-                            + " double precision), CAST(:latitud AS double precision)),"
-                            + " 4326)::geometry(Point, 4326) END, :cantidad, :altura, :area)"
-                            + " RETURNING id",
+                        "INSERT INTO mod02_ejemplar (alias, codigo_placa_antigua, especie_id,"
+                                + " tipo_vegetacion, ubicacion, ubicacion_geografica, cantidad,"
+                                + " altura_total_m, area_verde_inventario_id) VALUES"
+                                + " (nullif(btrim(CAST(:alias AS varchar)), ''), :placa, :especie,"
+                                + " :vegetacion, :ubicacion, CASE WHEN CAST(:latitud AS numeric) IS"
+                                + " NULL THEN NULL ELSE ST_SetSRID (ST_MakePoint(CAST(:longitud AS"
+                                + " double precision), CAST(:latitud AS double precision)),"
+                                + " 4326)::geometry(Point, 4326) END, :cantidad, :altura, :area)"
+                                + " RETURNING id",
                         parametros(entrada).addValue("area", entrada.areaVerdeId()),
                         Long.class);
         geometria.validarEjemplar(id);
@@ -140,7 +143,8 @@ public class EjemplaresService {
     @Transactional
     public Ejemplar cambiar(long id, CambioEjemplar cambio, Usuario usuario) {
         AccesoCoberturas.registrar(usuario);
-        if (cambio.especieId() == null
+        if (cambio.alias() == null
+                && cambio.especieId() == null
                 && cambio.tipoVegetacion() == null
                 && cambio.ubicacion() == null
                 && cambio.latitud() == null
@@ -174,11 +178,14 @@ public class EjemplaresService {
         }
         validarEspecie(cambio.especieId());
         validarArea(cambio.areaVerdeId());
+        validarAlias(id, cambio.alias());
         int filas =
                 jdbc.update(
-                        "UPDATE mod02_ejemplar SET especie_id = coalesce(:especie, especie_id),"
-                            + " tipo_vegetacion = coalesce(:vegetacion, tipo_vegetacion), ubicacion"
-                            + " = coalesce(:ubicacion, ubicacion), ubicacion_geografica = CASE WHEN"
+                        "UPDATE mod02_ejemplar SET alias = CASE WHEN CAST(:alias AS varchar) IS"
+                            + " NULL THEN alias ELSE nullif(btrim(CAST(:alias AS varchar)), '')"
+                            + " END, especie_id = coalesce(:especie, especie_id), tipo_vegetacion ="
+                            + " coalesce(:vegetacion, tipo_vegetacion), ubicacion ="
+                            + " coalesce(:ubicacion, ubicacion), ubicacion_geografica = CASE WHEN"
                             + " NOT :cambiaUbicacion THEN ubicacion_geografica ELSE"
                             + " ST_SetSRID(ST_MakePoint(coalesce(:longitud,"
                             + " ST_X(ubicacion_geografica)), coalesce(:latitud,"
@@ -217,7 +224,7 @@ public class EjemplaresService {
         return jdbc.query(
                 """
                 SELECT a.id actividad_id,a.fecha_hora_actividad,coalesce(a.tipo_actividad_nombre,t.nombre) tipo_actividad,
-                    a.observaciones,a.pendiente_vinculacion
+                    a.observaciones,a.pendiente_vinculacion,a.estado_actividad
                 FROM mod04_actividad a
                 JOIN mod04_tipo_actividad t ON t.id=a.tipo_actividad_id
                 WHERE a.ejemplar_id=:id ORDER BY a.fecha_hora_actividad DESC,a.id DESC
@@ -344,9 +351,14 @@ public class EjemplaresService {
                 switch (fuente) {
                     case podas ->
                             """
-                            SELECT a.id, a.fecha_hora_actividad momento, 'Poda menor' tipo,
+                            SELECT a.id, a.fecha_hora_actividad momento,
+                                   CASE WHEN a.estado_actividad='Anulada' THEN 'Poda menor (Anulada)'
+                                        ELSE 'Poda menor' END tipo,
                                    'Operación de campo' origen, 'actividad' entidad,
-                                   coalesce(equipo.operarios, c.nombre) ejecutor, a.observaciones detalle
+                                   coalesce(equipo.operarios, c.nombre) ejecutor,
+                                   CASE WHEN a.estado_actividad='Anulada'
+                                        THEN 'Anulada: ' || a.anulacion_motivo
+                                        ELSE a.observaciones END detalle
                             FROM mod04_actividad a
                             JOIN mod04_tipo_actividad t ON t.id = a.tipo_actividad_id
                             JOIN mod04_parte_diario parte ON parte.id = a.parte_id
@@ -398,9 +410,9 @@ public class EjemplaresService {
                 };
         return jdbc.query(
                 "SELECT evento.id, (evento.momento AT TIME ZONE 'America/Lima')::date fecha,"
-                        + " evento.momento, evento.tipo, evento.origen, evento.ejecutor,"
-                        + " evento.detalle, evidencia.id evidencia_id, documento.id documento_id,"
-                        + " documento.reporte_id FROM ("
+                        + " evento.momento, evento.tipo, evento.origen, evento.entidad,"
+                        + " evento.ejecutor, evento.detalle, evidencia.id evidencia_id,"
+                        + " documento.id documento_id, documento.reporte_id FROM ("
                         + consulta
                         + ") evento "
                         + """
@@ -495,6 +507,7 @@ public class EjemplaresService {
 
     private static MapSqlParameterSource parametros(NuevoEjemplar entrada) {
         return new MapSqlParameterSource()
+                .addValue("alias", entrada.alias(), java.sql.Types.VARCHAR)
                 .addValue("placa", entrada.codigoPlacaAntigua())
                 .addValue("especie", entrada.especieId())
                 .addValue("vegetacion", entrada.tipoVegetacion())
@@ -507,6 +520,7 @@ public class EjemplaresService {
 
     private static MapSqlParameterSource parametros(CambioEjemplar cambio) {
         return new MapSqlParameterSource()
+                .addValue("alias", cambio.alias(), java.sql.Types.VARCHAR)
                 .addValue("placa", cambio.codigoPlacaAntigua())
                 .addValue("especie", cambio.especieId())
                 .addValue("vegetacion", cambio.tipoVegetacion())
@@ -517,6 +531,26 @@ public class EjemplaresService {
                 .addValue("altura", cambio.alturaTotalM());
     }
 
+    /**
+     * El alias es opcional, pero no puede repetirse entre ejemplares (sin distinguir mayúsculas).
+     */
+    private void validarAlias(Long idPropio, String alias) {
+        if (alias == null || alias.isBlank()) return;
+        Integer repetidos =
+                jdbc.queryForObject(
+                        "SELECT count(*) FROM mod02_ejemplar WHERE lower(alias) ="
+                                + " lower(btrim(:alias)) AND (CAST(:id AS bigint) IS NULL OR id <>"
+                                + " :id)",
+                        new MapSqlParameterSource()
+                                .addValue("alias", alias)
+                                .addValue("id", idPropio, java.sql.Types.BIGINT),
+                        Integer.class);
+        if (repetidos != null && repetidos > 0) {
+            throw new ErrorCoberturas(
+                    409, "alias-repetido", "Ya existe otro ejemplar con ese alias");
+        }
+    }
+
     private ErrorCoberturas noExiste() {
         return new ErrorCoberturas(404, "ejemplar-no-encontrado", "No existe ese ejemplar");
     }
@@ -524,6 +558,7 @@ public class EjemplaresService {
     public record Ejemplar(
             long id,
             String codigo,
+            String alias,
             String referenciaCatastro,
             String codigoCatastro,
             String codigoPlacaAntigua,
@@ -585,7 +620,8 @@ public class EjemplaresService {
             java.time.OffsetDateTime fechaHoraActividad,
             String tipoActividad,
             String observaciones,
-            boolean pendienteVinculacion) {}
+            boolean pendienteVinculacion,
+            String estadoActividad) {}
 
     public enum FuenteHistorial {
         podas,
@@ -599,6 +635,7 @@ public class EjemplaresService {
             OffsetDateTime momento,
             String tipo,
             String origen,
+            String entidad,
             String ejecutor,
             String detalle,
             Long evidenciaId,
@@ -606,6 +643,7 @@ public class EjemplaresService {
             Long reporteId) {}
 
     public record NuevoEjemplar(
+            String alias,
             String codigoPlacaAntigua,
             Long especieId,
             String tipoVegetacion,
@@ -617,6 +655,7 @@ public class EjemplaresService {
             Long areaVerdeId) {}
 
     public record CambioEjemplar(
+            String alias,
             String codigoPlacaAntigua,
             Long especieId,
             String tipoVegetacion,

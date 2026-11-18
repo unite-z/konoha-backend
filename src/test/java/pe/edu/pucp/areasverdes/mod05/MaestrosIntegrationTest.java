@@ -763,6 +763,58 @@ class MaestrosIntegrationTest {
     }
 
     @Test
+    void cancelarExigeMotivoYConservaElHistorial() throws Exception {
+        var marcado =
+                send(
+                        "POST",
+                        "atenciones-especiales/",
+                        values(
+                                "ejemplar_id",
+                                ejemplar,
+                                "plaga_id",
+                                plaga("Pulgón"),
+                                "aplicaciones_adicionales",
+                                2),
+                        "jefe",
+                        201);
+        assertTrue(marcado.get("usuario_creacion_nombre").asText().contains("jefe"));
+        assertFalse(marcado.get("fecha_creacion").isNull());
+        String ruta = "atenciones-especiales/" + marcado.get("id").asLong() + "/cancelar/";
+        send("POST", ruta, values(), "ingeniero", 400);
+        send("POST", ruta, values("motivo", "   "), "ingeniero", 400);
+        var cancelado = send("POST", ruta, values("motivo", "Plaga controlada"), "ingeniero", 200);
+        assertTrue(cancelado.get("cancelado").asBoolean());
+        assertEquals("Plaga controlada", cancelado.get("motivo_cancelacion").asText());
+        assertTrue(cancelado.get("usuario_cancelacion_nombre").asText().contains("ingeniero"));
+        assertEquals(1, count("atencion_especial"));
+        send("POST", ruta, values("motivo", "Otra vez"), "ingeniero", 409);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"retirado", "muerto", "reemplazado", "trasladado"})
+    void soloSeMarcanEjemplaresActivos(String situacion) throws Exception {
+        repo.jdbc()
+                .update(
+                        "UPDATE mod02_ejemplar SET situacion=:s WHERE id=:id",
+                        Map.of("s", situacion, "id", ejemplar));
+        var error =
+                send(
+                        "POST",
+                        "atenciones-especiales/",
+                        values(
+                                "ejemplar_id",
+                                ejemplar,
+                                "plaga_id",
+                                plaga("Pulgón"),
+                                "aplicaciones_adicionales",
+                                1),
+                        "jefe",
+                        400);
+        assertTrue(error.toString().contains(situacion));
+        assertEquals(0, count("atencion_especial"));
+    }
+
+    @Test
     void sinRolOSinCredencialesNoMarcanNiConsultan() throws Exception {
         var body =
                 values(

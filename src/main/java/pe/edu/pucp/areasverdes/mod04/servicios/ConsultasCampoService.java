@@ -29,7 +29,11 @@ public class ConsultasCampoService {
     }
 
     public record Pagina(
-            long count, String next, String previous, List<Map<String, Object>> results) {}
+            long count,
+            String next,
+            String previous,
+            List<Map<String, Object>> results,
+            Long pendientesVerificacion) {}
 
     public Pagina listar(String recurso, Map<String, String> params, String url, Usuario user) {
         service.exigirLectura(user);
@@ -49,7 +53,9 @@ public class ConsultasCampoService {
                     case "encargos" ->
                             "SELECT"
                                 + " id,cuadrilla_id,capataz_id,periodicidad,fecha_inicio,fecha_fin,descripcion"
-                                + " texto FROM mod04_encargo";
+                                + " texto,(plazo_previsto < (now() AT TIME ZONE"
+                                + " 'America/Lima')::date AND estado NOT IN"
+                                + " ('Completado','Cancelado')) vencido FROM mod04_encargo";
                     case "partes" ->
                             "SELECT id,cuadrilla_id,capataz_id,fecha,estado,estado texto FROM"
                                     + " mod04_parte_diario";
@@ -57,14 +63,17 @@ public class ConsultasCampoService {
                             """
                             SELECT a.*,p.cuadrilla_id,p.capataz_id,p.fecha,p.estado,t.nombre texto,
                                 COALESCE(a.tipo_actividad_nombre,t.nombre) tipo_actividad_nombre,av.nombre area_verde_nombre,c.nombre cuadrilla_nombre,
-                                u.nombre verificado_por_nombre,e.codigo ejemplar_codigo,e.altura_total_m ejemplar_altura_m,
+                                u.nombre verificado_por_nombre,anulador.nombre anulada_por_nombre,
+                                e.codigo ejemplar_codigo,e.alias ejemplar_alias,e.altura_total_m ejemplar_altura_m,
                                 (SELECT min(r.fecha_hora) FROM core_registro_auditoria r
                                  WHERE r.entidad='Actividad' AND r.registro_id=a.id AND r.accion='Alta'
-                                   AND r.usuario_id=a.usuario_creacion_id) fecha_hora_registro
+                                   AND r.usuario_id=a.usuario_creacion_id) fecha_hora_registro,
+                                (SELECT en.id FROM mod04_encargo en WHERE en.actividad_origen_id=a.id) encargo_seguimiento_id
                             FROM mod04_actividad a
                             JOIN mod04_parte_diario p ON p.id=a.parte_id JOIN mod04_tipo_actividad t ON t.id=a.tipo_actividad_id
                             JOIN mod05_areaverde av ON av.id=a.area_verde_id JOIN mod04_cuadrilla c ON c.id=p.cuadrilla_id
                             LEFT JOIN core_usuario u ON u.id=a.verificado_por_usuario_id
+                            LEFT JOIN core_usuario anulador ON anulador.id=a.anulada_por_usuario_id
                             LEFT JOIN mod02_ejemplar e ON e.id=a.ejemplar_id
                             """;
                     case "tipos-actividad" ->
@@ -94,13 +103,22 @@ public class ConsultasCampoService {
                                     "periodo");
                     case "partes" -> Map.of("cuadrilla_id", "id", "fecha", "date");
                     case "actividades" ->
-                            Map.of("cuadrilla_id", "id", "parte_id", "id", "fecha", "date");
+                            Map.of(
+                                    "cuadrilla_id",
+                                    "id",
+                                    "parte_id",
+                                    "id",
+                                    "fecha",
+                                    "date",
+                                    "encargo_id",
+                                    "id");
                     case "unidades-medida" -> Map.of();
                     default -> Map.of("activo", "bool");
                 };
         Set<String> allowed = new HashSet<>(filters.keySet());
         allowed.addAll(List.of("q", "page"));
-        if (recurso.equals("encargos")) allowed.addAll(List.of("desde", "hasta"));
+        if (recurso.equals("encargos")) allowed.addAll(List.of("desde", "hasta", "vencidos"));
+        if (recurso.equals("actividades")) allowed.add("estado_actividad");
         if (!allowed.containsAll(params.keySet()))
             throw ApiError.invalid("Filtros no admitidos para " + recurso);
         StringBuilder where = new StringBuilder(" WHERE true");
@@ -126,7 +144,8 @@ public class ConsultasCampoService {
                                         };
                                 case "date" -> date(raw);
                                 case "tipo" -> option(raw, List.of("Capataz", "Operario"));
-                                case "periodo" -> option(raw, List.of("Semanal", "Quincenal"));
+                                case "periodo" ->
+                                        option(raw, List.of("Semanal", "Quincenal", "Directo"));
                                 default -> throw new IllegalStateException();
                             };
                     where.append(" AND ").append(field).append("=:").append(field);
@@ -164,6 +183,38 @@ public class ConsultasCampoService {
             }
             if (desde != null && hasta != null && desde.isAfter(hasta))
                 throw ApiError.invalid("desde no puede ser posterior a hasta");
+            // AV-403: solo los vencidos (plazo pasado sin completar ni cancelar) o solo los que no.
+            String vencidos = params.getOrDefault("vencidos", "").strip();
+            if (!vencidos.isEmpty()) {
+                boolean soloVencidos =
+                        switch (vencidos.toLowerCase(Locale.ROOT)) {
+                            case "true", "1" -> true;
+                            case "false", "0" -> false;
+                            default -> throw ApiError.invalid("Booleano inválido");
+                        };
+                where.append(soloVencidos ? " AND vencido" : " AND NOT vencido");
+            }
+        }
+        Long pendientesVerificacion = null;
+        if (recurso.equals("actividades")) {
+            String basePendientes = " FROM (" + sql + ") datos" + where;
+            pendientesVerificacion =
+                    repo.jdbc()
+                            .queryForObject(
+                                    "SELECT count(*)"
+                                            + basePendientes
+                                            + " AND estado_actividad='Registrada'",
+                                    args,
+                                    Long.class);
+            String estado = params.getOrDefault("estado_actividad", "").strip();
+            if (!estado.isEmpty()) {
+                args.put(
+                        "estado_actividad",
+                        option(
+                                estado,
+                                List.of("Registrada", "Verificada", "Observada", "Anulada")));
+                where.append(" AND estado_actividad=:estado_actividad");
+            }
         }
         String base = " FROM (" + sql + ") datos" + where;
         long count = repo.jdbc().queryForObject("SELECT count(*)" + base, args, Long.class);
@@ -194,7 +245,8 @@ public class ConsultasCampoService {
                 count,
                 page < pages ? link(url, params, page + 1) : null,
                 page > 1 ? link(url, params, page - 1) : null,
-                results);
+                results,
+                pendientesVerificacion);
     }
 
     static String option(String value, List<String> options) {

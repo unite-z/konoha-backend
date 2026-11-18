@@ -225,6 +225,7 @@ public class MapaAtencionesService {
                 f.areaVerdeId() == null ? AgrupadorMaterial.SIN_ESPACIO : f.espacio(),
                 f.ejemplarId(),
                 f.ejemplarCodigo(),
+                f.ejemplarAlias(),
                 f.archivosAsociados());
     }
 

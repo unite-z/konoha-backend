@@ -20,9 +20,9 @@ import pe.edu.pucp.areasverdes.mod06.apoyo.PruebaApi;
 import pe.edu.pucp.areasverdes.mod06.comun.errores.ServicioIANoDisponible;
 
 /**
- * Pruebas de los endpoints de RF-IA-001 ({@code tests/test_extraccion_reportes.py}, parte de endpoints), con las
- * variantes obligatorias de IA: fallo de IA (CP-TR-MOD06-006), acceso sin permiso (CP-TR-MOD06-007) y validación
- * (CP-TR-MOD06-008). Ninguna prueba llama a Gemini.
+ * Pruebas de los endpoints de RF-IA-001 ({@code tests/test_extraccion_reportes.py}, parte de
+ * endpoints), con las variantes obligatorias de IA: fallo de IA (CP-TR-MOD06-006), acceso sin
+ * permiso (CP-TR-MOD06-007) y validación (CP-TR-MOD06-008). Ninguna prueba llama a Gemini.
  */
 @SuppressWarnings("unchecked")
 class ExtraccionesApiTest extends PruebaApi {
@@ -56,16 +56,23 @@ class ExtraccionesApiTest extends PruebaApi {
         Map<String, Object> datos = crearPorApi();
         assertEquals("Propuesta", datos.get("estado"));
         assertEquals("Pendiente de revisión", datos.get("etiqueta_estado"));
-        Map<String, Object> propuesta = (Map<String, Object>) ((Map<String, Object>) datos.get("contenido")).get("propuesta");
-        assertEquals(propuestaCompleta().get("campo_5"), ((Map<String, Object>) propuesta.get("campo_5")).get("valor"));
+        Map<String, Object> propuesta =
+                (Map<String, Object>)
+                        ((Map<String, Object>) datos.get("contenido")).get("propuesta");
+        assertEquals(
+                propuestaCompleta().get("campo_5"),
+                ((Map<String, Object>) propuesta.get("campo_5")).get("valor"));
         assertEquals(1, fuente.datos.get("SugerenciaIA").size());
     }
 
     @Test
     void apiFalloDeIa503SinSugerencia() throws Exception {
         FuenteDatosMemoria fuente = apiIa();
-        usarClienteIa(ClienteIAFalso.conError(new ServicioIANoDisponible(
-            "No se pudo analizar el informe con IA; registra los datos manualmente")));
+        usarClienteIa(
+                ClienteIAFalso.conError(
+                        new ServicioIANoDisponible(
+                                "No se pudo completar el análisis con IA; registra los datos"
+                                        + " manualmente")));
         MockHttpServletResponse r = postJson(URL, d("reporte_proveedor_id", 1));
         assertEquals(503, r.getStatus());
         assertEquals("ServicioIANoDisponible", json(r).get("codigo"));
@@ -79,13 +86,23 @@ class ExtraccionesApiTest extends PruebaApi {
         fabrica.configuracion(clave, modelo);
         MockHttpServletResponse r = postJson(URL, d("reporte_proveedor_id", 1));
         assertEquals(503, r.getStatus());
-        Datos.igual(d("codigo", "ServicioIANoDisponible",
-            "detalle", "El análisis con IA no está configurado; registra los datos manualmente"), json(r));
+        Datos.igual(
+                d(
+                        "codigo",
+                        "ServicioIANoDisponible",
+                        "detalle",
+                        "El análisis con IA no está configurado; registra los datos manualmente"),
+                json(r));
         assertTrue(fuente.datos.get("SugerenciaIA").isEmpty());
     }
 
     @ParameterizedTest
-    @CsvSource({"2,422,ConfiguracionFaltante", "3,404,RecursoNoEncontrado", "4,415,TipoArchivoNoAdmitido", "999,404,RecursoNoEncontrado"})
+    @CsvSource({
+        "2,422,ConfiguracionFaltante",
+        "3,404,RecursoNoEncontrado",
+        "4,415,TipoArchivoNoAdmitido",
+        "999,404,RecursoNoEncontrado"
+    })
     void apiErroresDeSolicitud(long reporteId, int estado, String codigo) throws Exception {
         apiIa();
         usarClienteIa(new ClienteIAFalso(propuestaCompleta()));
@@ -114,7 +131,9 @@ class ExtraccionesApiTest extends PruebaApi {
         assertEquals("Validada", json(r).get("etiqueta_estado"));
         MockHttpServletResponse otra = postJson(URL + sid + "/validar/", cuerpo);
         assertEquals(409, otra.getStatus());
-        assertEquals("Esta propuesta ya fue revisada (estado actual: Validada)", json(otra).get("detalle"));
+        assertEquals(
+                "Esta propuesta ya fue revisada (estado actual: Validada)",
+                json(otra).get("detalle"));
     }
 
     @Test
@@ -122,7 +141,10 @@ class ExtraccionesApiTest extends PruebaApi {
         apiIa();
         usarClienteIa(new ClienteIAFalso(propuestaCompleta()));
         Object sid = crearPorApi().get("id");
-        MockHttpServletResponse r = postJson(URL + sid + "/validar/", d("decisiones", d("campo_1", d("accion", "aceptar"))));
+        MockHttpServletResponse r =
+                postJson(
+                        URL + sid + "/validar/",
+                        d("decisiones", d("campo_1", d("accion", "aceptar"))));
         assertEquals(400, r.getStatus());
         assertEquals("ParametroInvalido", json(r).get("codigo"));
         assertTrue(((String) json(r).get("detalle")).contains("campo_2"));
@@ -145,9 +167,15 @@ class ExtraccionesApiTest extends PruebaApi {
         apiIa();
         usarClienteIa(new ClienteIAFalso(propuestaCompleta()));
         Object sid = crearPorApi().get("id");
-        MockHttpServletResponse r = postJson(URL + sid + "/validar/", d("decisiones", d("campo_1", d("accion", "borrar"))));
+        MockHttpServletResponse r =
+                postJson(
+                        URL + sid + "/validar/",
+                        d("decisiones", d("campo_1", d("accion", "borrar"))));
         assertEquals(400, r.getStatus());
-        assertEquals("{\"decisiones\":{\"campo_1\":{\"accion\":[\"Usa aceptar, corregir o descartar\"]}}}", texto(r));
+        assertEquals(
+                "{\"decisiones\":{\"campo_1\":{\"accion\":[\"Usa aceptar, corregir o"
+                        + " descartar\"]}}}",
+                texto(r));
     }
 
     @Test
@@ -155,10 +183,13 @@ class ExtraccionesApiTest extends PruebaApi {
         apiIa();
         usarClienteIa(new ClienteIAFalso(propuestaCompleta()));
         Object sid = crearPorApi().get("id");
-        MockHttpServletResponse r = postJson(URL + sid + "/rechazar/", d("motivo", "Informe ilegible"));
+        MockHttpServletResponse r =
+                postJson(URL + sid + "/rechazar/", d("motivo", "Informe ilegible"));
         assertEquals(200, r.getStatus());
         assertEquals("Rechazada", json(r).get("estado"));
-        Map<String, Object> decision = (Map<String, Object>) ((Map<String, Object>) json(r).get("contenido")).get("decision");
+        Map<String, Object> decision =
+                (Map<String, Object>)
+                        ((Map<String, Object>) json(r).get("contenido")).get("decision");
         assertEquals("Informe ilegible", decision.get("motivo_rechazo"));
     }
 
@@ -168,7 +199,8 @@ class ExtraccionesApiTest extends PruebaApi {
         usarClienteIa(new ClienteIAFalso(propuestaCompleta()));
         autenticar("Ingeniero de campo");
         Object sid = crearPorApi().get("id"); // el ingeniero sí puede solicitar (propone)
-        MockHttpServletResponse r = postJson(URL + sid + "/validar/", d("decisiones", todosAceptar()));
+        MockHttpServletResponse r =
+                postJson(URL + sid + "/validar/", d("decisiones", todosAceptar()));
         assertEquals(403, r.getStatus());
         assertEquals(MENSAJE_ROL, json(r).get("detail"));
         assertEquals(403, postJson(URL + sid + "/rechazar/", d()).getStatus());
@@ -189,7 +221,8 @@ class ExtraccionesApiTest extends PruebaApi {
         usarClienteIa(new ClienteIAFalso(propuestaCompleta()));
         autenticar("Jefe de sección", 1L);
         Object sid = crearPorApi().get("id");
-        Map<String, Object> datos = json(postJson(URL + sid + "/validar/", d("decisiones", todosAceptar())));
+        Map<String, Object> datos =
+                json(postJson(URL + sid + "/validar/", d("decisiones", todosAceptar())));
         Datos.igual(1, datos.get("validador_id"));
         Datos.igual(1, datos.get("usuario_creacion_id"));
     }

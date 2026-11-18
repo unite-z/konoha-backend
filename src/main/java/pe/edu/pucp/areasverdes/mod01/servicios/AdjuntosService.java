@@ -119,6 +119,7 @@ public class AdjuntosService {
                     "Falta el identificador de la subida (Idempotency-Key)");
         }
         exigirRegistro(destino, entidad, registroId);
+        exigirActividadEditable(entidad, registroId);
         ArchivoStorage.Validado validado;
         try {
             validado = almacen.validar(archivo);
@@ -328,6 +329,20 @@ public class AdjuntosService {
                     "La entidad debe ser actividad, atencion, incidencia, ejemplar o intervencion");
         }
         return destino;
+    }
+
+    private void exigirActividadEditable(String entidad, long registroId) {
+        if (!"actividad".equals(entidad)) return;
+        String estado =
+                jdbc.queryForObject(
+                        "SELECT estado_actividad FROM mod04_actividad WHERE id=:id FOR UPDATE",
+                        Map.of("id", registroId),
+                        String.class);
+        if ("Anulada".equals(estado)) {
+            throw ErrorCore.conflicto(
+                    "actividad-anulada",
+                    "La actividad está anulada y no admite nuevas fotografías");
+        }
     }
 
     static String saneado(String nombre) {

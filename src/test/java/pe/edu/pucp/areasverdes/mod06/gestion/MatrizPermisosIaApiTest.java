@@ -6,6 +6,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -114,6 +115,41 @@ public class MatrizPermisosIaApiTest extends ApiGestion {
                         "/api/v1/ia/inconsistencias/analisis/",
                         "{\"conjunto\": \"Proveedores\"}",
                         PROPONER));
+        // Configuración de la IA (AV-395): solo el jefe (IA.PROPUESTA.VALIDAR). Sin clave, la
+        // prueba de conexión responde 200 con ok=false.
+        List<Integer> soloJefe = List.of(401, 200, 403, 403, 403, 401);
+        MATRIZ.add(
+                new Fila(
+                        "GET",
+                        "/api/v1/ia/configuracion",
+                        "/api/v1/ia/configuracion/",
+                        null,
+                        soloJefe));
+        MATRIZ.add(
+                new Fila(
+                        "PUT",
+                        "/api/v1/ia/configuracion",
+                        "/api/v1/ia/configuracion/",
+                        "{\"proveedor\": \"gemini\", \"modelo\": \"gemini-3.6-flash\"}",
+                        soloJefe));
+        MATRIZ.add(
+                new Fila(
+                        "POST",
+                        "/api/v1/ia/configuracion/probar",
+                        "/api/v1/ia/configuracion/probar/",
+                        "{}",
+                        soloJefe));
+        // Uso y costes de la IA (AV-396): solo el jefe.
+        MATRIZ.add(new Fila("GET", "/api/v1/ia/uso", "/api/v1/ia/uso/", null, soloJefe));
+        MATRIZ.add(new Fila("GET", "/api/v1/ia/precios", "/api/v1/ia/precios/", null, soloJefe));
+        MATRIZ.add(
+                new Fila(
+                        "PUT",
+                        "/api/v1/ia/precios",
+                        "/api/v1/ia/precios/",
+                        "{\"modelo\": \"deepseek-flash\", \"vigente_desde\": \"2099-01-01\","
+                                + " \"usd_millon_entrada\": 0.3, \"usd_millon_salida\": 1.2}",
+                        soloJefe));
     }
 
     private static void alta(String nombre, String sufijo, String cuerpo, List<Integer> esperados) {
@@ -175,8 +211,8 @@ public class MatrizPermisosIaApiTest extends ApiGestion {
                         ? multipart(fila.url())
                                 .part(new MockPart("datos", "{\"ejemplar_id\": 1}".getBytes()))
                                 .with(csrf())
-                        : fila.metodo().equals("POST")
-                                ? post(fila.url())
+                        : fila.metodo().equals("POST") || fila.metodo().equals("PUT")
+                                ? (fila.metodo().equals("PUT") ? put(fila.url()) : post(fila.url()))
                                         .with(csrf())
                                         .contentType(MediaType.APPLICATION_JSON)
                                         .content(fila.cuerpo())

@@ -79,7 +79,7 @@ class PanelApiTest extends ApiGestion {
         panel("")
                 .andExpect(jsonPath("$.indicadores[2].clave").value("atenciones-por-espacio"))
                 .andExpect(jsonPath("$.indicadores[2].indicador.codigo").value("RF-REP-006"))
-                .andExpect(jsonPath("$.indicadores[2].valor").value("5"))
+                .andExpect(jsonPath("$.indicadores[2].valor").value("4"))
                 .andExpect(jsonPath("$.indicadores[2].sin_datos").value(false))
                 .andExpect(
                         jsonPath("$.indicadores[2].desglose[0].etiqueta").value("Plaza de Armas"))
@@ -88,7 +88,9 @@ class PanelApiTest extends ApiGestion {
                         jsonPath("$.indicadores[2].desglose[1].etiqueta").value("Campo Deportivo"))
                 .andExpect(
                         jsonPath("$.indicadores[2].desglose[2].etiqueta").value("Jardín Central"))
-                .andExpect(jsonPath("$.indicadores[2].desglose[3].etiqueta").value("Sin espacio"));
+                .andExpect(
+                        jsonPath("$.indicadores[2].desglose.length()")
+                                .value(3)); // sin «Sin espacio» (AV-408)
     }
 
     @Test
@@ -134,7 +136,7 @@ class PanelApiTest extends ApiGestion {
 
     @Test
     void filtroPorTipoDeServicio() throws Exception {
-        panel("&tipo_servicio_id=1").andExpect(jsonPath("$.indicadores[2].valor").value("2"));
+        panel("&tipo_servicio_id=1").andExpect(jsonPath("$.indicadores[2].valor").value("1"));
     }
 
     @Test
@@ -159,7 +161,7 @@ class PanelApiTest extends ApiGestion {
     @Test
     void conTercerizadoLosMismosValoresQueSinFiltro() throws Exception {
         panel("&modalidad=Tercerizado")
-                .andExpect(jsonPath("$.indicadores[2].valor").value("5"))
+                .andExpect(jsonPath("$.indicadores[2].valor").value("4"))
                 .andExpect(jsonPath("$.indicadores[4].valor").value("66.67"));
     }
 

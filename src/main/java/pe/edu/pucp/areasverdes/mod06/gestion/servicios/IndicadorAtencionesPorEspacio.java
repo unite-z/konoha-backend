@@ -63,7 +63,11 @@ public class IndicadorAtencionesPorEspacio implements IndicadorPanel {
         if (soloPersonalPropio(consulta)) {
             return ResultadoIndicador.sinDatos(this, motivoPersonalPropio(), notas);
         }
-        List<ConteoEspacio> conteos = atenciones.contarPorEspacio(consulta.comoFiltroAtenciones());
+        // Una atención sin espacio asociado es un error de datos, no un grupo del panel (AV-408).
+        List<ConteoEspacio> conteos =
+                atenciones.contarPorEspacio(consulta.comoFiltroAtenciones()).stream()
+                        .filter(c -> c.areaVerdeId() != null)
+                        .toList();
         long total = conteos.stream().mapToLong(ConteoEspacio::total).sum();
         if (total == 0) {
             return ResultadoIndicador.sinDatos(
