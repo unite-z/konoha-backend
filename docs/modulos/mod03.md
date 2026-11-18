@@ -1,15 +1,14 @@
-# MOD-03: configuración de los servicios periódicos
+# MOD-03: configuración y coherencia de la planificación
 
 Contrato y reglas de RF-PLA-001 (frecuencia por estación) y RF-PLA-002 (duración máxima)
-en el backend, y cómo se prueban. Revisado contra `main` el 12/11/2026 (migraciones hasta
-`V80`).
+en el backend, catálogo de tipos de restricción y reglas de programación, limpieza y cierre.
+Revisado el 17/11/2026 con las migraciones hasta V97.
 
 ## Qué no cubre
 
-MOD-03 «Planificación» tiene más partes que esta guía no documenta: restricciones del
-calendario, programación y reprogramación de ciclos, ciclo de corte de césped (ruta, marcado,
-limpieza, interrupciones y traslados), incidencias (registro, clasificación, inspección,
-derivación a MOD-05, plazos y cierre), alertas y avisos. Su contrato está en OpenAPI
+Esta guía no describe todos los flujos de MOD-03: incidencias (registro, clasificación,
+inspección, derivación a MOD-05, plazos y cierre), alertas, avisos e interrupciones y traslados
+del ciclo de corte. El contrato completo está en OpenAPI
 (`/api/docs`, etiqueta «MOD-03 Planificación»), en los controladores de
 `src/main/java/pe/edu/pucp/areasverdes/mod03/` y en las pruebas de
 `src/test/java/pe/edu/pucp/areasverdes/mod03/`. Las tablas, en `docs/base-datos/README.md`
@@ -24,7 +23,7 @@ UAT o con la Sección.
 |---|---|---|
 | `mod03_frecuencia_servicio` | `V2`, `V43` | Una fila por servicio y estación: teórica (obligatoria), práctica y máxima (opcionales), en días |
 | `mod03_duracion_servicio` | `V2`, `V43` | Una fila por servicio: duración máxima (obligatoria), días de limpieza y horario opcional |
-| `mod03_valor_inicial_frecuencia`, `mod03_valor_inicial_duracion` | `V40`, `V44` | Valores iniciales de la sección para «Usar valores iniciales» (AV-363), cargados en todos los entornos |
+| `mod03_valor_inicial_frecuencia`, `mod03_valor_inicial_duracion` | `V40`, `V44` | Valores iniciales de la sección para "Usar valores iniciales» (AV-363), cargados en todos los entornos |
 | `core_registro_auditoria` | `V7` (MOD-01) | Cada cambio de configuración, con la entidad `mod03_configuracion_servicio` y el id del servicio como registro |
 
 - El servicio es `mod05_tiposervicio` (deuda de `V1`): `V2` le añade `es_periodico` y
@@ -130,3 +129,66 @@ servicio, sin depender de los ids del catálogo. El segundo jefe que usa se crea
 ```sh
 ./mvnw test -Dtest='ConfiguracionServiciosApiTest'
 ```
+
+## Coherencia operativa de programación y cierre (decisiones funcionales del 16/11/2026)
+
+La duración sigue siendo un máximo. Para un corte de césped (mismo criterio de nombre
+`corte...` utilizado por la interfaz), el periodo previsto debe incluir al menos una jornada
+para corte y las jornadas configuradas de limpieza: `1 + limpieza <= días <= máxima + limpieza`.
+Los servicios genéricos conservan el techo sin imponerles una duración fija.
+
+La limpieza de corte es obligatoria si `dias_limpieza > 0`. Solo se registra con el ciclo en curso
+y la ruta completa, en fecha no futura y estrictamente posterior al último corte registrado
+(en America/Lima). Una jornada por fecha; el reenvío no duplica la jornada. No se deducen jornadas
+realizadas de huecos entre fechas. El cierre exige ruta completa, corte registrado, limpieza
+suficiente y posterior, jornadas de corte dentro de su máximo y total registrado dentro del
+máximo total. La fecha de cierre incluye las jornadas registradas y no puede ser futura.
+
+La API de ciclo añade `cumple_duracion`, `cumple_limpieza` y `dias_limpieza_requeridos`;
+`cumple` exige ambos cumplimientos. El reporte conserva su frecuencia independiente y añade
+`estado_limpieza`. Con fuente BD usa recuentos de marcas/jornadas, no días intermedios sin
+actividad. No modifica registros históricos ni reconstruye jornadas que no se registraron.
+
+Disponibilidad: las altas y cambios de fechas se serializan mediante un bloqueo transaccional
+de reservas. Para ciclos Programada/EnCurso con periodos coincidentes se rechaza compartir
+cuadrilla o área. Las áreas se leen tanto de la asignación como de la copia histórica de ruta.
+Con el modelo actual se consideran incompatibles las intervenciones físicas sobre la misma
+área; áreas distintas sin conflicto de cuadrilla sí se permiten. Un solapamiento del mismo
+servicio y proveedor sin asignaciones suficientes para distinguir las áreas se rechaza con
+`409 conflicto-disponibilidad`. No se estima disponibilidad de maquinaria o personas sin
+asignación en el modelo.
+
+Al cambiar la identidad de un ciclo desde el panel, `reemplaza_programacion_id` identifica
+expresamente al original Programada. Su cancelación y la creación del reemplazo son atómicas;
+un conflicto revierte ambas. La confirmación posterior de esa cancelación con el mismo motivo
+`Reprogramado como <código>` es idempotente para mantener la compatibilidad con el panel y sus
+reintentos. No se permite usar esa referencia para ignorar reservas de otros ciclos.
+
+Errores añadidos: `periodo-sin-limpieza` (400), `fecha-limpieza-invalida` (400),
+`limpieza-pendiente` (409), `corte-sin-jornadas` (409), `fecha-cierre-invalida` (400),
+`ciclo-no-en-curso` (409), `conflicto-disponibilidad` (409) y `reemplazo-invalido` (409).
+Regresiones específicas: `CoherenciaProgramacionApiTest` y `CumplimientoCorteServiceTest`.
+
+
+## Catálogo administrable de tipos de restricción (MOD-03, 17/11/2026)
+
+GET `/api/v1/planificacion/tipos-restriccion/` conserva activos por defecto;
+`?incluir_inactivos=true` incluye todos. POST y PATCH `/{id}/` requieren
+`PLA.PLANIFICACION.GESTIONAR`; usan `nombre` (1–80), `efecto`
+(`Prohibicion`, `Advertencia`, `Favorable`) y `aplica_servicios_ruidosos` booleano.
+PATCH permite `activo` para baja lógica/reactivación. V97 agrega unicidad por
+nombre normalizado sin modificar V3/V27. Revisar duplicados antes del despliegue.
+
+Cierre del campus no admite renombrado ni desactivación porque MOD-02 lo busca
+por nombre exacto. Sí admite cambio de efecto y alcance ruidoso; una prohibición
+puede impedir programación MOD-03 aunque MOD-02 conserve su ventana de poda.
+El catálogo usa RegistradorAuditoria en la misma transacción. Restricciones
+históricas conservan etiqueta y efecto vigente aunque su tipo esté inactivo;
+el estado impide nuevos usos, sin anular restricciones. Un override explícito
+de ruido de la restricción prevalece sobre el valor por defecto del tipo.
+
+Cambiar a prohibición devuelve `ciclos_afectados` con el cálculo existente del
+Calendario (incluye recurrencias materializadas); no cancela ni reprograma.
+Configuración incorpora la tercera pestaña, filtro de inactivos, panel lateral
+y enlaces Revisar ciclo. Las pruebas de API del catálogo están en
+`TiposRestriccionApiTest`; la matriz de permisos incluye sus operaciones de escritura.
