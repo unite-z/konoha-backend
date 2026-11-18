@@ -311,7 +311,7 @@ public class MarcadoCorte {
     private void exigirCicloAbierto(long programacion) {
         List<String> estado =
                 jdbc.queryForList(
-                        "SELECT estado FROM mod03_programacion_servicio WHERE id = :id",
+                        "SELECT estado FROM mod03_programacion_servicio WHERE id = :id FOR UPDATE",
                         Map.of("id", programacion),
                         String.class);
         if (estado.isEmpty()) {

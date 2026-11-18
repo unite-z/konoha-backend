@@ -31,6 +31,11 @@ class ProgramadorTest {
         assertEquals("Otoño", estacion(d("2026-03-21")));
         assertEquals("Invierno", estacion(d("2026-09-22")));
         assertEquals("Primavera", estacion(d("2026-09-23")));
+        assertEquals("Verano", estacion(d("2026-03-20")));
+        assertEquals("Otoño", estacion(d("2026-06-20")));
+        assertEquals("Invierno", estacion(d("2026-06-21")));
+        assertEquals("Primavera", estacion(d("2026-12-20")));
+        assertEquals("Verano", estacion(d("2028-02-29")));
     }
 
     @Test

@@ -72,12 +72,18 @@ public class FuenteDatosBD implements FuenteDatos {
                        p.fecha_inicio_real,
                        CASE WHEN r.pendientes = 0 THEN (r.ultimo AT TIME ZONE 'America/Lima')::date END AS fecha_fin_corte,
                        l.inicio AS fecha_inicio_limpieza,
-                       CASE WHEN p.estado = 'Completada' THEN l.fin END AS fecha_fin_limpieza
+                        l.fin AS fecha_fin_limpieza,
+                        r.dias AS dias_corte_registrados,
+                        coalesce(l.dias,0) AS dias_limpieza_registrados,
+                        (SELECT count(*) FROM mod03_limpieza_corte j WHERE j.programacion_id=p.id
+                          AND j.fecha>(r.ultimo AT TIME ZONE 'America/Lima')::date
+                          AND j.fecha<=(now() AT TIME ZONE 'America/Lima')::date) AS limpiezas_validas
                 FROM mod03_programacion_servicio p
                 JOIN (SELECT programacion_id, count(*) FILTER (WHERE estado = 'Pendiente') AS pendientes,
-                             max(marcado_en) AS ultimo
+                               max(marcado_en) AS ultimo,
+                               count(DISTINCT (marcado_en AT TIME ZONE 'America/Lima')::date) FILTER (WHERE estado='Cortado') AS dias
                       FROM mod03_ruta_corte GROUP BY programacion_id) r ON r.programacion_id = p.id
-                LEFT JOIN (SELECT programacion_id, min(fecha) AS inicio, max(fecha) AS fin
+                  LEFT JOIN (SELECT programacion_id, min(fecha) AS inicio, max(fecha) AS fin, count(*) AS dias
                            FROM mod03_limpieza_corte GROUP BY programacion_id) l ON l.programacion_id = p.id
                 WHERE p.estado <> 'Cancelada'
                 """);

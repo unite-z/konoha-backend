@@ -42,9 +42,33 @@ public class ProgramacionServicios {
                     String ventanaMes,
             Long cuadrillaId,
             @Size(max = 200, message = "Máximo 200 áreas") List<Long> areaVerdeIds,
-            @Size(max = 50, message = "Máximo 50 zonas") List<String> zonas) {}
+            @Size(max = 50, message = "Máximo 50 zonas") List<String> zonas,
+            Long reemplazaProgramacionId) {
+        public NuevaProgramacion(
+                Long tipoServicioId,
+                Long proveedorId,
+                LocalDate fechaInicioPrevista,
+                LocalDate fechaFinPrevista,
+                String justificacion,
+                String ventanaMes,
+                Long cuadrillaId,
+                List<Long> areaVerdeIds,
+                List<String> zonas) {
+            this(
+                    tipoServicioId,
+                    proveedorId,
+                    fechaInicioPrevista,
+                    fechaFinPrevista,
+                    justificacion,
+                    ventanaMes,
+                    cuadrillaId,
+                    areaVerdeIds,
+                    zonas,
+                    null);
+        }
+    }
 
-    private record Duracion(boolean ruidoso, Integer maxima, Integer limpieza) {}
+    private record Duracion(boolean ruidoso, Integer maxima, Integer limpieza, boolean corte) {}
 
     private final NamedParameterJdbcTemplate jdbc;
     private final AlertasPlanificacion alertas;
@@ -68,6 +92,23 @@ public class ProgramacionServicios {
     @Transactional
     public long crear(NuevaProgramacion nueva, UsuarioPlanificacion usuario) {
         Acceso.gestionar(usuario);
+        bloquearDisponibilidad();
+        if (nueva.reemplazaProgramacionId() != null
+                && jdbc.queryForObject(
+                                "SELECT count(*) FROM mod03_programacion_servicio WHERE id=:id AND"
+                                        + " estado='Programada' AND (tipo_servicio_id<>:servicio OR"
+                                        + " proveedor_id IS DISTINCT FROM :proveedor)",
+                                new MapSqlParameterSource("id", nueva.reemplazaProgramacionId())
+                                        .addValue("servicio", nueva.tipoServicioId())
+                                        .addValue("proveedor", nueva.proveedorId()),
+                                Integer.class)
+                        == 0) {
+            throw new ErrorPlanificacion(
+                    409,
+                    "reemplazo-invalido",
+                    "El ciclo a reprogramar ya no está disponible o conserva la misma identidad;"
+                            + " actualiza sus fechas");
+        }
         LocalDate inicio = nueva.fechaInicioPrevista();
         LocalDate fin = nueva.fechaFinPrevista();
         exigirPeriodo(inicio, fin);
@@ -112,6 +153,20 @@ public class ProgramacionServicios {
                 requerimiento.generar(id, usuario);
             }
         }
+        if (nueva.reemplazaProgramacionId() != null) {
+            String codigo =
+                    jdbc.queryForObject(
+                            "SELECT codigo FROM mod03_programacion_servicio WHERE id=:id",
+                            Map.of("id", id),
+                            String.class);
+            cambiar(
+                    nueva.reemplazaProgramacionId(),
+                    "cancelacion",
+                    null,
+                    "Reprogramado como " + codigo,
+                    usuario);
+        }
+        exigirDisponibilidad(id, inicio, fin);
         alertas.atenderFrecuencia(nueva.tipoServicioId(), usuario);
         guardarConstancias(id, conflictos, nueva.justificacion(), usuario);
         return id;
@@ -142,6 +197,7 @@ public class ProgramacionServicios {
     @Transactional
     public void reprogramar(long id, Reprogramacion nueva, UsuarioPlanificacion usuario) {
         Acceso.gestionar(usuario);
+        bloquearDisponibilidad();
         List<Actual> filas =
                 jdbc.query(
                         "SELECT tipo_servicio_id, proveedor_id, ventana_mes, estado,"
@@ -166,6 +222,7 @@ public class ProgramacionServicios {
         ventana(actual.proveedorId(), actual.ventanaMes(), inicio, fin);
         List<Restriccion> conflictos =
                 conflictos(servicio(actual.tipoServicioId()), inicio, fin, nueva.justificacion());
+        exigirDisponibilidad(id, inicio, fin);
         jdbc.update(
                 "UPDATE mod03_programacion_servicio SET fecha_inicio_prevista = :inicio,"
                         + " fecha_fin_prevista = :fin, estacion = :estacion, fecha_modificacion ="
@@ -212,12 +269,12 @@ public class ProgramacionServicios {
     private Duracion servicio(long tipoServicioId) {
         List<Duracion> servicios =
                 jdbc.query(
-                        "SELECT t.es_ruidoso ruidoso, d.duracion_maxima_dias maxima,"
-                            + " coalesce(d.dias_limpieza, 0) limpieza FROM mod05_tiposervicio t"
-                            + " LEFT JOIN mod03_duracion_servicio d ON d.tipo_servicio_id = t.id"
-                            + " WHERE t.id = :id AND t.activo AND t.es_periodico",
-                        Map.of("id", tipoServicioId),
-                        new DataClassRowMapper<>(Duracion.class));
+                        "SELECT lower(t.nombre) LIKE 'corte%' corte, t.es_ruidoso ruidoso,"
+                            + " d.duracion_maxima_dias maxima, coalesce(d.dias_limpieza, 0)"
+                            + " limpieza FROM mod05_tiposervicio t LEFT JOIN"
+                            + " mod03_duracion_servicio d ON d.tipo_servicio_id = t.id WHERE t.id ="
+                            + " :id AND t.activo AND t.es_periodico",
+                        Map.of("id", tipoServicioId), new DataClassRowMapper<>(Duracion.class));
         if (servicios.isEmpty()) {
             throw new ErrorPlanificacion(404, "servicio-no-encontrado", "No existe ese servicio");
         }
@@ -236,6 +293,8 @@ public class ProgramacionServicios {
         }
         Programador.exigirDuracion(
                 Programador.dias(inicio, fin), servicio.maxima(), servicio.limpieza());
+        Programador.exigirEspacioLimpieza(
+                Programador.dias(inicio, fin), servicio.limpieza(), servicio.corte());
         List<Restriccion> conflictos =
                 jdbc
                         .query(
@@ -289,9 +348,35 @@ public class ProgramacionServicios {
     public void cambiar(
             long id, String accion, LocalDate fecha, String motivo, UsuarioPlanificacion usuario) {
         Acceso.gestionar(usuario);
+        bloquearDisponibilidad();
         Transicion t = TRANSICIONES.get(accion);
+        List<String> estados =
+                jdbc.query(
+                        "SELECT estado FROM mod03_programacion_servicio WHERE id=:id FOR UPDATE",
+                        Map.of("id", id),
+                        (rs, fila) -> rs.getString("estado"));
+        // Compatibilidad con el segundo paso del panel: confirmar una cancelación de reemplazo ya
+        // atómica.
+        if ("cancelacion".equals(accion)
+                && !estados.isEmpty()
+                && "Cancelada".equals(estados.getFirst())
+                && motivo != null
+                && motivo.startsWith("Reprogramado como ")
+                && motivo.trim()
+                        .equals(
+                                jdbc.queryForObject(
+                                        "SELECT motivo_cancelacion FROM mod03_programacion_servicio"
+                                                + " WHERE id=:id",
+                                        Map.of("id", id),
+                                        String.class))) return;
+        if (estados.isEmpty() || !t.desde().equals(estados.getFirst()))
+            throw new ErrorPlanificacion(
+                    409,
+                    "transicion-invalida",
+                    "Solo se puede registrar %s de una programación en estado %s"
+                            .formatted(accion, t.desde()));
         if ("Completada".equals(t.hasta())) {
-            corte.exigirRutaCompleta(id);
+            corte.exigirCierre(id, fecha);
         }
         boolean cancela = "Cancelada".equals(t.hasta());
         if (cancela && (motivo == null || motivo.isBlank())) {
@@ -361,6 +446,52 @@ public class ProgramacionServicios {
         return nueva.areaVerdeIds() == null
                 ? List.of()
                 : nueva.areaVerdeIds().stream().distinct().toList();
+    }
+
+    private void bloquearDisponibilidad() {
+        jdbc.query(
+                "SELECT pg_advisory_xact_lock(hashtext('mod03_disponibilidad'))",
+                Map.of(),
+                rs -> {});
+    }
+
+    /** Las intervenciones físicas de un área y una cuadrilla son exclusivas durante el periodo. */
+    private void exigirDisponibilidad(long id, LocalDate inicio, LocalDate fin) {
+        var parametros =
+                new MapSqlParameterSource("id", id).addValue("inicio", inicio).addValue("fin", fin);
+        List<String> conflictos =
+                jdbc.query(
+                        """
+                                WITH asignaciones AS (SELECT programacion_id,area_verde_id FROM mod03_programacion_area
+                                    UNION SELECT programacion_id,area_verde_id FROM mod03_ruta_corte)
+                                SELECT CASE
+                                  WHEN p.cuadrilla_id IS NOT NULL AND p.cuadrilla_id=n.cuadrilla_id THEN 'cuadrilla'
+                                  WHEN EXISTS (SELECT 1 FROM asignaciones a JOIN asignaciones b
+                                    ON a.area_verde_id=b.area_verde_id WHERE a.programacion_id=p.id AND b.programacion_id=n.id) THEN 'áreas'
+                                  ELSE 'asignación' END conflicto
+                                FROM mod03_programacion_servicio p CROSS JOIN mod03_programacion_servicio n
+                        WHERE n.id=:id AND p.id<>n.id AND p.estado IN ('Programada','EnCurso')
+                                  AND p.fecha_inicio_prevista<=:fin AND p.fecha_fin_prevista>=:inicio
+                                  AND ((p.cuadrilla_id IS NOT NULL AND p.cuadrilla_id=n.cuadrilla_id)
+                                    OR EXISTS (SELECT 1 FROM asignaciones a JOIN asignaciones b
+                                      ON a.area_verde_id=b.area_verde_id WHERE a.programacion_id=p.id AND b.programacion_id=n.id)
+                                    OR (p.tipo_servicio_id=n.tipo_servicio_id AND p.proveedor_id IS NOT DISTINCT FROM n.proveedor_id
+                                      AND (NOT EXISTS (SELECT 1 FROM asignaciones a WHERE a.programacion_id=p.id)
+                                        OR NOT EXISTS (SELECT 1 FROM asignaciones a WHERE a.programacion_id=n.id))))
+                                ORDER BY p.id
+                        """,
+                        parametros,
+                        (rs, fila) -> rs.getString("conflicto"));
+        if (!conflictos.isEmpty()) {
+            String conflicto = conflictos.getFirst();
+            throw new ErrorPlanificacion(
+                    409,
+                    "conflicto-disponibilidad",
+                    "Conflicto de "
+                            + conflicto
+                            + ": cambia las fechas o asigna áreas independientes y una cuadrilla"
+                            + " disponible; no se guardó el ciclo");
+        }
     }
 
     /**
