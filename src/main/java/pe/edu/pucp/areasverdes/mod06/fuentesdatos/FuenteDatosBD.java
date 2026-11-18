@@ -72,7 +72,7 @@ public class FuenteDatosBD implements FuenteDatos {
                        p.fecha_inicio_real,
                        CASE WHEN r.pendientes = 0 THEN (r.ultimo AT TIME ZONE 'America/Lima')::date END AS fecha_fin_corte,
                        l.inicio AS fecha_inicio_limpieza,
-                        l.fin AS fecha_fin_limpieza,
+                        CASE WHEN p.estado = 'Completada' THEN l.fin END AS fecha_fin_limpieza,
                         r.dias AS dias_corte_registrados,
                         coalesce(l.dias,0) AS dias_limpieza_registrados,
                         (SELECT count(*) FROM mod03_limpieza_corte j WHERE j.programacion_id=p.id
