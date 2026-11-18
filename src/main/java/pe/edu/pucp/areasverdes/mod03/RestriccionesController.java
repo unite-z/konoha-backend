@@ -33,7 +33,12 @@ import pe.edu.pucp.areasverdes.mod03.CalendarioRestricciones.NuevaRestriccion;
 public class RestriccionesController {
 
     public record TipoRestriccion(
-            long id, String nombre, String efecto, boolean aplicaServiciosRuidosos) {}
+            long id,
+            String nombre,
+            String efecto,
+            boolean aplicaServiciosRuidosos,
+            boolean activo,
+            boolean protegido) {}
 
     public record Restriccion(
             long id,
@@ -94,20 +99,49 @@ public class RestriccionesController {
 
     private final NamedParameterJdbcTemplate jdbc;
     private final CalendarioRestricciones calendario;
+    private final CatalogoTiposRestriccion catalogo;
 
     public RestriccionesController(
-            NamedParameterJdbcTemplate jdbc, CalendarioRestricciones calendario) {
+            NamedParameterJdbcTemplate jdbc,
+            CalendarioRestricciones calendario,
+            CatalogoTiposRestriccion catalogo) {
         this.jdbc = jdbc;
         this.calendario = calendario;
+        this.catalogo = catalogo;
     }
 
     @Operation(summary = "Tipos de restricción con su efecto en la programación")
     @GetMapping({"/tipos-restriccion", "/tipos-restriccion/"})
-    public List<TipoRestriccion> tipos(UsuarioPlanificacion usuario) {
+    public List<TipoRestriccion> tipos(
+            UsuarioPlanificacion usuario,
+            @RequestParam(name = "incluir_inactivos", defaultValue = "false")
+                    boolean incluirInactivos) {
         Acceso.consultar(usuario);
-        return jdbc.query(
-                "SELECT * FROM mod03_tipo_restriccion WHERE activo ORDER BY id",
-                new DataClassRowMapper<>(TipoRestriccion.class));
+        return catalogo.listar(incluirInactivos);
+    }
+
+    @Operation(summary = "Crea un tipo de restricción activo (gestión de planificación)")
+    @PostMapping({"/tipos-restriccion", "/tipos-restriccion/"})
+    @ResponseStatus(HttpStatus.CREATED)
+    public CatalogoTiposRestriccion.Resultado crearTipo(
+            UsuarioPlanificacion usuario,
+            @RequestBody com.fasterxml.jackson.databind.JsonNode datos) {
+        return catalogo.crear(datos, usuario);
+    }
+
+    @Operation(
+            summary =
+                    "Modifica, desactiva o reactiva un tipo; informa ciclos afectados sin"
+                            + " modificarlos")
+    @org.springframework.web.bind.annotation.PatchMapping({
+        "/tipos-restriccion/{id}",
+        "/tipos-restriccion/{id}/"
+    })
+    public CatalogoTiposRestriccion.Resultado modificarTipo(
+            UsuarioPlanificacion usuario,
+            @PathVariable long id,
+            @RequestBody com.fasterxml.jackson.databind.JsonNode datos) {
+        return catalogo.modificar(id, datos, usuario);
     }
 
     @Operation(summary = "Restricciones vigentes que se solapan con el periodo [desde, hasta]")
