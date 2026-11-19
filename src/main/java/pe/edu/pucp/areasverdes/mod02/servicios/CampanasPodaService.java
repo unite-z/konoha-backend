@@ -122,7 +122,8 @@ public class CampanasPodaService {
             String especieNombreComun,
             String ubicacion,
             Long areaVerdeId,
-            String estadoIntervencion) {}
+            String estadoIntervencion,
+            Long intervencionId) {}
 
     public record EspecieCampana(
             Long especieId,
@@ -306,9 +307,16 @@ public class CampanasPodaService {
                                     WHERE i.campana_id = l.campana_id AND i.ejemplar_id = e.id
                                     AND i.activo) THEN 'Incompleta'
                                 ELSE 'Pendiente'
-                            END estado_intervencion
+                            END estado_intervencion,
+                            (SELECT i.id FROM mod02_intervencion_arbolado i
+                                WHERE i.campana_id = l.campana_id AND i.ejemplar_id = e.id
+                                AND i.activo
+                                ORDER BY %s DESC, i.fecha_ejecucion DESC, i.id DESC
+                                LIMIT 1) intervencion_id
                         """
-                                        .formatted(IntervencionesPodaService.TIENE_FOTO)
+                                        .formatted(
+                                                IntervencionesPodaService.TIENE_FOTO,
+                                                IntervencionesPodaService.TIENE_FOTO)
                                 + desde
                                 + " ORDER BY e.codigo LIMIT :limite OFFSET :offset",
                         filtros,
