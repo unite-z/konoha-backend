@@ -38,7 +38,24 @@ public final class TiposAtencion {
                     CORTE_DE_CESPED,
                     MANTENIMIENTO);
 
+    /** Clases de actividad de MOD-04 ({@code mod04_clase_actividad}, V54) que son atenciones. */
+    private static final Map<String, String> POR_CLASE_ACTIVIDAD =
+            Map.of(
+                    "Mantenimiento de jardines", MANTENIMIENTO,
+                    "Poda", PODA,
+                    "Manejo fitosanitario", FITOSANITARIO);
+
     private TiposAtencion() {}
+
+    /**
+     * Tipo de atención de una actividad del personal propio por su clase (coincidencia exacta);
+     * vacío si la clase no es de mantenimiento, poda ni manejo fitosanitario.
+     */
+    public static Optional<String> deClaseActividad(String nombreClase) {
+        return nombreClase == null
+                ? Optional.empty()
+                : Optional.ofNullable(POR_CLASE_ACTIVIDAD.get(nombreClase));
+    }
 
     /** Tipo de atención por coincidencia exacta del nombre; vacío si no se clasifica. */
     public static Optional<String> deTipoServicio(String nombreTipoServicio) {

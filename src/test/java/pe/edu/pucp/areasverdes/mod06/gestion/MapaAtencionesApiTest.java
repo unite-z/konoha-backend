@@ -155,6 +155,68 @@ class MapaAtencionesApiTest extends ApiGestion {
                                 .value(MapaAtencionesService.MENSAJE_SIN_DATOS));
     }
 
+    /**
+     * MOD-04 el 20/10: un deshierbo (clase «Mantenimiento de jardines») en el área 1, un riego en
+     * el área 2, que no es mantenimiento, poda ni manejo fitosanitario, y otro deshierbo anulado en
+     * el área 3.
+     */
+    @Test
+    void lasActividadesDelPersonalPropioTambienSonAtenciones() throws Exception {
+        String[] sql = {
+            "INSERT INTO mod04_personal (id, nombres, apellidos, tipo_personal) VALUES (9701,"
+                    + " 'Rosa', 'Quispe', 'Capataz')",
+            "INSERT INTO mod04_cuadrilla (id, nombre, capataz_id, usuario_creacion_id,"
+                    + " usuario_modificacion_id) SELECT 9701, 'Cuadrilla 9701', 9701, min(id),"
+                    + " min(id) FROM core_usuario",
+            "INSERT INTO mod04_parte_diario (id, cuadrilla_id, capataz_id, fecha,"
+                    + " usuario_creacion_id) SELECT 9701, 9701, 9701, '2026-10-20', min(id) FROM"
+                    + " core_usuario",
+            """
+            INSERT INTO mod04_tipo_actividad (id, nombre, clase_id)
+            SELECT 9701, 'Deshierbo 9701', id FROM mod04_clase_actividad WHERE nombre = 'Mantenimiento de jardines'
+            UNION ALL
+            SELECT 9702, 'Riego 9702', id FROM mod04_clase_actividad WHERE nombre = 'Riego'
+            ON CONFLICT (id) DO NOTHING
+            """,
+            """
+            INSERT INTO mod04_actividad (id, parte_id, tipo_actividad_id, area_verde_id, fecha_hora_actividad,
+                usuario_creacion_id)
+            SELECT v.id, 9701, v.tipo, v.area, '2026-10-20T10:00:00-05:00', (SELECT min(id) FROM core_usuario)
+            FROM (VALUES (9701, 9701, 1), (9702, 9702, 2)) AS v(id, tipo, area)
+            """,
+            // Anulada (AV-384): no es una ejecución válida y no se muestra.
+            """
+            INSERT INTO mod04_actividad (id, parte_id, tipo_actividad_id, area_verde_id, fecha_hora_actividad,
+                usuario_creacion_id, estado_actividad, anulada_en, anulada_por_usuario_id, anulacion_motivo)
+            SELECT 9703, 9701, 9701, 3, '2026-10-20T11:00:00-05:00', min(id), 'Anulada', now(), min(id),
+                   'Registrada por error'
+            FROM core_usuario
+            """,
+        };
+        for (String s : sql) jdbc.getJdbcTemplate().update(s);
+        String nota = MapaAtencionesService.NOTA_ACTIVIDADES_SIN_CLASIFICAR.formatted(1);
+
+        mapa("&modalidad=PersonalPropio")
+                .andExpect(jsonPath("$.sin_datos").value(false))
+                .andExpect(jsonPath("$.sin_coordenadas.length()").value(1))
+                .andExpect(jsonPath("$.sin_coordenadas[0].codigo").value("ACT-9701"))
+                .andExpect(jsonPath("$.sin_coordenadas[0].modalidad").value("PersonalPropio"))
+                .andExpect(jsonPath("$.sin_coordenadas[0].tipo_atencion").value("Mantenimiento"))
+                .andExpect(jsonPath("$.sin_coordenadas[0].tipo_servicio").value("Deshierbo 9701"))
+                .andExpect(jsonPath("$.sin_coordenadas[0].proveedor").value("Cuadrilla 9701"))
+                .andExpect(jsonPath("$.sin_coordenadas[0].area_verde_id").value(1))
+                .andExpect(jsonPath("$.notas", hasItem(nota)));
+
+        // Sin modalidad, junto a las tercerizadas: el mantenimiento pasa de 2 a 3.
+        mapa("").andExpect(jsonPath("$.sin_coordenadas.length()").value(7))
+                .andExpect(jsonPath("$.totales_por_tipo[*].total", contains(3, 1, 1)));
+        // Los filtros de MOD-05 (estado, tipo de servicio, riesgo) dejan fuera las actividades.
+        mapa("&tipo_servicio_id=2")
+                .andExpect(jsonPath("$.sin_coordenadas[*].codigo", contains("AT-001", "AT-001")));
+        mapa("&es_riesgo=false")
+                .andExpect(jsonPath("$.sin_coordenadas[*].codigo", hasItem("ACT-9701")));
+    }
+
     @Test
     void unPeriodoSinAtencionesDejaElMapaVisible() throws Exception {
         como("jefe", "?desde=2025-01-01&hasta=2025-01-31")

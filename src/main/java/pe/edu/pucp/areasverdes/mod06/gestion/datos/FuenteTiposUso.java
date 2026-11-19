@@ -17,4 +17,13 @@ public interface FuenteTiposUso {
      * null.
      */
     Map<Long, Long> tipoUsoDeEspacios(Collection<Long> areaVerdeIds);
+
+    /**
+     * Área de inventario de MOD-02 ({@code mod02_area_verde.id}) de cada espacio (id de
+     * mod05_areaverde): con ella el frontend ubica el espacio en el mapa del campus de MOD-02. Sin
+     * equivalencia → sin entrada. Nunca null.
+     */
+    default Map<Long, Long> areaInventarioDeEspacios(Collection<Long> areaVerdeIds) {
+        return Map.of();
+    }
 }

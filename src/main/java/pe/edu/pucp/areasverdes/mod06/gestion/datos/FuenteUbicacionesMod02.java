@@ -97,6 +97,19 @@ public class FuenteUbicacionesMod02 implements FuenteUbicaciones, FuenteTiposUso
         return r;
     }
 
+    @Override
+    public Map<Long, Long> areaInventarioDeEspacios(Collection<Long> areaVerdeIds) {
+        if (areaVerdeIds.isEmpty()) return Map.of();
+        Map<Long, Long> r = new HashMap<>();
+        jdbc.query(
+                EQUIVALENCIA + "SELECT espacio_id, area_id FROM eq",
+                Map.of("ids", areaVerdeIds),
+                rs -> {
+                    r.put(rs.getLong("espacio_id"), rs.getLong("area_id"));
+                });
+        return r;
+    }
+
     private Map<Long, JsonNode> geometrias(String sql, Collection<Long> ids) {
         Map<Long, JsonNode> r = new HashMap<>();
         jdbc.query(
