@@ -6,7 +6,7 @@ WORKDIR /build
 COPY pom.xml .
 RUN mvn -B -ntp -q dependency:go-offline
 COPY src ./src
-RUN mvn -B -ntp -q -DskipTests -Dspotless.skip=true package \
+RUN mvn -B -ntp -q -U -DskipTests -Dspotless.skip=true package \
     && cp target/*.jar /build/app.jar
 
 FROM eclipse-temurin:21-jre
