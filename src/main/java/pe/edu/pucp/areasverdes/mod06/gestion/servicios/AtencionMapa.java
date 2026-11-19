@@ -15,6 +15,8 @@ import java.time.LocalDate;
  *     actividad (el frontend lo rotula «Responsable»)
  * @param archivosAsociados evidencias disponibles: archivos de los reportes del proveedor
  * @param tipoUsoId tipo de uso del espacio en MOD-02, para colorearlo; {@code null} si no lo tiene
+ * @param areaInventarioId área de MOD-02 equivalente al espacio, para ubicarlo en el mapa del
+ *     campus de MOD-02 (sus polígonos); {@code null} si no tiene equivalencia
  */
 public record AtencionMapa(
         long atencionId,
@@ -32,9 +34,11 @@ public record AtencionMapa(
         String ejemplarCodigo,
         String ejemplarAlias,
         long archivosAsociados,
-        Long tipoUsoId) {
+        Long tipoUsoId,
+        Long areaInventarioId) {
 
-    AtencionMapa conTipoUso(Long tipoUso) {
+    /** La fila con el tipo de uso y el área de MOD-02 de su espacio. */
+    AtencionMapa conInventario(Long tipoUso, Long areaInventario) {
         return new AtencionMapa(
                 atencionId,
                 codigo,
@@ -51,7 +55,8 @@ public record AtencionMapa(
                 ejemplarCodigo,
                 ejemplarAlias,
                 archivosAsociados,
-                tipoUso);
+                tipoUso,
+                areaInventario);
     }
 
     /**

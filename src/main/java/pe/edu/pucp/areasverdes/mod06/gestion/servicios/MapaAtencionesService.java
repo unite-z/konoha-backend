@@ -149,17 +149,21 @@ public class MapaAtencionesService {
         // De la más reciente a la más antigua; con la misma fecha, en el orden de lectura.
         clasificadas.sort(Comparator.comparing(AtencionMapa::fecha).reversed());
 
-        // 5. Tipo de uso de cada espacio (para colorearlo) y, si se filtra, solo los de ese tipo.
+        // 5. Tipo de uso y área de MOD-02 de cada espacio (para colorearlo y ubicarlo en el mapa
+        // del campus) y, si se filtra por tipo de uso, solo los de ese tipo.
         if (usos.disponible()) {
-            Map<Long, Long> usoPorEspacio = tiposUso.tipoUsoDeEspacios(ids(clasificadas, true));
+            Set<Long> espacios = ids(clasificadas, true);
+            Map<Long, Long> usoPorEspacio = tiposUso.tipoUsoDeEspacios(espacios);
+            Map<Long, Long> areaPorEspacio = tiposUso.areaInventarioDeEspacios(espacios);
             clasificadas =
                     clasificadas.stream()
                             .map(
                                     a ->
-                                            a.conTipoUso(
-                                                    a.areaVerdeId() == null
-                                                            ? null
-                                                            : usoPorEspacio.get(a.areaVerdeId())))
+                                            a.areaVerdeId() == null
+                                                    ? a
+                                                    : a.conInventario(
+                                                            usoPorEspacio.get(a.areaVerdeId()),
+                                                            areaPorEspacio.get(a.areaVerdeId())))
                             .filter(
                                     a ->
                                             filtros.tipoUsoId() == null
@@ -263,6 +267,7 @@ public class MapaAtencionesService {
                 f.ejemplarCodigo(),
                 f.ejemplarAlias(),
                 f.archivosAsociados(),
+                null,
                 null);
     }
 
@@ -284,6 +289,7 @@ public class MapaAtencionesService {
                 a.ejemplarCodigo(),
                 a.ejemplarAlias(),
                 0,
+                null,
                 null);
     }
 

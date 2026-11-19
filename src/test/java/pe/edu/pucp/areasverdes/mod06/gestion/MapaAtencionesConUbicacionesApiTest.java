@@ -85,6 +85,11 @@ class MapaAtencionesConUbicacionesApiTest extends ApiGestion {
                 public Map<Long, Long> tipoUsoDeEspacios(Collection<Long> ids) {
                     return filtrar(Map.of(1L, 1L, 2L, 2L, 3L, 1L), ids);
                 }
+
+                @Override
+                public Map<Long, Long> areaInventarioDeEspacios(Collection<Long> ids) {
+                    return filtrar(Map.of(1L, 101L, 3L, 103L), ids);
+                }
             };
         }
 
@@ -137,6 +142,27 @@ class MapaAtencionesConUbicacionesApiTest extends ApiGestion {
                 .andExpect(jsonPath("$.mapa.features[*].properties.codigo", contains("AT-001")))
                 .andExpect(jsonPath("$.mapa.features[0].geometry.type").value("Polygon"))
                 .andExpect(jsonPath("$.sin_coordenadas[*].codigo", contains("AT-006")));
+    }
+
+    /**
+     * Cada fila lleva el área de MOD-02 de su espacio, para ubicarla en el mapa del campus; sin
+     * equivalencia (área 2) o sin espacio, ninguna.
+     */
+    @Test
+    void cadaAtencionLlevaElAreaDeInventarioDeSuEspacio() throws Exception {
+        mapa("").andExpect(
+                        jsonPath(
+                                "$.mapa.features[?(@.geometry.type =="
+                                        + " 'Polygon')].properties.area_inventario_id",
+                                contains(101)))
+                .andExpect(
+                        jsonPath(
+                                "$.sin_coordenadas[?(@.codigo == 'AT-006')].area_inventario_id",
+                                contains(103)))
+                .andExpect(
+                        jsonPath(
+                                "$.sin_coordenadas[?(@.codigo == 'AT-007')].area_inventario_id",
+                                contains(nullValue())));
     }
 
     /** Cada fila lleva el tipo de uso de su espacio, para colorearlo; sin espacio, ninguno. */
