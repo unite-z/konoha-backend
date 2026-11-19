@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -24,6 +25,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -42,6 +44,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -58,7 +61,7 @@ import pe.edu.pucp.areasverdes.mod05.Mod05Repository;
 @AutoConfigureMockMvc
 class Mod04IntegrationTest {
     static final String BASE = "/api/v1/operacion-campo", PASSWORD = "prueba-mod04-local";
-    static final String HASH = new BCryptPasswordEncoder().encode(PASSWORD);
+    static final String HASH = new BCryptPasswordEncoder(4).encode(PASSWORD);
     static final LocalDate HOY = LocalDate.of(2026, 10, 22);
 
     @DynamicPropertySource
@@ -379,6 +382,248 @@ class Mod04IntegrationTest {
     }
 
     @Test
+    void losEncargosVencidosSeMarcanYSeFiltran() throws Exception {
+        long equipo = cuadrilla(c1, o1);
+        // Vencido: el plazo (HOY, en el pasado) ya pasó y sigue abierto.
+        long vencido =
+                postJson("/encargos/", encargo(equipo, "Semanal", 7), "jefe", 201)
+                        .path("id")
+                        .asLong();
+        // Cancelado con el plazo pasado: ya no cuenta como vencido.
+        long cancelado =
+                postJson("/encargos/", encargo(equipo, "Semanal", 7), "jefe", 201)
+                        .path("id")
+                        .asLong();
+        postJson(
+                "/encargos/" + cancelado + "/estado/",
+                values(
+                        "estado_anterior",
+                        "Por completar",
+                        "estado",
+                        "Cancelado",
+                        "observaciones",
+                        "Ya no hace falta"),
+                "jefe",
+                200);
+        // Vigente: el plazo está lejos en el futuro.
+        var futuro = encargo(equipo, "Semanal", 7);
+        futuro.put("fecha_reunion", "2099-06-01");
+        futuro.put("fecha_inicio", "2099-06-01");
+        futuro.put("fecha_fin", "2099-06-07");
+        futuro.put("plazo_previsto", "2099-06-07");
+        long vigente = postJson("/encargos/", futuro, "jefe", 201).path("id").asLong();
+
+        var jefe = httpBasic("jefe", PASSWORD);
+        http.perform(get(BASE + "/encargos/" + vencido).with(jefe))
+                .andExpect(jsonPath("$.vencido").value(true));
+        http.perform(get(BASE + "/encargos/" + cancelado).with(jefe))
+                .andExpect(jsonPath("$.vencido").value(false));
+        http.perform(get(BASE + "/encargos/" + vigente).with(jefe))
+                .andExpect(jsonPath("$.vencido").value(false));
+
+        http.perform(get(BASE + "/encargos?vencidos=true").with(jefe))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(1))
+                .andExpect(jsonPath("$.results[0].id").value(vencido))
+                .andExpect(jsonPath("$.results[0].vencido").value(true));
+        http.perform(get(BASE + "/encargos?vencidos=false").with(jefe))
+                .andExpect(jsonPath("$.count").value(2));
+        http.perform(get(BASE + "/encargos").with(jefe)).andExpect(jsonPath("$.count").value(3));
+        http.perform(get(BASE + "/encargos?vencidos=quizas").with(jefe))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void laJefaturaReprogramaUnEncargoVivoConJustificacionYQuedaEnElHistorial() throws Exception {
+        long equipo = cuadrilla(c1, o1);
+        long id =
+                postJson("/encargos/", encargo(equipo, "Semanal", 7), "jefe", 201)
+                        .path("id")
+                        .asLong();
+        String ruta = "/encargos/" + id + "/reprogramacion/";
+        var inicioNuevo = LocalDate.of(2099, 6, 1);
+        var finNuevo = inicioNuevo.plusDays(6);
+        var nueva =
+                values(
+                        "fecha_inicio",
+                        inicioNuevo.toString(),
+                        "fecha_fin",
+                        finNuevo.toString(),
+                        "plazo_previsto",
+                        finNuevo.toString(),
+                        "justificacion",
+                        "  Lluvias en la zona ");
+
+        postJson(ruta, nueva, "capataz1", 403);
+        postJson(ruta, nueva, "ingeniero", 403);
+
+        var reprogramado = postJson(ruta, nueva, "jefe", 200);
+        assertEquals(inicioNuevo.toString(), reprogramado.path("fecha_inicio").asText());
+        assertEquals(finNuevo.toString(), reprogramado.path("fecha_fin").asText());
+        assertEquals(finNuevo.toString(), reprogramado.path("plazo_previsto").asText());
+        assertEquals(false, reprogramado.path("vencido").asBoolean());
+        var historial = reprogramado.path("reprogramaciones").get(0);
+        assertEquals("Lluvias en la zona", historial.path("justificacion").asText());
+        assertEquals(HOY.toString(), historial.path("fecha_inicio_anterior").asText());
+        assertEquals(inicioNuevo.toString(), historial.path("fecha_inicio_nueva").asText());
+        assertEquals(HOY.toString(), historial.path("plazo_anterior").asText());
+        assertEquals(finNuevo.toString(), historial.path("plazo_nuevo").asText());
+        assertTrue(historial.hasNonNull("autor"));
+        http.perform(get(BASE + "/encargos/" + id).with(httpBasic("jefe", PASSWORD)))
+                .andExpect(jsonPath("$.reprogramaciones.length()").value(1));
+    }
+
+    @Test
+    void laReprogramacionAplicaLasReglasDelEncargoYNoToleraCambiosVacios() throws Exception {
+        long equipo = cuadrilla(c1, o1);
+        long id =
+                postJson("/encargos/", encargo(equipo, "Semanal", 7), "jefe", 201)
+                        .path("id")
+                        .asLong();
+        String ruta = "/encargos/" + id + "/reprogramacion/";
+        var igual =
+                values(
+                        "fecha_inicio",
+                        HOY.toString(),
+                        "fecha_fin",
+                        HOY.plusDays(6).toString(),
+                        "plazo_previsto",
+                        HOY.toString(),
+                        "justificacion",
+                        "Sin cambios");
+        postJson(ruta, igual, "jefe", 400);
+
+        var sinJustificar = new HashMap<>(igual);
+        sinJustificar.put("plazo_previsto", HOY.plusDays(1).toString());
+        sinJustificar.put("justificacion", "   ");
+        postJson(ruta, sinJustificar, "jefe", 400);
+
+        var muyLargo = new HashMap<>(igual);
+        muyLargo.put("fecha_fin", HOY.plusDays(7).toString());
+        muyLargo.put("justificacion", "Más días");
+        postJson(ruta, muyLargo, "jefe", 400);
+
+        var plazoFuera = new HashMap<>(igual);
+        plazoFuera.put("plazo_previsto", HOY.plusDays(9).toString());
+        plazoFuera.put("justificacion", "Plazo fuera");
+        postJson(ruta, plazoFuera, "jefe", 400);
+
+        var sinPeriodo = values("plazo_previsto", HOY.plusDays(1).toString(), "justificacion", "x");
+        postJson(ruta, sinPeriodo, "jefe", 400);
+        postJson("/encargos/999999/reprogramacion/", igual, "jefe", 404);
+    }
+
+    @Test
+    void noSeReprogramaUnEncargoCerradoNiDejaActividadesFueraDelNuevoPeriodo() throws Exception {
+        long equipo = cuadrilla(c1, o1);
+        long id =
+                postJson("/encargos/", encargo(equipo, "Semanal", 7), "jefe", 201)
+                        .path("id")
+                        .asLong();
+        long parte =
+                postJson("/partes", values("cuadrilla_id", equipo, "fecha", HOY), "capataz1", 201)
+                        .path("id")
+                        .asLong();
+        postJson(
+                "/actividades",
+                values(
+                        "parte_id",
+                        parte,
+                        "tipo_actividad_id",
+                        tipo,
+                        "area_verde_id",
+                        area,
+                        "fecha_hora_actividad",
+                        "2026-10-22T08:00:00-05:00",
+                        "encargo_id",
+                        id),
+                "capataz1",
+                201);
+        String ruta = "/encargos/" + id + "/reprogramacion/";
+        // La actividad del día HOY quedaría fuera del periodo que empieza dos días después.
+        var corrido =
+                values(
+                        "fecha_inicio",
+                        HOY.plusDays(2).toString(),
+                        "fecha_fin",
+                        HOY.plusDays(8).toString(),
+                        "plazo_previsto",
+                        HOY.plusDays(8).toString(),
+                        "justificacion",
+                        "Mover");
+        postJson(ruta, corrido, "jefe", 409);
+        // Alargar el periodo manteniendo la actividad dentro sí se puede, aunque ya tenga
+        // ejecución.
+        var alargado = new HashMap<>(corrido);
+        alargado.put("fecha_inicio", HOY.toString());
+        alargado.put("fecha_fin", HOY.plusDays(6).toString());
+        alargado.put("plazo_previsto", HOY.plusDays(3).toString());
+        alargado.put("justificacion", "Alargar");
+        postJson(ruta, alargado, "jefe", 200);
+
+        postJson(
+                "/encargos/" + id + "/estado/",
+                values(
+                        "estado_anterior",
+                        "Por completar",
+                        "estado",
+                        "Cancelado",
+                        "observaciones",
+                        "Ya no hace falta"),
+                "jefe",
+                200);
+        var otro = new HashMap<>(alargado);
+        otro.put("plazo_previsto", HOY.plusDays(4).toString());
+        postJson(ruta, otro, "jefe", 409);
+    }
+
+    @Test
+    void elEncargoDirectoSoloCambiaElPlazo() throws Exception {
+        long equipo = cuadrilla(c1, o1);
+        var directo =
+                values(
+                        "cuadrilla_id",
+                        equipo,
+                        "tipo_actividad_id",
+                        tipo,
+                        "area_verde_id",
+                        area,
+                        "descripcion",
+                        "Encargo directo",
+                        "periodicidad",
+                        "Directo",
+                        "plazo_previsto",
+                        LocalDate.now().plusDays(20).toString());
+        long id = postJson("/encargos/", directo, "jefe", 201).path("id").asLong();
+        String ruta = "/encargos/" + id + "/reprogramacion/";
+        postJson(
+                ruta,
+                values(
+                        "fecha_inicio",
+                        HOY.toString(),
+                        "plazo_previsto",
+                        LocalDate.now().plusDays(30).toString(),
+                        "justificacion",
+                        "x"),
+                "jefe",
+                400);
+        postJson(
+                ruta,
+                values("plazo_previsto", "2000-01-01", "justificacion", "Antes del inicio"),
+                "jefe",
+                400);
+        var plazo = LocalDate.now().plusDays(30).toString();
+        var reprogramado =
+                postJson(
+                        ruta,
+                        values("plazo_previsto", plazo, "justificacion", "Más tiempo"),
+                        "jefe",
+                        200);
+        assertEquals(plazo, reprogramado.path("plazo_previsto").asText());
+        assertEquals(plazo, reprogramado.path("fecha_fin").asText());
+    }
+
+    @Test
     void filtrosPaginacionValidacionYDocumentacion() throws Exception {
         long id = cuadrilla(c1, o1);
         postJson("/encargos", encargo(id, "Quincenal", 14), "jefe", 201);
@@ -489,6 +734,272 @@ class Mod04IntegrationTest {
     }
 
     @Test
+    void lasActividadesSeFiltranPorEncargoParaLlegarDelEncargoASusTareas() throws Exception {
+        long equipo = cuadrilla(c1, o1);
+        long encargo =
+                postJson("/encargos/", encargo(equipo, "Semanal", 7), "jefe", 201)
+                        .path("id")
+                        .asLong();
+        long parte =
+                postJson("/partes", values("cuadrilla_id", equipo, "fecha", HOY), "capataz1", 201)
+                        .path("id")
+                        .asLong();
+        var vinculada =
+                values(
+                        "parte_id",
+                        parte,
+                        "tipo_actividad_id",
+                        tipo,
+                        "area_verde_id",
+                        area,
+                        "fecha_hora_actividad",
+                        "2026-10-22T08:00:00-05:00",
+                        "encargo_id",
+                        encargo);
+        long deEncargo = postJson("/actividades", vinculada, "capataz1", 201).path("id").asLong();
+        var sinEncargo = new HashMap<>(vinculada);
+        sinEncargo.remove("encargo_id");
+        postJson("/actividades", sinEncargo, "capataz1", 201);
+
+        Cookie sesion = sesionCore("ingeniero");
+        http.perform(get(BASE + "/actividades/?encargo_id=" + encargo).cookie(sesion))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(1))
+                .andExpect(jsonPath("$.results[0].id").value(deEncargo))
+                .andExpect(jsonPath("$.results[0].encargo_id").value(encargo));
+        http.perform(get(BASE + "/actividades/?encargo_id=" + (encargo + 1000)).cookie(sesion))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(0));
+        http.perform(get(BASE + "/actividades/?encargo_id=abc").cookie(sesion))
+                .andExpect(status().isBadRequest());
+        // Sin el filtro, las dos actividades de la cuadrilla.
+        http.perform(get(BASE + "/actividades/?cuadrilla_id=" + equipo).cookie(sesion))
+                .andExpect(jsonPath("$.count").value(2));
+    }
+
+    @Test
+    void aceptarConObservacionesCreaElEncargoDeSeguimientoVinculado() throws Exception {
+        long equipo = cuadrilla(c1, o1);
+        long actividad = actividad(equipo);
+        var seguimiento =
+                values(
+                        "descripcion",
+                        "  Terminar el borde norte ",
+                        "plazo_previsto",
+                        LocalDate.now().plusDays(10).toString());
+
+        // Sin permiso de verificar no se puede, y un plazo pasado deja la actividad como estaba.
+        putJson(
+                "/actividades/" + actividad + "/verificacion/",
+                values(
+                        "con_observaciones",
+                        true,
+                        "observaciones",
+                        "Falta el borde",
+                        "encargo_seguimiento",
+                        seguimiento),
+                "capataz1",
+                403);
+        var pasado = values("descripcion", "Terminar", "plazo_previsto", "2000-01-01");
+        putJson(
+                "/actividades/" + actividad + "/verificacion/",
+                values(
+                        "con_observaciones",
+                        true,
+                        "observaciones",
+                        "Falta el borde",
+                        "encargo_seguimiento",
+                        pasado),
+                "jefe",
+                400);
+        http.perform(get(BASE + "/actividades/" + actividad).with(httpBasic("jefe", PASSWORD)))
+                .andExpect(jsonPath("$.estado_actividad").value("Registrada"))
+                .andExpect(jsonPath("$.encargo_seguimiento_id").isEmpty());
+        assertEquals(
+                0L,
+                repo.jdbc()
+                        .queryForObject(
+                                "SELECT count(*) FROM mod04_encargo", Map.of(), Long.class));
+
+        var observada =
+                putJson(
+                        "/actividades/" + actividad + "/verificacion/",
+                        values(
+                                "con_observaciones",
+                                true,
+                                "observaciones",
+                                "Falta el borde",
+                                "encargo_seguimiento",
+                                seguimiento),
+                        "jefe",
+                        200);
+        assertEquals("Observada", observada.path("estado_actividad").asText());
+        long encargo = observada.path("encargo_seguimiento_id").asLong();
+        assertTrue(encargo > 0);
+
+        http.perform(get(BASE + "/encargos/" + encargo).with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.actividad_origen_id").value(actividad))
+                .andExpect(jsonPath("$.periodicidad").value("Directo"))
+                .andExpect(jsonPath("$.descripcion").value("Terminar el borde norte"))
+                .andExpect(jsonPath("$.cuadrilla_id").value(equipo))
+                .andExpect(jsonPath("$.tipo_actividad_id").value(tipo))
+                .andExpect(jsonPath("$.area_verde_id").value(area))
+                .andExpect(jsonPath("$.estado").value("Por completar"));
+        http.perform(
+                        get(BASE + "/actividades/?estado_actividad=Observada")
+                                .with(httpBasic("jefe", PASSWORD)))
+                .andExpect(jsonPath("$.count").value(1))
+                .andExpect(jsonPath("$.results[0].encargo_seguimiento_id").value(encargo));
+
+        // Las actualizaciones reutilizan el seguimiento y conservan cada cambio en auditoría.
+        var actualizada =
+                putJson(
+                        "/actividades/" + actividad + "/verificacion/",
+                        values(
+                                "con_observaciones",
+                                true,
+                                "observaciones",
+                                "Corregir también el sur"),
+                        "jefe",
+                        200);
+        assertEquals("Observada", actualizada.path("estado_actividad").asText());
+        assertEquals(encargo, actualizada.path("encargo_seguimiento_id").asLong());
+        assertEquals(
+                1L,
+                repo.jdbc()
+                        .queryForObject(
+                                "SELECT count(*) FROM mod04_encargo WHERE actividad_origen_id=:id",
+                                Map.of("id", actividad),
+                                Long.class));
+
+        // Volver a «Verificada» limpia el valor vigente, pero no borra ni cancela en silencio el
+        // seguimiento histórico. Si vuelve a «Observada», reutiliza el mismo encargo.
+        var conforme =
+                putJson(
+                        "/actividades/" + actividad + "/verificacion/",
+                        values("con_observaciones", false),
+                        "jefe",
+                        200);
+        assertEquals("Verificada", conforme.path("estado_actividad").asText());
+        assertTrue(conforme.path("verificacion_observaciones").asText().isEmpty());
+        assertEquals(encargo, conforme.path("encargo_seguimiento_id").asLong());
+        http.perform(get(BASE + "/encargos/" + encargo).with(httpBasic("jefe", PASSWORD)))
+                .andExpect(jsonPath("$.estado").value("Por completar"));
+
+        var observadaDeNuevo =
+                putJson(
+                        "/actividades/" + actividad + "/verificacion/",
+                        values("con_observaciones", true, "observaciones", "Revisar otra vez"),
+                        "jefe",
+                        200);
+        assertEquals("Observada", observadaDeNuevo.path("estado_actividad").asText());
+        assertEquals(encargo, observadaDeNuevo.path("encargo_seguimiento_id").asLong());
+        putJson(
+                "/actividades/" + actividad + "/verificacion/",
+                values(
+                        "con_observaciones",
+                        true,
+                        "observaciones",
+                        "No duplicar",
+                        "encargo_seguimiento",
+                        seguimiento),
+                "jefe",
+                400);
+        assertEquals(
+                4,
+                repo.jdbc()
+                        .queryForObject(
+                                "SELECT count(*) FROM core_registro_auditoria WHERE"
+                                        + " entidad='Actividad' AND registro_id=:id AND"
+                                        + " accion='Modificacion'",
+                                Map.of("id", actividad),
+                                Integer.class));
+
+        // La anulación sigue prohibida después de cualquier resultado de verificación.
+        putJson(
+                "/actividades/" + actividad + "/anulacion/",
+                values("motivo", "Registro duplicado"),
+                "jefe",
+                409);
+    }
+
+    @Test
+    void verificacionValidaLaModalidadYNoAceptaTextoResidual() throws Exception {
+        long actividad = actividad(cuadrilla(c1, o1));
+        putJson(
+                "/actividades/" + actividad + "/verificacion/",
+                values("con_observaciones", true, "observaciones", "   "),
+                "jefe",
+                400);
+        putJson(
+                "/actividades/" + actividad + "/verificacion/",
+                values("con_observaciones", true, "observaciones", "Falta corregir"),
+                "jefe",
+                400);
+        putJson(
+                "/actividades/" + actividad + "/verificacion/",
+                values("con_observaciones", false, "observaciones", "Texto que no corresponde"),
+                "jefe",
+                400);
+        http.perform(get(BASE + "/actividades/" + actividad).with(httpBasic("jefe", PASSWORD)))
+                .andExpect(jsonPath("$.estado_actividad").value("Registrada"));
+    }
+
+    @Test
+    void verificacionesConcurrentesNoDuplicanElSeguimiento() throws Exception {
+        long actividad = actividad(cuadrilla(c1, o1));
+        var seguimiento =
+                values(
+                        "descripcion",
+                        "Terminar el borde",
+                        "plazo_previsto",
+                        LocalDate.now().plusDays(10).toString());
+        var cuerpo =
+                values(
+                        "con_observaciones",
+                        true,
+                        "observaciones",
+                        "Falta el borde",
+                        "encargo_seguimiento",
+                        seguimiento);
+        var inicio = new CountDownLatch(1);
+        try (var ejecutor = Executors.newFixedThreadPool(2)) {
+            List<Future<Integer>> tareas = new ArrayList<>();
+            for (int i = 0; i < 2; i++)
+                tareas.add(
+                        ejecutor.submit(
+                                () -> {
+                                    inicio.await();
+                                    return http.perform(
+                                                    put(BASE
+                                                                    + "/actividades/"
+                                                                    + actividad
+                                                                    + "/verificacion")
+                                                            .with(httpBasic("jefe", PASSWORD))
+                                                            .contentType(MediaType.APPLICATION_JSON)
+                                                            .content(
+                                                                    json.writeValueAsBytes(cuerpo)))
+                                            .andReturn()
+                                            .getResponse()
+                                            .getStatus();
+                                }));
+            inicio.countDown();
+            var estados = new ArrayList<Integer>();
+            for (var tarea : tareas) estados.add(tarea.get(15, TimeUnit.SECONDS));
+            Collections.sort(estados);
+            assertEquals(List.of(200, 400), estados);
+        }
+        assertEquals(
+                1L,
+                repo.jdbc()
+                        .queryForObject(
+                                "SELECT count(*) FROM mod04_encargo WHERE actividad_origen_id=:id",
+                                Map.of("id", actividad),
+                                Long.class));
+    }
+
+    @Test
     void opcionesYDetalleDeActividadRespetanPertenenciaYRol() throws Exception {
         long squad = cuadrilla(c1, o1, o2), act = actividad(squad);
         http.perform(get(BASE + "/actividades/" + act).with(httpBasic("capataz1", PASSWORD)))
@@ -532,7 +1043,7 @@ class Mod04IntegrationTest {
     @Test
     void jefeVerificaActividadYSeConservanAutorFechaYAuditoria() throws Exception {
         long equipo = cuadrilla(c1, o1), actividad = actividad(equipo);
-        var verificacion = values("observaciones", "Ejecución conforme; retirar ramas del sendero");
+        var verificacion = values("con_observaciones", false);
 
         putJson("/actividades/" + actividad + "/verificacion/", verificacion, "capataz1", 403);
         putJson("/actividades/" + actividad + "/verificacion/", verificacion, "ingeniero", 403);
@@ -541,9 +1052,8 @@ class Mod04IntegrationTest {
         http.perform(get(BASE + "/actividades/" + actividad).with(httpBasic("jefe", PASSWORD)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.observaciones").doesNotExist())
-                .andExpect(
-                        jsonPath("$.verificacion_observaciones")
-                                .value(verificacion.get("observaciones")))
+                .andExpect(jsonPath("$.verificacion_observaciones").isEmpty())
+                .andExpect(jsonPath("$.estado_actividad").value("Verificada"))
                 .andExpect(jsonPath("$.verificado_por_usuario_id").value(jefe))
                 .andExpect(jsonPath("$.verificado_por_nombre").value("jefe"))
                 .andExpect(jsonPath("$.fecha_verificacion").isNotEmpty());
@@ -555,6 +1065,269 @@ class Mod04IntegrationTest {
                                         + " entidad='Actividad' AND accion='Modificacion' AND"
                                         + " registro_id=:id AND usuario_id=:u",
                                 Map.of("id", actividad, "u", jefe),
+                                Integer.class));
+    }
+
+    @Test
+    void verificarActividadIniciaSuEncargoSinCompletarlo() throws Exception {
+        long equipo = cuadrilla(c1, o1);
+        long encargo =
+                postJson("/encargos/", encargo(equipo, "Semanal", 7), "jefe", 201)
+                        .path("id")
+                        .asLong();
+        long parte =
+                postJson("/partes", values("cuadrilla_id", equipo, "fecha", HOY), "capataz1", 201)
+                        .path("id")
+                        .asLong();
+        long actividad =
+                postJson(
+                                "/actividades",
+                                values(
+                                        "parte_id",
+                                        parte,
+                                        "tipo_actividad_id",
+                                        tipo,
+                                        "area_verde_id",
+                                        area,
+                                        "fecha_hora_actividad",
+                                        "2026-10-22T08:00:00-05:00",
+                                        "encargo_id",
+                                        encargo),
+                                "capataz1",
+                                201)
+                        .path("id")
+                        .asLong();
+
+        putJson(
+                "/actividades/" + actividad + "/verificacion/",
+                values("con_observaciones", false),
+                "jefe",
+                200);
+
+        http.perform(get(BASE + "/encargos/" + encargo).with(httpBasic("jefe", PASSWORD)))
+                .andExpect(jsonPath("$.estado").value("En curso"))
+                .andExpect(jsonPath("$.historial_estados.length()").value(1))
+                .andExpect(
+                        jsonPath("$.historial_estados[0].estado_anterior").value("Por completar"))
+                .andExpect(jsonPath("$.historial_estados[0].estado_nuevo").value("En curso"))
+                .andExpect(
+                        jsonPath("$.historial_estados[0].observaciones")
+                                .value("Actividad " + actividad + " verificada"));
+
+        // Actualizar la misma verificación no duplica la transición ni completa el encargo.
+        putJson(
+                "/actividades/" + actividad + "/verificacion/",
+                values("con_observaciones", false),
+                "jefe",
+                200);
+        http.perform(get(BASE + "/encargos/" + encargo).with(httpBasic("jefe", PASSWORD)))
+                .andExpect(jsonPath("$.estado").value("En curso"))
+                .andExpect(jsonPath("$.historial_estados.length()").value(1));
+    }
+
+    @Test
+    void jefeAnulaActividadConMotivoYConservaSusDatos() throws Exception {
+        long equipo = cuadrilla(c1, o1), actividad = actividad(equipo);
+        putJson(
+                "/actividades/" + actividad + "/participantes/",
+                values("operarios", List.of(o1)),
+                "capataz1",
+                200);
+        var material = values("material_id", 1, "cantidad", 2, "unidad_medida_id", 1);
+        postJson("/actividades/" + actividad + "/materiales/", material, "capataz1", 201);
+        long archivo =
+                repo.jdbc()
+                        .queryForObject(
+                                "INSERT INTO core_archivo (nombre_original,tipo_mime,tamano_bytes,"
+                                        + " hash_contenido,clave) VALUES ('foto.png','image/png',1,"
+                                        + " :hash,:clave) RETURNING id",
+                                Map.of(
+                                        "hash",
+                                        "a".repeat(64),
+                                        "clave",
+                                        "prueba-av384-" + UUID.randomUUID()),
+                                Long.class);
+        repo.jdbc()
+                .update(
+                        "INSERT INTO core_adjunto (uuid_cliente,entidad,registro_id,archivo_id,"
+                                + " hash_contenido,usuario_creacion_id) VALUES (:uuid,'actividad',"
+                                + " :actividad,:archivo,:hash,:usuario)",
+                        Map.of(
+                                "uuid", UUID.randomUUID(),
+                                "actividad", actividad,
+                                "archivo", archivo,
+                                "hash", "a".repeat(64),
+                                "usuario", jefe));
+
+        var anulacion = values("motivo", "  Registro duplicado en el parte  ");
+        putJson("/actividades/" + actividad + "/anulacion/", anulacion, "capataz1", 403);
+        putJson("/actividades/" + actividad + "/anulacion/", anulacion, "ingeniero", 403);
+        putJson("/actividades/" + actividad + "/anulacion/", values("motivo", "   "), "jefe", 400);
+        putJson("/actividades/" + actividad + "/anulacion/", anulacion, "jefe", 200);
+
+        http.perform(get(BASE + "/actividades/" + actividad).with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estado_actividad").value("Anulada"))
+                .andExpect(jsonPath("$.anulacion_motivo").value("Registro duplicado en el parte"))
+                .andExpect(jsonPath("$.anulada_por_usuario_id").value(jefe))
+                .andExpect(jsonPath("$.anulada_por_nombre").value("jefe"))
+                .andExpect(jsonPath("$.anulada_en").isNotEmpty());
+        assertEquals(1, repo.participantes(actividad).get("cantidad_operarios"));
+        assertEquals(
+                1,
+                repo.rows(
+                                "SELECT id FROM mod04_material_actividad WHERE actividad_id=:id",
+                                Map.of("id", actividad))
+                        .size());
+        assertEquals(
+                1,
+                repo.jdbc()
+                        .queryForObject(
+                                "SELECT count(*) FROM core_adjunto WHERE entidad='actividad' AND"
+                                        + " registro_id=:id",
+                                Map.of("id", actividad),
+                                Integer.class));
+        var auditoria =
+                repo.one(
+                        "SELECT accion,motivo,valores_anteriores,valores_nuevos FROM"
+                                + " core_registro_auditoria WHERE entidad='Actividad' AND"
+                                + " registro_id=:id AND accion='Anulacion'",
+                        Map.of("id", actividad));
+        assertEquals("Registro duplicado en el parte", auditoria.get("motivo"));
+        assertTrue(String.valueOf(auditoria.get("valores_anteriores")).contains("Registrada"));
+        assertTrue(String.valueOf(auditoria.get("valores_nuevos")).contains("Anulada"));
+
+        putJson(
+                "/actividades/" + actividad + "/verificacion/",
+                values("observaciones", "Conforme"),
+                "jefe",
+                409);
+        putJson(
+                "/actividades/" + actividad + "/participantes/",
+                values("operarios", List.of()),
+                "capataz1",
+                409);
+        postJson("/actividades/" + actividad + "/materiales/", material, "capataz1", 409);
+        http.perform(
+                        multipart("/api/v1/core/adjuntos/")
+                                .file(
+                                        new MockMultipartFile(
+                                                "archivo",
+                                                "nueva.png",
+                                                "image/png",
+                                                new byte[] {
+                                                    (byte) 137, 80, 78, 71, 13, 10, 26, 10
+                                                }))
+                                .param("entidad", "actividad")
+                                .param("registro_id", String.valueOf(actividad))
+                                .header("Idempotency-Key", UUID.randomUUID().toString())
+                                .cookie(sesionCore("capataz1"))
+                                .with(csrf()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("actividad-anulada"));
+
+        putJson("/actividades/" + actividad + "/anulacion/", anulacion, "jefe", 200);
+        putJson(
+                "/actividades/" + actividad + "/anulacion/",
+                values("motivo", "Otro motivo"),
+                "jefe",
+                409);
+        assertEquals(
+                1,
+                repo.jdbc()
+                        .queryForObject(
+                                "SELECT count(*) FROM core_registro_auditoria WHERE"
+                                        + " entidad='Actividad' AND registro_id=:id AND"
+                                        + " accion='Anulacion'",
+                                Map.of("id", actividad),
+                                Integer.class));
+    }
+
+    @Test
+    void verificadaNoPuedeAnularseYLosFiltrosCuentanSoloRegistradas() throws Exception {
+        long equipo = cuadrilla(c1, o1);
+        long registrada = actividad(equipo);
+        long verificada =
+                postJson(
+                                "/actividades",
+                                values(
+                                        "parte_id",
+                                        repo.get("actividad", registrada, false).get("parte_id"),
+                                        "tipo_actividad_id",
+                                        tipo,
+                                        "area_verde_id",
+                                        area,
+                                        "fecha_hora_actividad",
+                                        "2026-10-22T09:00:00-05:00"),
+                                "capataz1",
+                                201)
+                        .path("id")
+                        .asLong();
+        putJson(
+                "/actividades/" + verificada + "/verificacion/",
+                values("observaciones", "Conforme"),
+                "jefe",
+                200);
+        putJson(
+                "/actividades/" + verificada + "/anulacion/",
+                values("motivo", "No corresponde"),
+                "jefe",
+                409);
+
+        http.perform(
+                        get(BASE + "/actividades/")
+                                .param("estado_actividad", "Registrada")
+                                .with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(1))
+                .andExpect(jsonPath("$.pendientes_verificacion").value(1))
+                .andExpect(jsonPath("$.results[0].id").value(registrada));
+        http.perform(
+                        get(BASE + "/actividades/")
+                                .param("estado_actividad", "Verificada")
+                                .with(httpBasic("jefe", PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.count").value(1))
+                .andExpect(jsonPath("$.pendientes_verificacion").value(1))
+                .andExpect(jsonPath("$.results[0].id").value(verificada));
+    }
+
+    @Test
+    void anulacionesSimultaneasNoDuplicanAuditoria() throws Exception {
+        long equipo = cuadrilla(c1, o1), actividad = actividad(equipo);
+        var inicio = new CountDownLatch(1);
+        try (var ejecutor = Executors.newFixedThreadPool(2)) {
+            List<Future<Integer>> tareas = new ArrayList<>();
+            for (int i = 0; i < 2; i++)
+                tareas.add(
+                        ejecutor.submit(
+                                () -> {
+                                    inicio.await();
+                                    return http.perform(
+                                                    put(BASE
+                                                                    + "/actividades/"
+                                                                    + actividad
+                                                                    + "/anulacion")
+                                                            .with(httpBasic("jefe", PASSWORD))
+                                                            .contentType(MediaType.APPLICATION_JSON)
+                                                            .content(
+                                                                    "{\"motivo\":\"Registro"
+                                                                            + " duplicado\"}"))
+                                            .andReturn()
+                                            .getResponse()
+                                            .getStatus();
+                                }));
+            inicio.countDown();
+            for (var tarea : tareas) assertEquals(200, tarea.get(15, TimeUnit.SECONDS));
+        }
+        assertEquals(
+                1,
+                repo.jdbc()
+                        .queryForObject(
+                                "SELECT count(*) FROM core_registro_auditoria WHERE"
+                                        + " entidad='Actividad' AND registro_id=:id AND"
+                                        + " accion='Anulacion'",
+                                Map.of("id", actividad),
                                 Integer.class));
     }
 
@@ -919,6 +1692,86 @@ class Mod04IntegrationTest {
     }
 
     @Test
+    void soloJefeCancelaUnEncargoAbiertoConMotivo() throws Exception {
+        long equipo = cuadrilla(c1, o1);
+        var creado = postJson("/encargos/", encargo(equipo, "Semanal", 7), "jefe", 201);
+        long id = creado.path("id").asLong();
+        String ruta = "/encargos/" + id + "/estado/";
+        var cancelar = values("estado_anterior", "Por completar", "estado", "Cancelado");
+        postJson(ruta, cancelar, "jefe", 400);
+        cancelar.put("observaciones", "Cierre temporal del espacio");
+        postJson(ruta, cancelar, "capataz1", 403);
+        var cancelado = postJson(ruta, cancelar, "jefe", 200);
+        assertEquals("Cancelado", cancelado.path("estado").asText());
+        var cambio = cancelado.path("historial_estados").get(0);
+        assertEquals("Cierre temporal del espacio", cambio.path("observaciones").asText());
+        assertTrue(cambio.hasNonNull("usuario_id"));
+        assertTrue(cambio.hasNonNull("fecha"));
+        postJson(
+                ruta,
+                values("estado_anterior", "Cancelado", "estado", "En curso"),
+                "capataz1",
+                409);
+        postJson(ruta, cancelar, "jefe", 409);
+    }
+
+    @Test
+    void encargoDirectoConservaHistorialYRestringeCambiosAlCapatazResponsable() throws Exception {
+        long equipo = cuadrilla(c1, o1);
+        var directo =
+                values(
+                        "cuadrilla_id",
+                        equipo,
+                        "tipo_actividad_id",
+                        tipo,
+                        "area_verde_id",
+                        area,
+                        "descripcion",
+                        "Encargo directo",
+                        "periodicidad",
+                        "Directo",
+                        "plazo_previsto",
+                        HOY.plusDays(20).toString());
+        var creado = postJson("/encargos/", directo, "jefe", 201);
+        assertEquals("Directo", creado.path("periodicidad").asText());
+        assertTrue(creado.path("fecha_reunion").isNull());
+        assertEquals("Por completar", creado.path("estado").asText());
+        var ruta = "/encargos/" + creado.path("id").asLong() + "/estado/";
+        postJson(
+                ruta,
+                values("estado_anterior", "Por completar", "estado", "Completado"),
+                "capataz1",
+                409);
+        var iniciar = values("estado_anterior", "Por completar", "estado", "En curso");
+        postJson(ruta, iniciar, "capataz2", 403);
+        postJson(ruta, iniciar, "jefe", 403);
+        postJson(ruta, iniciar, "capataz1", 200);
+        postJson(ruta, iniciar, "capataz1", 409);
+        var observar = values("estado_anterior", "En curso", "estado", "Observado");
+        postJson(ruta, observar, "capataz1", 400);
+        observar.put("observaciones", "Falta material");
+        postJson(ruta, observar, "capataz1", 200);
+        postJson(
+                ruta,
+                values("estado_anterior", "Observado", "estado", "En curso"),
+                "capataz1",
+                200);
+        var cerrado =
+                postJson(
+                        ruta,
+                        values("estado_anterior", "En curso", "estado", "Completado"),
+                        "capataz1",
+                        200);
+        assertEquals("Completado", cerrado.path("estado").asText());
+        putJson("/encargos/" + creado.path("id").asLong(), directo, "jefe", 409);
+        var historial = cerrado.path("historial_estados");
+        assertEquals(4, historial.size());
+        assertEquals("Falta material", historial.get(2).path("observaciones").asText());
+        assertTrue(historial.get(2).hasNonNull("usuario_id"));
+        assertTrue(historial.get(2).hasNonNull("fecha"));
+    }
+
+    @Test
     void cadaCapatazSoloConsultaSusEncargosConPlazo() throws Exception {
         long propia = cuadrilla(c1, o1), ajena = cuadrilla(c2, o2);
         long idPropio =
@@ -938,7 +1791,7 @@ class Mod04IntegrationTest {
                 .andExpect(status().isForbidden());
         postJson("/encargos", encargo(propia, "Semanal", 7), "capataz1", 403);
         assertTrue(repo.encargo(idPropio).containsKey("estado"));
-        assertEquals(null, repo.encargo(idPropio).get("estado"));
+        assertEquals("Por completar", repo.encargo(idPropio).get("estado"));
     }
 
     String hashDemo() {
@@ -1260,6 +2113,28 @@ class Mod04IntegrationTest {
                                 false,
                                 true),
                         new Fila(
+                                "reprogramarEncargo",
+                                "POST",
+                                "/encargos/" + enc + "/reprogramacion",
+                                values(
+                                        "fecha_inicio",
+                                        HOY.toString(),
+                                        "fecha_fin",
+                                        HOY.plusDays(5).toString(),
+                                        "plazo_previsto",
+                                        HOY.plusDays(1).toString(),
+                                        "justificacion",
+                                        "Cambio de planificación"),
+                                true,
+                                false),
+                        new Fila(
+                                "cambiarEstadoEncargo",
+                                "POST",
+                                "/encargos/" + enc + "/estado",
+                                values("estado_anterior", "Por completar", "estado", "En curso"),
+                                false,
+                                true),
+                        new Fila(
                                 "guardarParticipantes",
                                 "PUT",
                                 "/actividades/" + act + "/participantes",
@@ -1271,6 +2146,13 @@ class Mod04IntegrationTest {
                                 "PUT",
                                 "/actividades/" + act + "/verificacion",
                                 values("observaciones", "Conforme en campo"),
+                                true,
+                                false),
+                        new Fila(
+                                "anularActividad",
+                                "PUT",
+                                "/actividades/" + act + "/anulacion",
+                                values("motivo", "Registro inválido"),
                                 true,
                                 false));
         var registrados = new HashSet<String>();
@@ -1297,6 +2179,8 @@ class Mod04IntegrationTest {
                 boolean permitido =
                         !usuario.equals("sinrol")
                                 && (!fila.jefe() || usuario.equals("jefe"))
+                                && (!fila.nombre().equals("cambiarEstadoEncargo")
+                                        || usuario.equals("capataz1"))
                                 && (!fila.campo()
                                         || usuario.equals("jefe")
                                         || usuario.equals("capataz1"));

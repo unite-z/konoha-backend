@@ -56,6 +56,7 @@ public final class Salidas {
             Long dias_limpieza_maximo,
             Long maximo_total,
             String estado_duracion,
+            String estado_limpieza,
             List<String> faltantes) {}
 
     public record ResumenCumplimiento(

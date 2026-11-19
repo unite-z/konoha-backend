@@ -87,11 +87,11 @@ public class CalendarioRestricciones {
             throw new ErrorPlanificacion(
                     400, "periodo-invalido", "El fin debe ser posterior al inicio");
         }
-        if (jdbc.queryForObject(
-                        "SELECT count(*) FROM mod03_tipo_restriccion WHERE id = :id AND activo",
+        if (jdbc.queryForList(
+                        "SELECT id FROM mod03_tipo_restriccion WHERE id = :id AND activo FOR SHARE",
                         Map.of("id", nueva.tipoRestriccionId()),
-                        Integer.class)
-                == 0) {
+                        Long.class)
+                .isEmpty()) {
             throw new ErrorPlanificacion(400, "tipo-invalido", "No existe ese tipo de restricción");
         }
         List<LocalDate> inicios =

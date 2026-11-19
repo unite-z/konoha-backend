@@ -161,6 +161,14 @@ public class MatrizPermisosApiTest extends ApiPlanificacion {
     /** Escrituras de los endpoints que ya existen, con un cuerpo que pasa la validación. */
     static List<MockHttpServletRequestBuilder> escrituras() {
         return List.of(
+                post(RUTA + "tipos-restriccion/")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(
+                                "{\"nombre\":\"Tipo prueba"
+                                    + " permisos\",\"efecto\":\"Advertencia\",\"aplica_servicios_ruidosos\":false}"),
+                patch(RUTA + "tipos-restriccion/999999/")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"activo\":false}"),
                 put(RUTA + "servicios/1/frecuencias/Verano/")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"frecuencia_teorica_dias\": 21}"),
@@ -188,6 +196,12 @@ public class MatrizPermisosApiTest extends ApiPlanificacion {
                         .content("{\"motivo\": \"Lluvia\"}"),
                 get(RUTA + "incidencias/inspectores/"),
                 get(RUTA + "incidencias/1/capataces/"),
+                get(RUTA + "incidencias/actividades/"),
+                post(RUTA + "incidencias/999999/encargo/")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(
+                                "{\"capataz_id\": 1, \"actividad\": \"Poda menor\","
+                                        + " \"plazo\": \"2027-01-11\"}"),
                 get(RUTA + "incidencias/1/proveedores/"),
                 post(RUTA + "incidencias/999999/requerimiento/")
                         .contentType(MediaType.APPLICATION_JSON)

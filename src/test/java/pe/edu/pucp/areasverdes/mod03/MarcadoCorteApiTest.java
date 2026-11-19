@@ -60,7 +60,7 @@ class MarcadoCorteApiTest extends ApiPlanificacion {
                                                      + " \"fecha_inicio_prevista\": \"%s\","
                                                      + " \"fecha_fin_prevista\": \"%s\", \"zonas\":"
                                                      + " [\"Sociales\"]}")
-                                                        .formatted(HOY, HOY)))
+                                                        .formatted(HOY.minusDays(1), HOY)))
                         .andExpect(status().isCreated())
                         .andReturn()
                         .getResponse()
@@ -244,7 +244,7 @@ class MarcadoCorteApiTest extends ApiPlanificacion {
                 .andExpect(jsonPath("$.porcentaje").value(0))
                 .andExpect(jsonPath("$.por_cortar.length()").value(2))
                 .andExpect(jsonPath("$.ultima_marca").isEmpty())
-                .andExpect(jsonPath("$.fecha_inicio_prevista").value(HOY.toString()));
+                .andExpect(jsonPath("$.fecha_inicio_prevista").value(HOY.minusDays(1).toString()));
         marcar("ingeniero", UUID.randomUUID(), HOY.minusDays(2) + "T09:00:00-05:00")
                 .andExpect(status().isOk());
         http.perform(get(avance).with(httpBasic("jefe", CLAVE)))
@@ -268,7 +268,8 @@ class MarcadoCorteApiTest extends ApiPlanificacion {
     void laLimpiezaPideLaRutaCompletaYElCierreTambien() throws Exception {
         String limpiezas = "ciclos/" + ciclo + "/limpiezas/";
         String hoy = "{\"fecha\": \"" + HOY + "\"}";
-        marcar("ingeniero", UUID.randomUUID(), HOY + "T09:00:00-05:00").andExpect(status().isOk());
+        marcar("ingeniero", UUID.randomUUID(), HOY.minusDays(1) + "T09:00:00-05:00")
+                .andExpect(status().isOk());
         accion("ingeniero", limpiezas, hoy)
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.codigo").value("ruta-incompleta"))
@@ -278,7 +279,8 @@ class MarcadoCorteApiTest extends ApiPlanificacion {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.codigo").value("ruta-incompleta"));
         jardin = patio;
-        marcar("ingeniero", UUID.randomUUID(), HOY + "T11:00:00-05:00").andExpect(status().isOk());
+        marcar("ingeniero", UUID.randomUUID(), HOY.minusDays(1) + "T11:00:00-05:00")
+                .andExpect(status().isOk());
         accion("ingeniero", limpiezas, hoy)
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.autor").value("ingeniero"));
@@ -294,6 +296,10 @@ class MarcadoCorteApiTest extends ApiPlanificacion {
 
     @Test
     void laInterrupcionTrasladaElCorteYDescuentaElTiempo() throws Exception {
+        jdbc.getJdbcTemplate()
+                .update(
+                        "UPDATE mod03_programacion_servicio SET estado='Cancelada' WHERE id=?",
+                        ciclo);
         area("Jardín de Ciencias Norte", sector("Ciencias Norte"));
         jdbc.getJdbcTemplate()
                 .update(
@@ -312,7 +318,7 @@ class MarcadoCorteApiTest extends ApiPlanificacion {
                                 ("{\"tipo_servicio_id\": 1, \"fecha_inicio_prevista\": \"%s\","
                                                 + " \"fecha_fin_prevista\": \"%s\", \"zonas\":"
                                                 + " [\"Sociales\", \"Ciencias Norte\"]}")
-                                        .formatted(HOY, HOY))
+                                        .formatted(HOY.minusDays(1), HOY))
                         .andExpect(status().isCreated())
                         .andReturn()
                         .getResponse()
@@ -363,6 +369,10 @@ class MarcadoCorteApiTest extends ApiPlanificacion {
     }
 
     long programarCon(String quien) throws Exception {
+        jdbc.getJdbcTemplate()
+                .update(
+                        "UPDATE mod03_programacion_servicio SET estado='Cancelada' WHERE id=?",
+                        ciclo);
         area("Jardín de Letras", sector("Letras"));
         String creado =
                 accion(

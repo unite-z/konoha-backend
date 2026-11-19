@@ -93,7 +93,7 @@ public class PriorizacionesService {
         LocalDate hoy = Fechas.hoy(sugerencias.reloj());
 
         // El cliente se obtiene antes de leer: si la IA no está configurada, 503 inmediato.
-        ClienteIA cliente = fabrica.obtenerClienteIa();
+        ClienteIA cliente = fabrica.obtenerClienteIa("priorizacion");
         Integer frecuencia = tipoServicio == null ? null : frecuencia(tipoServicio);
         List<Map<String, Object>> candidatos = new ArrayList<>();
         if (!alcance.equals("Ejemplares")) candidatos.addAll(areas(area, hoy, frecuencia));
@@ -329,6 +329,7 @@ public class PriorizacionesService {
                     LEFT JOIN LATERAL (
                         SELECT (ac.fecha_hora_actividad AT TIME ZONE 'America/Lima')::date AS dia
                         FROM mod04_actividad ac WHERE ac.area_verde_id = e.espacio_id
+                          AND ac.estado_actividad <> 'Anulada'
                         UNION ALL
                         SELECT (at.fecha_hora_inicio AT TIME ZONE 'America/Lima')::date
                         FROM mod05_alcanceatencion al JOIN mod05_atenciontercerizada at ON at.id = al.atencion_id
@@ -371,11 +372,13 @@ public class PriorizacionesService {
                        (SELECT max(x.dia) FROM (
                             SELECT (ac.fecha_hora_actividad AT TIME ZONE 'America/Lima')::date AS dia
                             FROM mod04_actividad ac WHERE ac.ejemplar_id = e.id
+                              AND ac.estado_actividad <> 'Anulada'
                             UNION ALL
                             SELECT (at.fecha_hora_inicio AT TIME ZONE 'America/Lima')::date
                             FROM mod05_alcanceatencion al JOIN mod05_atenciontercerizada at ON at.id = al.atencion_id
                             WHERE al.ejemplar_id = e.id AND at.fecha_hora_inicio IS NOT NULL) x) AS ultima,
                        (SELECT count(*) FROM mod04_actividad ac WHERE ac.ejemplar_id = e.id
+                          AND ac.estado_actividad <> 'Anulada'
                           AND ac.fecha_hora_actividad >= :desde)
                          + (SELECT count(*) FROM mod05_alcanceatencion al JOIN mod05_atenciontercerizada at
                               ON at.id = al.atencion_id WHERE al.ejemplar_id = e.id AND at.fecha_hora_inicio >= :desde)

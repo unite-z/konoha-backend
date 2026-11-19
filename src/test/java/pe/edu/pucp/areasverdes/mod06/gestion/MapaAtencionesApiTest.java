@@ -156,8 +156,9 @@ class MapaAtencionesApiTest extends ApiGestion {
     }
 
     /**
-     * MOD-04 el 20/10: un deshierbo (clase «Mantenimiento de jardines») en el área 1 y un riego en
-     * el área 2, que no es mantenimiento, poda ni manejo fitosanitario.
+     * MOD-04 el 20/10: un deshierbo (clase «Mantenimiento de jardines») en el área 1, un riego en
+     * el área 2, que no es mantenimiento, poda ni manejo fitosanitario, y otro deshierbo anulado en
+     * el área 3.
      */
     @Test
     void lasActividadesDelPersonalPropioTambienSonAtenciones() throws Exception {
@@ -182,6 +183,14 @@ class MapaAtencionesApiTest extends ApiGestion {
                 usuario_creacion_id)
             SELECT v.id, 9701, v.tipo, v.area, '2026-10-20T10:00:00-05:00', (SELECT min(id) FROM core_usuario)
             FROM (VALUES (9701, 9701, 1), (9702, 9702, 2)) AS v(id, tipo, area)
+            """,
+            // Anulada (AV-384): no es una ejecución válida y no se muestra.
+            """
+            INSERT INTO mod04_actividad (id, parte_id, tipo_actividad_id, area_verde_id, fecha_hora_actividad,
+                usuario_creacion_id, estado_actividad, anulada_en, anulada_por_usuario_id, anulacion_motivo)
+            SELECT 9703, 9701, 9701, 3, '2026-10-20T11:00:00-05:00', min(id), 'Anulada', now(), min(id),
+                   'Registrada por error'
+            FROM core_usuario
             """,
         };
         for (String s : sql) jdbc.getJdbcTemplate().update(s);

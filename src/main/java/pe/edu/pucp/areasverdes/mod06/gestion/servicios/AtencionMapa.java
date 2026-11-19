@@ -30,6 +30,7 @@ public record AtencionMapa(
         String espacio,
         Long ejemplarId,
         String ejemplarCodigo,
+        String ejemplarAlias,
         long archivosAsociados,
         Long tipoUsoId) {
 
@@ -48,6 +49,7 @@ public record AtencionMapa(
                 espacio,
                 ejemplarId,
                 ejemplarCodigo,
+                ejemplarAlias,
                 archivosAsociados,
                 tipoUso);
     }

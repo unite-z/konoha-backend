@@ -72,12 +72,18 @@ public class FuenteDatosBD implements FuenteDatos {
                        p.fecha_inicio_real,
                        CASE WHEN r.pendientes = 0 THEN (r.ultimo AT TIME ZONE 'America/Lima')::date END AS fecha_fin_corte,
                        l.inicio AS fecha_inicio_limpieza,
-                       CASE WHEN p.estado = 'Completada' THEN l.fin END AS fecha_fin_limpieza
+                        CASE WHEN p.estado = 'Completada' THEN l.fin END AS fecha_fin_limpieza,
+                        r.dias AS dias_corte_registrados,
+                        coalesce(l.dias,0) AS dias_limpieza_registrados,
+                        (SELECT count(*) FROM mod03_limpieza_corte j WHERE j.programacion_id=p.id
+                          AND j.fecha>(r.ultimo AT TIME ZONE 'America/Lima')::date
+                          AND j.fecha<=(now() AT TIME ZONE 'America/Lima')::date) AS limpiezas_validas
                 FROM mod03_programacion_servicio p
                 JOIN (SELECT programacion_id, count(*) FILTER (WHERE estado = 'Pendiente') AS pendientes,
-                             max(marcado_en) AS ultimo
+                               max(marcado_en) AS ultimo,
+                               count(DISTINCT (marcado_en AT TIME ZONE 'America/Lima')::date) FILTER (WHERE estado='Cortado') AS dias
                       FROM mod03_ruta_corte GROUP BY programacion_id) r ON r.programacion_id = p.id
-                LEFT JOIN (SELECT programacion_id, min(fecha) AS inicio, max(fecha) AS fin
+                  LEFT JOIN (SELECT programacion_id, min(fecha) AS inicio, max(fecha) AS fin, count(*) AS dias
                            FROM mod03_limpieza_corte GROUP BY programacion_id) l ON l.programacion_id = p.id
                 WHERE p.estado <> 'Cancelada'
                 """);
@@ -139,6 +145,7 @@ public class FuenteDatosBD implements FuenteDatos {
                        a.cantidad_solicitada, a.cantidad_ejecutada, a.tiempo_minutos, a.superficie_m2
                 FROM mod04_actividad a
                 LEFT JOIN mod02_ejemplar e ON e.id = a.ejemplar_id
+                WHERE a.estado_actividad <> 'Anulada'
                 """
                         .formatted(AREA_INVENTARIO.formatted("a.area_verde_id")));
         CONSULTAS.put(
@@ -173,6 +180,7 @@ public class FuenteDatosBD implements FuenteDatos {
                 """
                 SELECT i.id, i.ejemplar_id, i.categoria, i.campana_id,
                        (SELECT min(a.id) FROM mod04_actividad a WHERE a.ejemplar_id = i.ejemplar_id
+                           AND a.estado_actividad <> 'Anulada'
                            AND (a.fecha_hora_actividad AT TIME ZONE 'America/Lima')::date = i.fecha_ejecucion) AS actividad_id,
                        i.atencion_id, i.incidencia_id, i.tipo_intervencion_id, i.fecha_ejecucion,
                        i.cantidad_solicitada, i.cantidad_ejecutada, i.prioridad

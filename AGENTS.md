@@ -109,7 +109,7 @@ Ningún PR puede ampliar estas brechas (por ejemplo, abrir más rutas sin autent
 - Dos configuraciones de seguridad (`mod05/Seguridad` y `mod06/config/SeguridadMod06`) y la zona `LIMA` definida dos veces (`AreasVerdesApplication` y `Mod05Application`).
 - Variables con prefijo de módulo (`MOD05_DB_*`) para una base compartida.
 - MOD-05 en `/api/tercerizados/`, fuera de `/api/v1/`.
-- `V1__mod05.sql` duplica entidades ajenas (`mod05_usuario`, `mod05_usuario_rol`, `mod05_areaverde`, `mod05_ejemplar`). Objetivo: consolidarlas en las tablas de su dueño.
+- `V1__mod05.sql` duplica entidades ajenas (`mod05_usuario`, `mod05_usuario_rol`, `mod05_areaverde`; `mod05_ejemplar` ya es `mod02_ejemplar` desde `V15`). Objetivo: consolidarlas en las tablas de su dueño (AV-287).
 - Formato: está previsto un PR único de `spotless:apply` sobre todo el código (ver `CONTRIBUTING.md`).
 
 ## Qué no entra al repo
@@ -135,6 +135,7 @@ Los planes, notas y borradores de trabajo de personas y agentes van en `.notas/`
 | `docs/arranque-local.md` | Instalación paso a paso en macOS y Windows |
 | `docs/estandares/*.md` | Java, API, base de datos, pruebas y almacenamiento |
 | `docs/modulos/mod01.md` | Contrato de MOD-01: sesión, endpoints y códigos de permiso para los demás módulos |
+| `docs/modulos/mod03.md` | MOD-03: contrato, reglas y pruebas de la configuración de servicios periódicos (RF-PLA-001 y RF-PLA-002) |
 | `docs/modulos/mod05.md` | Documentación funcional de MOD-05 |
 | `mock-data/README.md` | Formato de los datos simulados |
 

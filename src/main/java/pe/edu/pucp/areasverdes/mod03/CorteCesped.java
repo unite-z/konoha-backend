@@ -48,9 +48,9 @@ public class CorteCesped {
 
     /**
      * El ciclo con su ruta y sus jornadas de limpieza. {@code dias_corte} son los días con marcas;
-     * {@code cumple}, si días de corte más limpieza no pasan de la duración máxima más limpieza
-     * (RN-002, 3 + 1). Las interrupciones (AV-258) descuentan días y dejan detenidos los jardines
-     * pendientes de su zona.
+     * {@code cumple} exige duración dentro del máximo y limpieza requerida en jornadas posteriores.
+     * Ambos indicadores se devuelven separados. Las interrupciones (AV-258) descuentan días y dejan
+     * detenidos los jardines pendientes de su zona.
      */
     public record CicloCorte(
             long programacionId,
@@ -60,7 +60,10 @@ public class CorteCesped {
             double diasInterrupcionDescontados,
             int diasCorte,
             int maximoDias,
-            boolean cumple) {}
+            boolean cumple,
+            boolean cumpleDuracion,
+            boolean cumpleLimpieza,
+            int diasLimpiezaRequeridos) {}
 
     public record CortadosDia(LocalDate fecha, int cortados) {}
 
@@ -80,15 +83,30 @@ public class CorteCesped {
             LocalDate fechaInicioPrevista,
             LocalDate fechaFinPrevista) {}
 
+    /**
+     * Jardín no retirado de la ruta de MOD-02 en {@code :fecha} (AV-129): un retiro se aplica a los
+     * ciclos que empiezan desde su fecha; los programados antes conservan su copia.
+     */
+    static final String NO_RETIRADO =
+            """
+             AND NOT EXISTS (SELECT 1 FROM mod02_ruta_corte_retiro r
+                WHERE r.area_verde_id = a.id AND r.desde <= CAST(:fecha AS date)
+                  AND (r.reincorporado_desde IS NULL
+                       OR r.reincorporado_desde > CAST(:fecha AS date)))
+            """;
+
     static final String ZONAS =
             """
             SELECT s.nombre zona, count(a.id) jardines, NOT s.atencion_a_demanda en_ruta
             FROM mod02_sector s
             JOIN mod02_historial_area_sector h ON h.sector_id = s.id AND h.fecha_fin IS NULL
             JOIN mod02_area_verde a ON a.id = h.area_verde_id AND a.activo
-            WHERE s.activo
-            GROUP BY s.id, s.nombre, s.atencion_a_demanda ORDER BY s.nombre
-            """;
+            """
+                    + NO_RETIRADO
+                    + """
+                    WHERE s.activo
+                    GROUP BY s.id, s.nombre, s.atencion_a_demanda ORDER BY s.nombre
+                    """;
 
     private final NamedParameterJdbcTemplate jdbc;
     private final InterrupcionesCorte interrupciones;
@@ -104,15 +122,16 @@ public class CorteCesped {
     /** La ruta propuesta para programar el servicio y si va fuera de frecuencia (CU-010 1a). */
     public RutaCorte ruta(long servicio, UsuarioPlanificacion usuario) {
         Acceso.consultar(usuario);
+        LocalDate hoy = LocalDate.now(reloj);
         List<ZonaRuta> zonas =
                 jdbc.query(
                         ZONAS,
+                        Map.of("fecha", hoy),
                         (rs, n) ->
                                 new ZonaRuta(
                                         rs.getString("zona"),
                                         rs.getInt("jardines"),
                                         rs.getBoolean("en_ruta")));
-        LocalDate hoy = LocalDate.now(reloj);
         List<FueraDeFrecuencia> fuera =
                 jdbc.query(
                         """
@@ -152,8 +171,16 @@ public class CorteCesped {
         }
         Set<String> elegidas = new TreeSet<>(zonas);
         Set<String> existentes = new TreeSet<>();
+        // AV-129: la ruta de MOD-02 en el día que empieza el ciclo, sin los jardines retirados.
+        LocalDate inicio =
+                jdbc.queryForObject(
+                        "SELECT fecha_inicio_prevista FROM mod03_programacion_servicio WHERE id ="
+                                + " :id",
+                        Map.of("id", programacion),
+                        LocalDate.class);
         jdbc.query(
                 ZONAS,
+                Map.of("fecha", inicio),
                 rs -> {
                     existentes.add(rs.getString("zona"));
                 });
@@ -171,10 +198,14 @@ public class CorteCesped {
                         FROM mod02_sector s
                         JOIN mod02_historial_area_sector h ON h.sector_id = s.id AND h.fecha_fin IS NULL
                         JOIN mod02_area_verde a ON a.id = h.area_verde_id AND a.activo
-                        WHERE s.activo AND s.nombre IN (:zonas)
-                        """,
+                        """
+                                + NO_RETIRADO
+                                + """
+                                WHERE s.activo AND s.nombre IN (:zonas)
+                                """,
                         new MapSqlParameterSource()
                                 .addValue("programacion", programacion)
+                                .addValue("fecha", inicio)
                                 .addValue("zonas", List.copyOf(elegidas)));
         if (copiados == 0) {
             throw new ErrorPlanificacion(400, "ruta-vacia", "La ruta no tiene jardines");
@@ -226,7 +257,7 @@ public class CorteCesped {
         int diasCorte =
                 (int)
                         jardines.stream()
-                                .filter(j -> j.marcadoEn() != null)
+                                .filter(j -> "Cortado".equals(j.estado()) && j.marcadoEn() != null)
                                 .map(j -> j.marcadoEn().toLocalDate())
                                 .distinct()
                                 .count();
@@ -240,6 +271,7 @@ public class CorteCesped {
                         """,
                         Map.of("id", programacion),
                         Integer.class);
+        Cumplimiento cumplimiento = cumplimiento(programacion);
         return new CicloCorte(
                 programacion,
                 jardines,
@@ -248,7 +280,10 @@ public class CorteCesped {
                 InterrupcionesCorte.diasDescontados(interrupciones),
                 diasCorte,
                 maximo,
-                diasCorte + limpiezas.size() <= maximo);
+                cumplimiento.cumple(),
+                cumplimiento.duracion(),
+                cumplimiento.limpieza(),
+                cumplimiento.requeridos());
     }
 
     public Avance avance(long programacion, UsuarioPlanificacion usuario) {
@@ -296,6 +331,14 @@ public class CorteCesped {
     public Limpieza registrarLimpieza(
             long programacion, LocalDate fecha, UsuarioPlanificacion usuario) {
         Acceso.registrarLimpieza(usuario);
+        List<String> estados =
+                jdbc.query(
+                        "SELECT estado FROM mod03_programacion_servicio WHERE id=:id FOR UPDATE",
+                        Map.of("id", programacion),
+                        (rs, fila) -> rs.getString("estado"));
+        if (estados.isEmpty())
+            throw new ErrorPlanificacion(404, "ciclo-no-encontrado", "No existe ese ciclo");
+        String estado = estados.getFirst();
         List<JardinRuta> pendientes =
                 jardines(
                         "r.programacion_id = :programacion AND r.estado = 'Pendiente'",
@@ -319,7 +362,19 @@ public class CorteCesped {
                                             ", ",
                                             pendientes.stream().map(JardinRuta::codigo).toList())));
         }
+        if (!"EnCurso".equals(estado)) {
+            throw new ErrorPlanificacion(
+                    409, "ciclo-no-en-curso", "Solo se registra limpieza en un ciclo en curso");
+        }
         LocalDate dia = fecha == null ? LocalDate.now(reloj) : fecha;
+        LocalDate ultimoCorte = ultimoCorte(programacion);
+        if (ultimoCorte == null || !dia.isAfter(ultimoCorte) || dia.isAfter(LocalDate.now(reloj))) {
+            throw new ErrorPlanificacion(
+                    400,
+                    "fecha-limpieza-invalida",
+                    "La limpieza debe registrarse en una jornada posterior al último corte y no"
+                            + " futura");
+        }
         long id =
                 jdbc.queryForObject(
                         """
@@ -347,6 +402,82 @@ public class CorteCesped {
                     "ruta-incompleta",
                     "Faltan %d jardines por cortar para cerrar el ciclo".formatted(pendientes));
         }
+    }
+
+    record Cumplimiento(boolean duracion, boolean limpieza, int requeridos) {
+        boolean cumple() {
+            return duracion && limpieza;
+        }
+    }
+
+    private LocalDate ultimoCorte(long id) {
+        return jdbc.queryForObject(
+                "SELECT max((marcado_en AT TIME ZONE 'America/Lima')::date) FROM mod03_ruta_corte"
+                        + " WHERE programacion_id=:id AND estado='Cortado'",
+                Map.of("id", id),
+                LocalDate.class);
+    }
+
+    private Cumplimiento cumplimiento(long id) {
+        return jdbc.queryForObject(
+                """
+                SELECT coalesce(d.duracion_maxima_dias,3) maxima, coalesce(d.dias_limpieza,0) requeridos,
+                  (SELECT count(DISTINCT (r.marcado_en AT TIME ZONE 'America/Lima')::date)
+                    FROM mod03_ruta_corte r WHERE r.programacion_id=p.id AND r.estado='Cortado') corte,
+                  (SELECT count(*) FROM mod03_limpieza_corte l WHERE l.programacion_id=p.id) limpieza,
+                  (SELECT count(*) FROM mod03_limpieza_corte l WHERE l.programacion_id=p.id
+                    AND l.fecha > (SELECT max((r.marcado_en AT TIME ZONE 'America/Lima')::date)
+                      FROM mod03_ruta_corte r WHERE r.programacion_id=p.id AND r.estado='Cortado')
+                    AND l.fecha<=:hoy) validas
+                FROM mod03_programacion_servicio p LEFT JOIN mod03_duracion_servicio d ON d.tipo_servicio_id=p.tipo_servicio_id
+                WHERE p.id=:id
+                """,
+                Map.of("id", id, "hoy", LocalDate.now(reloj)),
+                (rs, fila) ->
+                        new Cumplimiento(
+                                rs.getInt("corte") <= rs.getInt("maxima")
+                                        && rs.getInt("corte") + rs.getInt("limpieza")
+                                                <= rs.getInt("maxima") + rs.getInt("requeridos"),
+                                rs.getInt("validas") >= rs.getInt("requeridos"),
+                                rs.getInt("requeridos")));
+    }
+
+    void exigirCierre(long id, LocalDate fecha) {
+        List<Boolean> cortes =
+                jdbc.query(
+                        "SELECT lower(t.nombre) LIKE 'corte%' corte FROM"
+                                + " mod03_programacion_servicio p JOIN mod05_tiposervicio t ON"
+                                + " t.id=p.tipo_servicio_id WHERE p.id=:id FOR UPDATE OF p",
+                        Map.of("id", id), (rs, fila) -> rs.getBoolean("corte"));
+        exigirRutaCompleta(id);
+        if (cortes.isEmpty() || !cortes.getFirst()) return;
+        if (ultimoCorte(id) == null)
+            throw new ErrorPlanificacion(
+                    409, "corte-sin-jornadas", "Registra el corte de la ruta antes de cerrar");
+        Cumplimiento cumplimiento = cumplimiento(id);
+        if (!cumplimiento.limpieza())
+            throw new ErrorPlanificacion(
+                    409,
+                    "limpieza-pendiente",
+                    "Faltan las jornadas de limpieza requeridas, posteriores al último corte");
+        if (!cumplimiento.duracion())
+            throw new ErrorPlanificacion(
+                    409,
+                    "duracion-excedida",
+                    "Las jornadas registradas exceden el máximo de corte o el máximo total");
+        LocalDate ultima =
+                jdbc.queryForObject(
+                        "SELECT greatest((SELECT max(fecha) FROM mod03_limpieza_corte WHERE"
+                                + " programacion_id=:id), (SELECT max((marcado_en AT TIME ZONE"
+                                + " 'America/Lima')::date) FROM mod03_ruta_corte WHERE"
+                                + " programacion_id=:id))",
+                        Map.of("id", id),
+                        LocalDate.class);
+        if (fecha == null || fecha.isBefore(ultima) || fecha.isAfter(LocalDate.now(reloj)))
+            throw new ErrorPlanificacion(
+                    400,
+                    "fecha-cierre-invalida",
+                    "El cierre debe incluir la última jornada registrada y no ser futuro");
     }
 
     private List<Limpieza> limpiezas(long programacion) {

@@ -32,4 +32,12 @@ public interface ClienteIA {
      */
     Map<String, Object> generarJson(
             String datos, List<Imagen> imagenes, Map<String, Object> esquema, String instruccion);
+
+    /** Tokens de la última llamada (AV-396); {@code null} si el proveedor no los devolvió. */
+    record Uso(Integer entrada, Integer salida, Integer cache) {}
+
+    /** Tokens de la última llamada de este cliente, o {@code null}. */
+    default Uso ultimoUso() {
+        return null;
+    }
 }

@@ -458,30 +458,38 @@ class PlanFitosanitarioIntegrationTest {
         assertEquals("Cancelado", detalle.get("estado").asText());
     }
 
+    /** AV-154 (RF-INV-011): retirar la marca exige su motivo; sin él, sigue en seguimiento. */
     @Test
-    void elMotivoDeCancelacionEsOpcional() throws Exception {
+    void elMotivoDeCancelacionEsObligatorio() throws Exception {
         long especial = marcarEspecial(1);
-        var cancelado =
-                send(
-                        "atenciones-especiales/" + especial + "/cancelar/",
-                        values("motivo", ""),
-                        "jefe",
-                        200);
-        assertTrue(cancelado.get("cancelado").asBoolean());
-        assertTrue(cancelado.get("motivo_cancelacion").isNull());
+        send("atenciones-especiales/" + especial + "/cancelar/", values("motivo", ""), "jefe", 400);
+        var detalle = sendGet("atenciones-especiales/" + especial + "/", "jefe", 200);
+        assertFalse(detalle.get("cancelado").asBoolean());
     }
 
     @Test
     void noSeCancelaUnSeguimientoYaCancelado() throws Exception {
         long especial = marcarEspecial(1);
-        send("atenciones-especiales/" + especial + "/cancelar/", values("motivo", ""), "jefe", 200);
-        send("atenciones-especiales/" + especial + "/cancelar/", values("motivo", ""), "jefe", 409);
+        send(
+                "atenciones-especiales/" + especial + "/cancelar/",
+                values("motivo", "Plaga controlada"),
+                "jefe",
+                200);
+        send(
+                "atenciones-especiales/" + especial + "/cancelar/",
+                values("motivo", "Plaga controlada"),
+                "jefe",
+                409);
     }
 
     @Test
     void noSeProgramaUnaAplicacionAdicionalParaUnSeguimientoCancelado() throws Exception {
         long especial = marcarEspecial(2);
-        send("atenciones-especiales/" + especial + "/cancelar/", values("motivo", ""), "jefe", 200);
+        send(
+                "atenciones-especiales/" + especial + "/cancelar/",
+                values("motivo", "Plaga controlada"),
+                "jefe",
+                200);
         send(
                 "atenciones-especiales/" + especial + "/aplicaciones/",
                 aplicacionAdicional(LocalDate.of(anio, 3, 1)),

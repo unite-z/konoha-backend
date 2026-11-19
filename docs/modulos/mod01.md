@@ -41,7 +41,8 @@ Todos bajo `/api/v1/core/`, con y sin barra final. Errores en `{codigo, detalle}
 | Método y ruta | Quién | Notas |
 |---|---|---|
 | `POST auth/login/` | Público | `{identificador, contrasena, canal: oficina\|campo, mantener_sesion}`. 401 `no-autenticado` con mensaje genérico, `cuenta-bloqueada` o `cuenta-no-activa` |
-| `GET auth/sesion/` | Con sesión | Usuario, rol y `permisos`: la interfaz arma el menú con ellos |
+| `GET auth/sesion/` | Con sesión | Usuario, rol, `permisos` y `apariencia` (`{tema, acento}` o `null`): la interfaz arma el menú y aplica la apariencia. El login devuelve lo mismo |
+| `PUT auth/apariencia/` | Con sesión | `{tema: claro\|oscuro\|calido\|sistema, acento: institucional\|azul\|verde\|morado\|magenta}`: guarda la apariencia de la propia cuenta (AV-391). 400 si un valor es desconocido |
 | `POST auth/logout/` | Con sesión | 204. Solo cierra la sesión de ese dispositivo |
 | `POST auth/contrasena/` | Con sesión | `{contrasena_actual, contrasena_nueva, confirmacion}`. 400 `contrasena-debil` con `reglas` |
 | `GET usuarios/` | Jefe | Filtros `rol`, `estado` (`activa`, `inactiva`, `bloqueada`) y `vigencia_proxima`. `destacados`: `sin-uso`, `vence-pronto`, `rechazos` |
@@ -102,8 +103,8 @@ Códigos de permiso (`core_permiso`). Desde AV-381 la matriz la edita el superad
 |---|---|
 | MOD-01 | `CORE.ROL.GESTIONAR`† (solo superadministrador), `CORE.USUARIO.GESTIONAR`†, `CORE.CATALOGO.GESTIONAR`, `CORE.CATALOGO.CONSULTAR`, `CORE.REPOSITORIO.CONSULTAR`, `CORE.HISTORIAL.CONSULTAR`, `CORE.PERSONAL.VER_DATOS`† |
 | MOD-02 | `INV.INVENTARIO.REGISTRAR`, `INV.INVENTARIO.CONSULTAR`, `INV.PODA.PLANIFICAR`, `INV.PODA.REGISTRAR` |
-| MOD-03 | `PLA.PLANIFICACION.GESTIONAR`, `PLA.PLANIFICACION.CONSULTAR`, `PLA.ENCARGO.ACTUALIZAR_ESTADO`, `PLA.CORTE.PLANIFICAR`, `PLA.CORTE.REGISTRAR`, `PLA.CORTE.LIMPIEZA`, `PLA.INCIDENCIA.REGISTRAR`, `PLA.INCIDENCIA.CLASIFICAR` |
-| MOD-04 | `CAM.CUADRILLA.GESTIONAR`†, `CAM.CUADRILLA.CONSULTAR`, `CAM.PARTE.REGISTRAR`, `CAM.PARTE.CONSULTAR`, `CAM.PARTE.VERIFICAR` |
+| MOD-03 | `PLA.PLANIFICACION.GESTIONAR`, `PLA.PLANIFICACION.CONSULTAR`, `PLA.ENCARGO.ACTUALIZAR_ESTADO`, `PLA.CORTE.PLANIFICAR`, `PLA.CORTE.REGISTRAR`, `PLA.CORTE.LIMPIEZA`, `PLA.INCIDENCIA.REGISTRAR`, `PLA.INCIDENCIA.CLASIFICAR`, `PLA.INCIDENCIA.CONSULTAR_TODAS` |
+| MOD-04 | `CAM.CUADRILLA.GESTIONAR`†, `CAM.CUADRILLA.CONSULTAR`, `CAM.PARTE.REGISTRAR`, `CAM.PARTE.CONSULTAR`, `CAM.PARTE.VERIFICAR`, `CAM.PARTE.ANULAR`† |
 | MOD-05 | `SER.CONTRATO.GESTIONAR`†, `SER.CONTRATO.CONSULTAR`, `SER.CONTRATO.VER_MONTOS`†, `SER.ATENCION.GESTIONAR`, `SER.ATENCION.REGISTRAR`, `SER.CONFORMIDAD.REGISTRAR` |
 | MOD-06 | `REP.INDICADOR.CONSULTAR`, `REP.INDICADOR.EXPORTAR`, `REP.MAPA_ATENCIONES.CONSULTAR`, `IA.PROPUESTA.PROPONER`, `IA.PROPUESTA.VALIDAR` |
 

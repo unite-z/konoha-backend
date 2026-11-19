@@ -26,6 +26,7 @@ public class FuenteOperacionCampoMod04 implements FuenteOperacionCampo {
             JOIN mod04_cuadrilla c ON c.id = p.cuadrilla_id
             LEFT JOIN mod05_areaverde v ON v.id = a.area_verde_id
             WHERE (a.fecha_hora_actividad AT TIME ZONE 'America/Lima')::date BETWEEN :desde AND :hasta
+              AND a.estado_actividad <> 'Anulada'
               AND (CAST(:area AS bigint) IS NULL OR a.area_verde_id = :area)
             """;
 

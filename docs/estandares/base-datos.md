@@ -41,7 +41,7 @@ Cada entidad tiene **un módulo dueño**, que es el único que crea y migra su t
 
 - El esquema de referencia es el documento `07.AreasVerdes.ModeloBaseDatos.v1` (Drive del equipo, `04-entregables/semana-07/entregables-limpios/producto/`). Una tabla nueva se alinea con él o, si no puede, actualiza ese modelo en el mismo ticket.
 - La extensión PostGIS y las tablas de MOD-01 y MOD-02 van antes que cualquier tabla nueva que las referencie. Como `V1__mod05.sql` ya existe, serán las siguientes versiones de la secuencia.
-- **Deuda:** `V1__mod05.sql` (generado desde Django) crea copias de entidades ajenas: `mod05_usuario` y `mod05_usuario_rol` (de MOD-01) y `mod05_areaverde` y `mod05_ejemplar` (de MOD-02). Su consolidación en las tablas del dueño va en un ticket aparte, con expand/contract. No se toca de paso.
+- **Deuda:** `V1__mod05.sql` (generado desde Django) crea copias de entidades ajenas: `mod05_usuario` y `mod05_usuario_rol` (de MOD-01) y `mod05_areaverde` y `mod05_ejemplar` (de MOD-02). `mod05_ejemplar` ya pasó a MOD-02 (`V15`, hoy `mod02_ejemplar`); las otras tres se consolidan en las tablas del dueño en AV-287, con expand/contract. No se toca de paso.
 
 ## Convenciones de esquema
 

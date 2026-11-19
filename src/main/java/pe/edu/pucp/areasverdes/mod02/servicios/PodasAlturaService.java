@@ -161,36 +161,88 @@ public class PodasAlturaService {
                         usuario);
 
         long id =
-                jdbc.queryForObject(
-                        """
-                        INSERT INTO mod02_intervencion_arbolado (ejemplar_id, categoria, atencion_id,
-                            incidencia_id, tipo_intervencion_id, prioridad, motivo,
-                            altura_referencia_m, justificacion, usuario_creacion_id,
-                            usuario_modificacion_id)
-                        VALUES (:ejemplar, 'AlturaDemanda', :atencion, :incidencia, :tipo,
-                            :prioridad, :motivo, :altura, :justificacion, :usuario, :usuario)
-                        RETURNING id
-                        """,
-                        new MapSqlParameterSource()
-                                .addValue("ejemplar", ejemplar.id())
-                                .addValue("atencion", ((Number) atencion.get("id")).longValue())
-                                .addValue("incidencia", entrada.incidenciaId(), Types.BIGINT)
-                                .addValue("tipo", entrada.tipoIntervencionId(), Types.BIGINT)
-                                .addValue(
-                                        "prioridad",
-                                        entrada.prioridad() == null
-                                                ? null
-                                                : entrada.prioridad().name(),
-                                        Types.VARCHAR)
-                                .addValue("motivo", entrada.motivo().name())
-                                .addValue("altura", ejemplar.alturaTotalM(), Types.NUMERIC)
-                                .addValue("justificacion", justificacion, Types.VARCHAR)
-                                .addValue("usuario", usuario.id()),
-                        Long.class);
+                insertar(
+                        ejemplar,
+                        ((Number) atencion.get("id")).longValue(),
+                        entrada.incidenciaId(),
+                        entrada.tipoIntervencionId(),
+                        entrada.prioridad(),
+                        entrada.motivo(),
+                        justificacion,
+                        usuario.id());
         Intervencion creada = intervenciones.buscar(id);
         auditoria.registrarAlta(
                 ENTIDAD, id, IntervencionesPodaService.valores(creada), usuario.id());
         return creada;
+    }
+
+    /**
+     * Poda de altura de una incidencia derivada a un proveedor (MOD-03, {@code crear_poda}): la
+     * atención ya la creó la derivación, así que aquí solo se registra la intervención del
+     * ejemplar, en la misma transacción. Los permisos los comprueba la derivación. Por debajo de
+     * {@value #ALTURA_MINIMA_M} m queda como justificación la incidencia, que ya eligió la vía
+     * tercerizada.
+     */
+    @Transactional
+    public Intervencion registrarDerivada(
+            long ejemplarId,
+            long atencionId,
+            long incidenciaId,
+            String incidenciaCodigo,
+            MotivoPodaAltura motivo,
+            long usuarioId) {
+        EjemplarPoda ejemplar = buscarEjemplar(ejemplarId);
+        long id =
+                insertar(
+                        ejemplar,
+                        atencionId,
+                        incidenciaId,
+                        null,
+                        null,
+                        motivo == null ? MotivoPodaAltura.Riesgo : motivo,
+                        ejemplar.requiereJustificacion()
+                                ? "Derivada desde la incidencia %s por la vía tercerizada"
+                                        .formatted(incidenciaCodigo)
+                                : null,
+                        usuarioId);
+        Intervencion creada = intervenciones.buscar(id);
+        auditoria.registrarAlta(ENTIDAD, id, IntervencionesPodaService.valores(creada), usuarioId);
+        return creada;
+    }
+
+    private long insertar(
+            EjemplarPoda ejemplar,
+            long atencionId,
+            Long incidenciaId,
+            Long tipoId,
+            Prioridad prioridad,
+            MotivoPodaAltura motivo,
+            String justificacion,
+            long usuarioId) {
+        return jdbc.queryForObject(
+                """
+                INSERT INTO mod02_intervencion_arbolado (ejemplar_id, categoria, atencion_id,
+                    incidencia_id, tipo_intervencion_id, prioridad, motivo,
+                    altura_referencia_m, justificacion, usuario_creacion_id,
+                    usuario_modificacion_id)
+                VALUES (:ejemplar, 'AlturaDemanda', :atencion, :incidencia, :tipo,
+                    :prioridad, :motivo, :altura, :justificacion, :usuario, :usuario)
+                RETURNING id
+                """,
+                new MapSqlParameterSource()
+                        .addValue("ejemplar", ejemplar.id())
+                        .addValue("atencion", atencionId)
+                        .addValue("incidencia", incidenciaId, Types.BIGINT)
+                        .addValue("tipo", tipoId, Types.BIGINT)
+                        .addValue(
+                                "prioridad",
+                                prioridad == null ? null : prioridad.name(),
+                                Types.VARCHAR)
+                        .addValue("motivo", motivo.name())
+                        .addValue("altura", ejemplar.alturaTotalM(), Types.NUMERIC)
+                        .addValue("justificacion", justificacion, Types.VARCHAR)
+                        .addValue("usuario", usuarioId),
+                Long.class);
     }
 
     private EjemplarPoda buscarEjemplar(long id) {

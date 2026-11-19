@@ -12,7 +12,8 @@ import pe.edu.pucp.areasverdes.mod06.gestion.RangoFechas;
  * Actividades del personal propio (MOD-04) para el mapa de atenciones (RF-REP-007), en solo lectura
  * y con SQL parametrizado. La fecha es la local de America/Lima; el espacio, el de {@code
  * mod05_areaverde} (el mismo id que las atenciones tercerizadas); la clase, la histórica de la
- * actividad o, si no la guarda, la de su tipo.
+ * actividad o, si no la guarda, la de su tipo. Las actividades anuladas (AV-384) no cuentan: no
+ * representan una ejecución válida, igual que en las demás fuentes de MOD-04.
  */
 @Repository
 public class ActividadesMapaRepository {
@@ -28,7 +29,8 @@ public class ActividadesMapaRepository {
             Long areaVerdeId,
             String espacio,
             Long ejemplarId,
-            String ejemplarCodigo) {}
+            String ejemplarCodigo,
+            String ejemplarAlias) {}
 
     private final NamedParameterJdbcTemplate jdbc;
 
@@ -45,7 +47,8 @@ public class ActividadesMapaRepository {
                 SELECT a.id, (a.fecha_hora_actividad AT TIME ZONE 'America/Lima')::date AS fecha,
                        ca.nombre AS clase, COALESCE(a.tipo_actividad_nombre, t.nombre) AS tipo_actividad,
                        p.estado AS estado_parte, c.nombre AS cuadrilla, a.area_verde_id,
-                       v.nombre AS espacio, a.ejemplar_id, e.codigo AS ejemplar_codigo
+                       v.nombre AS espacio, a.ejemplar_id, e.codigo AS ejemplar_codigo,
+                       e.alias AS ejemplar_alias
                 FROM mod04_actividad a
                 JOIN mod04_parte_diario p ON p.id = a.parte_id
                 JOIN mod04_cuadrilla c ON c.id = p.cuadrilla_id
@@ -54,6 +57,7 @@ public class ActividadesMapaRepository {
                 LEFT JOIN mod05_areaverde v ON v.id = a.area_verde_id
                 LEFT JOIN mod02_ejemplar e ON e.id = a.ejemplar_id
                 WHERE (a.fecha_hora_actividad AT TIME ZONE 'America/Lima')::date BETWEEN :desde AND :hasta
+                  AND a.estado_actividad <> 'Anulada'
                   AND (CAST(:area AS bigint) IS NULL OR a.area_verde_id = :area)
                 ORDER BY a.fecha_hora_actividad DESC, a.id
                 """,

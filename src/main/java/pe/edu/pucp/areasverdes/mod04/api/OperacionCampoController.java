@@ -181,6 +181,26 @@ public class OperacionCampoController {
         return service.guardarEncargo(id, body, user);
     }
 
+    @PostMapping({"/encargos/{id}/estado", "/encargos/{id}/estado/"})
+    @Operation(summary = "Actualizar el estado de un encargo propio o cancelarlo como jefe")
+    public Map<String, Object> cambiarEstadoEncargo(
+            @PathVariable long id,
+            @Valid @RequestBody Entradas.CambioEstadoEncargo body,
+            @AuthenticationPrincipal Usuario user) {
+        return service.cambiarEstadoEncargo(id, body, user);
+    }
+
+    @PostMapping({"/encargos/{id}/reprogramacion", "/encargos/{id}/reprogramacion/"})
+    @Operation(
+            summary =
+                    "Reprogramar un encargo vivo: nuevo periodo o plazo, con justificación (jefe)")
+    public Map<String, Object> reprogramarEncargo(
+            @PathVariable long id,
+            @Valid @RequestBody Entradas.Reprogramacion body,
+            @AuthenticationPrincipal Usuario user) {
+        return service.reprogramarEncargo(id, body, user);
+    }
+
     @GetMapping({"/encargos/{id}", "/encargos/{id}/"})
     @Operation(summary = "Consultar encargo")
     public Map<String, Object> encargo(
@@ -231,6 +251,15 @@ public class OperacionCampoController {
             @Valid @RequestBody Entradas.Verificacion body,
             @AuthenticationPrincipal Usuario user) {
         return service.verificarActividad(id, body, user);
+    }
+
+    @PutMapping({"/actividades/{id}/anulacion", "/actividades/{id}/anulacion/"})
+    @Operation(summary = "AV-384: anular una actividad pendiente de verificación")
+    public Map<String, Object> anularActividad(
+            @PathVariable long id,
+            @Valid @RequestBody Entradas.Anulacion body,
+            @AuthenticationPrincipal Usuario user) {
+        return service.anularActividad(id, body, user);
     }
 
     @GetMapping({"/actividades/{id}/materiales", "/actividades/{id}/materiales/"})

@@ -20,6 +20,7 @@ final class Acceso {
     static final String REGISTRAR_CORTE = "PLA.CORTE.REGISTRAR";
     static final String REGISTRAR_INCIDENCIA = "PLA.INCIDENCIA.REGISTRAR";
     static final String CLASIFICAR_INCIDENCIA = "PLA.INCIDENCIA.CLASIFICAR";
+    static final String CONSULTAR_TODAS_INCIDENCIAS = "PLA.INCIDENCIA.CONSULTAR_TODAS";
 
     private Acceso() {}
 
@@ -51,6 +52,14 @@ final class Acceso {
     /** Consultar la bandeja y la ficha: todos los que reportan (AV-281). */
     static void consultarIncidencias(UsuarioPlanificacion usuario) {
         exigir(usuario, REGISTRAR_INCIDENCIA);
+    }
+
+    /**
+     * Ve toda la bandeja: quien tiene {@code PLA.INCIDENCIA.CONSULTAR_TODAS} (jefe, ingeniero y
+     * practicante); el capataz solo las suyas y las de su cuadrilla.
+     */
+    static boolean veTodasLasIncidencias(UsuarioPlanificacion usuario) {
+        return usuario != null && usuario.tiene(CONSULTAR_TODAS_INCIDENCIAS);
     }
 
     /** Clasificar, derivar, descartar, cerrar y reasignar: el jefe (AV-281). */

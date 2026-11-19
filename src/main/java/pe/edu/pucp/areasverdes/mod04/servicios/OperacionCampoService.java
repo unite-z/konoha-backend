@@ -48,6 +48,13 @@ public class OperacionCampoService implements ConsultaCampo {
     /** Registrar en la propia cuadrilla (antes: capataz). */
     public static final String REGISTRAR_PARTE = "CAM.PARTE.REGISTRAR";
 
+    public static final String VERIFICAR_PARTE = "CAM.PARTE.VERIFICAR";
+
+    public static final String ANULAR_PARTE = "CAM.PARTE.ANULAR";
+
+    /** Avanzar el estado de los encargos propios (capataz responsable). */
+    public static final String ACTUALIZAR_ESTADO_ENCARGO = "PLA.ENCARGO.ACTUALIZAR_ESTADO";
+
     public static boolean jefe(Usuario user) {
         return user != null && user.puede(GESTIONAR);
     }
@@ -59,6 +66,10 @@ public class OperacionCampoService implements ConsultaCampo {
 
     public static void exigirJefe(Usuario user) {
         if (!jefe(user)) throw forbidden();
+    }
+
+    static void exigirPermiso(Usuario user, String permiso) {
+        if (user == null || !user.puede(permiso)) throw forbidden();
     }
 
     static ApiError forbidden() {
@@ -99,7 +110,8 @@ public class OperacionCampoService implements ConsultaCampo {
                         """
                         SELECT e.id,e.descripcion FROM mod04_encargo e
                         JOIN mod04_personal p ON p.id=e.capataz_id
-                        WHERE p.usuario_id=:usuario AND e.fecha_fin>=:hoy ORDER BY e.id
+                        WHERE p.usuario_id=:usuario AND e.fecha_fin>=:hoy
+                            AND e.estado NOT IN ('Completado','Cancelado') ORDER BY e.id
                         """,
                         Map.of("usuario", usuarioId, "hoy", LocalDate.now(clock)),
                         (fila, indice) ->
@@ -316,16 +328,6 @@ public class OperacionCampoService implements ConsultaCampo {
     @Transactional
     public Map<String, Object> guardarEncargo(Long id, Entradas.Encargo body, Usuario user) {
         exigirJefe(user);
-        long days = ChronoUnit.DAYS.between(body.fechaInicio(), body.fechaFin()) + 1;
-        int max = body.periodicidad().equals("Semanal") ? 7 : 14;
-        if (days < 1 || days > max)
-            throw ApiError.invalid(
-                    "El periodo debe tener entre 1 y " + max + " días, incluidos inicio y fin");
-        if (body.plazoPrevisto().isBefore(body.fechaInicio())
-                || body.plazoPrevisto().isAfter(body.fechaFin()))
-            throw ApiError.invalid("El plazo debe estar dentro del periodo de planificación");
-        if (body.fechaReunion().isAfter(body.fechaFin()))
-            throw ApiError.invalid("La reunión no puede ser posterior al periodo");
         var squad = repo.get("cuadrilla", body.cuadrillaId(), true);
         if (!Boolean.TRUE.equals(squad.get("activa")))
             throw ApiError.conflict("La cuadrilla está inactiva");
@@ -334,10 +336,41 @@ public class OperacionCampoService implements ConsultaCampo {
         Map<String, Object> before = Map.of();
         if (id != null) {
             before = repo.get("encargo", id, true);
+            if ("Cancelado".equals(before.get("estado")))
+                throw ApiError.conflict("No se puede redefinir un encargo cancelado");
+            if ("Completado".equals(before.get("estado")))
+                throw ApiError.conflict("No se puede redefinir un encargo completado");
             if (!repo.rows("SELECT id FROM mod04_actividad WHERE encargo_id=:id", Map.of("id", id))
                     .isEmpty())
                 throw ApiError.conflict(
                         "El encargo ya tiene ejecución registrada y no puede redefinirse");
+        }
+        boolean directo = "Directo".equals(body.periodicidad());
+        LocalDate inicio = body.fechaInicio();
+        LocalDate fin = body.fechaFin();
+        LocalDate reunion = body.fechaReunion();
+        if (directo) {
+            if (inicio != null || fin != null || reunion != null)
+                throw ApiError.invalid("El encargo directo solo requiere el plazo previsto");
+            inicio =
+                    "Directo".equals(before.get("periodicidad"))
+                            ? (LocalDate) before.get("fecha_inicio")
+                            : LocalDate.now(clock);
+            fin = body.plazoPrevisto();
+            if (fin.isBefore(inicio))
+                throw ApiError.invalid("El plazo no puede ser anterior al inicio del encargo");
+        } else {
+            if (inicio == null || fin == null || reunion == null)
+                throw ApiError.invalid("Indica la reunión y el periodo de planificación");
+            long days = ChronoUnit.DAYS.between(inicio, fin) + 1;
+            int max = body.periodicidad().equals("Semanal") ? 7 : 14;
+            if (days < 1 || days > max)
+                throw ApiError.invalid(
+                        "El periodo debe tener entre 1 y " + max + " días, incluidos inicio y fin");
+            if (body.plazoPrevisto().isBefore(inicio) || body.plazoPrevisto().isAfter(fin))
+                throw ApiError.invalid("El plazo debe estar dentro del periodo de planificación");
+            if (reunion.isAfter(fin))
+                throw ApiError.invalid("La reunión no puede ser posterior al periodo");
         }
         var data =
                 values(
@@ -354,11 +387,11 @@ public class OperacionCampoService implements ConsultaCampo {
                         "periodicidad",
                         body.periodicidad(),
                         "fecha_reunion",
-                        body.fechaReunion(),
+                        reunion,
                         "fecha_inicio",
-                        body.fechaInicio(),
+                        inicio,
                         "fecha_fin",
-                        body.fechaFin(),
+                        fin,
                         "plazo_previsto",
                         body.plazoPrevisto(),
                         "fecha_modificacion",
@@ -380,14 +413,181 @@ public class OperacionCampoService implements ConsultaCampo {
         return result;
     }
 
+    @Transactional
+    public Map<String, Object> cambiarEstadoEncargo(
+            long id, Entradas.CambioEstadoEncargo body, Usuario user) {
+        exigirLectura(user);
+        boolean cancelar = "Cancelado".equals(body.estado());
+        if (cancelar ? !jefe(user) : !user.puede(ACTUALIZAR_ESTADO_ENCARGO)) throw forbidden();
+        var encargo = repo.get("encargo", id, true);
+        if (!cancelar && !Objects.equals(personalUsuario(user), number(encargo, "capataz_id")))
+            throw forbidden();
+        String anterior = (String) encargo.get("estado");
+        boolean permitida =
+                switch (anterior) {
+                    case "Por completar", "Observado" ->
+                            cancelar || "En curso".equals(body.estado());
+                    case "En curso" ->
+                            cancelar || Set.of("Completado", "Observado").contains(body.estado());
+                    default -> false;
+                };
+        if (!anterior.equals(body.estadoAnterior()) || !permitida)
+            throw ApiError.conflict("El cambio de estado no está permitido para este encargo");
+        String observaciones = Objects.toString(body.observaciones(), "").strip();
+        if (cancelar && observaciones.isEmpty())
+            throw ApiError.invalid("Indica el motivo de la cancelación");
+        if ("Observado".equals(body.estado()) && observaciones.isEmpty())
+            throw ApiError.invalid("Indica el motivo de la observación");
+        var fecha = OffsetDateTime.now(clock);
+        repo.update(
+                "encargo",
+                id,
+                values(
+                        "estado",
+                        body.estado(),
+                        "fecha_modificacion",
+                        fecha,
+                        "usuario_modificacion_id",
+                        user.id()));
+        repo.insert(
+                "encargo_cambio_estado",
+                values(
+                        "encargo_id",
+                        id,
+                        "estado_anterior",
+                        anterior,
+                        "estado_nuevo",
+                        body.estado(),
+                        "observaciones",
+                        observaciones,
+                        "usuario_id",
+                        user.id(),
+                        "fecha",
+                        fecha));
+        return encargo(id, user);
+    }
+
+    /**
+     * Cambia el periodo y el plazo de un encargo vivo con una justificación que queda en su
+     * historial (AV-405). Sigue las reglas de {@link #guardarEncargo}, pero sin la restricción de
+     * no tener ejecución: lo ya registrado debe quedar dentro del nuevo periodo.
+     */
+    @Transactional
+    public Map<String, Object> reprogramarEncargo(
+            long id, Entradas.Reprogramacion body, Usuario user) {
+        exigirJefe(user);
+        var before = repo.get("encargo", id, true);
+        String estado = String.valueOf(before.get("estado"));
+        if (!Set.of("Por completar", "En curso", "Observado").contains(estado))
+            throw ApiError.conflict(
+                    "Solo se reprograma un encargo por completar, en curso u observado");
+        boolean directo = "Directo".equals(before.get("periodicidad"));
+        LocalDate inicio = (LocalDate) before.get("fecha_inicio");
+        LocalDate fin;
+        LocalDate plazo = body.plazoPrevisto();
+        if (directo) {
+            if (body.fechaInicio() != null || body.fechaFin() != null)
+                throw ApiError.invalid("El encargo directo solo cambia el plazo");
+            fin = plazo;
+            if (fin.isBefore(inicio))
+                throw ApiError.invalid("El plazo no puede ser anterior al inicio del encargo");
+        } else {
+            if (body.fechaInicio() == null || body.fechaFin() == null)
+                throw ApiError.invalid("Indica el inicio y el fin del periodo");
+            inicio = body.fechaInicio();
+            fin = body.fechaFin();
+            long dias = ChronoUnit.DAYS.between(inicio, fin) + 1;
+            int max = "Semanal".equals(before.get("periodicidad")) ? 7 : 14;
+            if (dias < 1 || dias > max)
+                throw ApiError.invalid(
+                        "El periodo debe tener entre 1 y " + max + " días, incluidos inicio y fin");
+            if (plazo.isBefore(inicio) || plazo.isAfter(fin))
+                throw ApiError.invalid("El plazo debe estar dentro del periodo de planificación");
+            LocalDate reunion = (LocalDate) before.get("fecha_reunion");
+            if (reunion != null && reunion.isAfter(fin))
+                throw ApiError.invalid("La reunión no puede ser posterior al periodo");
+        }
+        if (inicio.equals(before.get("fecha_inicio"))
+                && fin.equals(before.get("fecha_fin"))
+                && plazo.equals(before.get("plazo_previsto")))
+            throw ApiError.invalid("Cambia alguna fecha para reprogramar");
+        long fuera =
+                repo.jdbc()
+                        .queryForObject(
+                                """
+                                SELECT count(*) FROM mod04_actividad
+                                WHERE encargo_id=:id AND estado_actividad<>'Anulada'
+                                  AND (fecha_hora_actividad AT TIME ZONE 'America/Lima')::date
+                                      NOT BETWEEN :inicio AND :fin
+                                """,
+                                Map.of("id", id, "inicio", inicio, "fin", fin),
+                                Long.class);
+        if (fuera > 0)
+            throw ApiError.conflict(
+                    "Hay actividades registradas fuera del nuevo periodo; no se puede reprogramar"
+                            + " así");
+        var fecha = OffsetDateTime.now(clock);
+        repo.update(
+                "encargo",
+                id,
+                values(
+                        "fecha_inicio",
+                        inicio,
+                        "fecha_fin",
+                        fin,
+                        "plazo_previsto",
+                        plazo,
+                        "fecha_modificacion",
+                        fecha,
+                        "usuario_modificacion_id",
+                        user.id()));
+        repo.insert(
+                "encargo_reprogramacion",
+                values(
+                        "encargo_id",
+                        id,
+                        "fecha_inicio_anterior",
+                        before.get("fecha_inicio"),
+                        "fecha_fin_anterior",
+                        before.get("fecha_fin"),
+                        "plazo_anterior",
+                        before.get("plazo_previsto"),
+                        "fecha_inicio_nueva",
+                        inicio,
+                        "fecha_fin_nueva",
+                        fin,
+                        "plazo_nuevo",
+                        plazo,
+                        "justificacion",
+                        body.justificacion().strip(),
+                        "usuario_id",
+                        user.id(),
+                        "fecha",
+                        fecha));
+        var after = repo.encargo(id);
+        repo.auditExplicit(
+                "Encargo",
+                id,
+                "Modificacion",
+                user.id(),
+                before,
+                after,
+                body.justificacion().strip());
+        return encargo(id, user);
+    }
+
     public Map<String, Object> encargo(long id, Usuario user) {
         var result = repo.encargo(id);
         exigirCapataz(number(result, "capataz_id"), user, false);
+        result.put("historial_estados", repo.historialEncargo(id));
+        result.put("reprogramaciones", repo.reprogramacionesEncargo(id));
         return result;
     }
 
     Map<String, Object> parteDeActividad(long id, Usuario user, boolean write) {
         var activity = repo.get("actividad", id, write);
+        if (write && "Anulada".equals(activity.get("estado_actividad")))
+            throw ApiError.conflict("La actividad está anulada y solo puede consultarse");
         var part = repo.get("parte_diario", number(activity, "parte_id"), write);
         exigirCapataz(number(part, "capataz_id"), user, write);
         if (write && !part.get("estado").equals("Abierto"))
@@ -437,12 +637,14 @@ public class OperacionCampoService implements ConsultaCampo {
         if (ejemplarId != null) {
             var ejemplar =
                     repo.one(
-                            "SELECT codigo,altura_total_m FROM mod02_ejemplar WHERE id=:id",
+                            "SELECT codigo,alias,altura_total_m FROM mod02_ejemplar WHERE id=:id",
                             Map.of("id", ejemplarId));
             result.put("ejemplar_codigo", ejemplar.get("codigo"));
+            result.put("ejemplar_alias", ejemplar.get("alias"));
             result.put("ejemplar_altura_m", ejemplar.get("altura_total_m"));
         } else {
             result.put("ejemplar_codigo", null);
+            result.put("ejemplar_alias", null);
             result.put("ejemplar_altura_m", null);
         }
         Object verificador = result.get("verificado_por_usuario_id");
@@ -454,26 +656,184 @@ public class OperacionCampoService implements ConsultaCampo {
                                         "SELECT nombre FROM core_usuario WHERE id=:id",
                                         Map.of("id", verificador))
                                 .get("nombre"));
+        Object anulador = result.get("anulada_por_usuario_id");
+        result.put(
+                "anulada_por_nombre",
+                anulador == null
+                        ? null
+                        : repo.one(
+                                        "SELECT nombre FROM core_usuario WHERE id=:id",
+                                        Map.of("id", anulador))
+                                .get("nombre"));
+        var seguimiento =
+                repo.rows(
+                        "SELECT id FROM mod04_encargo WHERE actividad_origen_id=:id",
+                        Map.of("id", id));
+        result.put(
+                "encargo_seguimiento_id",
+                seguimiento.isEmpty() ? null : seguimiento.get(0).get("id"));
         return result;
     }
 
     @Transactional
     public Map<String, Object> verificarActividad(
             long id, Entradas.Verificacion body, Usuario user) {
-        exigirJefe(user);
+        exigirPermiso(user, VERIFICAR_PARTE);
         var before = repo.get("actividad", id, true);
+        if ("Anulada".equals(before.get("estado_actividad")))
+            throw ApiError.conflict("Una actividad anulada no puede verificarse");
+
+        var seguimientoSolicitado = body.encargoSeguimiento();
+        boolean conObservaciones =
+                body.conObservaciones() != null
+                        ? body.conObservaciones()
+                        : seguimientoSolicitado != null;
+        String observaciones = Objects.toString(body.observaciones(), "").strip();
+        if (conObservaciones && observaciones.isEmpty())
+            throw ApiError.invalid("Escribe las observaciones de la verificación");
+        if (!conObservaciones
+                && Boolean.FALSE.equals(body.conObservaciones())
+                && !observaciones.isEmpty())
+            throw ApiError.invalid("La verificación sin observaciones no admite observaciones");
+        if (!conObservaciones && seguimientoSolicitado != null)
+            throw ApiError.invalid(
+                    "Un encargo de seguimiento solo corresponde a una verificación con"
+                            + " observaciones");
+
+        // La fila de actividad queda bloqueada durante toda la decisión. El índice único de
+        // actividad_origen_id refuerza que dos verificaciones concurrentes no creen seguimientos
+        // duplicados (AV-402).
+        var seguimientos =
+                repo.rows(
+                        "SELECT id FROM mod04_encargo WHERE actividad_origen_id=:id FOR UPDATE",
+                        Map.of("id", id));
+        if (conObservaciones && seguimientos.isEmpty()) {
+            if (seguimientoSolicitado == null)
+                throw ApiError.invalid(
+                        "Crea el encargo de seguimiento de la verificación con observaciones");
+            var parte = repo.get("parte_diario", number(before, "parte_id"), false);
+            var encargo =
+                    guardarEncargo(
+                            null,
+                            new Entradas.Encargo(
+                                    number(parte, "cuadrilla_id"),
+                                    number(before, "tipo_actividad_id"),
+                                    number(before, "area_verde_id"),
+                                    seguimientoSolicitado.descripcion(),
+                                    "Directo",
+                                    null,
+                                    null,
+                                    null,
+                                    seguimientoSolicitado.plazoPrevisto()),
+                            user);
+            repo.update("encargo", number(encargo, "id"), values("actividad_origen_id", id));
+        } else if (conObservaciones && seguimientoSolicitado != null) {
+            throw ApiError.invalid(
+                    "La actividad ya tiene un encargo de seguimiento; se reutiliza el existente");
+        }
+
+        // El cliente nuevo envía con_observaciones=false y no conserva texto residual. Las
+        // restricciones históricas V58/V85/V95 exigen un valor no nulo cuando la actividad está
+        // verificada, por lo que la cadena vacía representa «sin observaciones» en persistencia.
+        // La rama compatible permite desplegar el backend antes que el frontend antiguo.
+        Object observacionesGuardadas =
+                conObservaciones
+                        ? observaciones
+                        : body.conObservaciones() == null && !observaciones.isEmpty()
+                                ? observaciones
+                                : "";
         repo.update(
                 "actividad",
                 id,
                 values(
                         "verificacion_observaciones",
-                        body.observaciones().strip(),
+                        observacionesGuardadas,
                         "verificado_por_usuario_id",
                         user.id(),
                         "fecha_verificacion",
-                        OffsetDateTime.now(clock)));
+                        OffsetDateTime.now(clock),
+                        "estado_actividad",
+                        conObservaciones ? "Observada" : "Verificada"));
+        iniciarEncargoDeActividad(before, id, user);
         var after = repo.get("actividad", id, false);
         repo.audit("Actividad", id, "Verificar", user.id(), before, after);
+        return actividad(id, user);
+    }
+
+    /**
+     * Verificar confirma que el trabajo del encargo ya tuvo ejecución. Solo avanza «Por completar»
+     * a «En curso»: conserva los estados terminales o observados y nunca completa el encargo por
+     * verificar una actividad.
+     */
+    private void iniciarEncargoDeActividad(
+            Map<String, Object> actividad, long actividadId, Usuario user) {
+        if (actividad.get("encargo_id") == null) return;
+        long encargoId = number(actividad, "encargo_id");
+        var before = repo.get("encargo", encargoId, true);
+        if (!"Por completar".equals(before.get("estado"))) return;
+        var fecha = OffsetDateTime.now(clock);
+        repo.update(
+                "encargo",
+                encargoId,
+                values(
+                        "estado",
+                        "En curso",
+                        "fecha_modificacion",
+                        fecha,
+                        "usuario_modificacion_id",
+                        user.id()));
+        String motivo = "Actividad " + actividadId + " verificada";
+        repo.insert(
+                "encargo_cambio_estado",
+                values(
+                        "encargo_id",
+                        encargoId,
+                        "estado_anterior",
+                        "Por completar",
+                        "estado_nuevo",
+                        "En curso",
+                        "observaciones",
+                        motivo,
+                        "usuario_id",
+                        user.id(),
+                        "fecha",
+                        fecha));
+        repo.auditExplicit(
+                "Encargo",
+                encargoId,
+                "CambioEstado",
+                user.id(),
+                before,
+                repo.get("encargo", encargoId, false),
+                motivo);
+    }
+
+    @Transactional
+    public Map<String, Object> anularActividad(long id, Entradas.Anulacion body, Usuario user) {
+        exigirPermiso(user, ANULAR_PARTE);
+        String motivo = body.motivo().strip();
+        var before = repo.get("actividad", id, true);
+        String estado = String.valueOf(before.get("estado_actividad"));
+        if ("Verificada".equals(estado) || "Observada".equals(estado))
+            throw ApiError.conflict("Una actividad verificada no puede anularse");
+        if ("Anulada".equals(estado)) {
+            if (motivo.equals(before.get("anulacion_motivo"))) return actividad(id, user);
+            throw ApiError.conflict("La actividad ya fue anulada con otro motivo");
+        }
+        repo.update(
+                "actividad",
+                id,
+                values(
+                        "estado_actividad",
+                        "Anulada",
+                        "anulada_en",
+                        OffsetDateTime.now(clock),
+                        "anulada_por_usuario_id",
+                        user.id(),
+                        "anulacion_motivo",
+                        motivo));
+        var after = repo.get("actividad", id, false);
+        repo.auditExplicit("Actividad", id, "Anulacion", user.id(), before, after, motivo);
         return actividad(id, user);
     }
 
@@ -589,6 +949,8 @@ public class OperacionCampoService implements ConsultaCampo {
                         .isEmpty()) throw ApiError.invalid("La incidencia de origen no existe");
         if (body.encargoId() != null) {
             var task = repo.get("encargo", body.encargoId(), true);
+            if ("Cancelado".equals(task.get("estado")))
+                throw ApiError.conflict("No se puede registrar ejecución en un encargo cancelado");
             LocalDate day = (LocalDate) part.get("fecha");
             if (number(task, "cuadrilla_id") != number(part, "cuadrilla_id")
                     || number(task, "capataz_id") != number(part, "capataz_id")

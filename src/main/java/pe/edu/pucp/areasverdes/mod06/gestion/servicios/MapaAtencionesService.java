@@ -261,6 +261,7 @@ public class MapaAtencionesService {
                 f.areaVerdeId() == null ? AgrupadorMaterial.SIN_ESPACIO : f.espacio(),
                 f.ejemplarId(),
                 f.ejemplarCodigo(),
+                f.ejemplarAlias(),
                 f.archivosAsociados(),
                 null);
     }
@@ -281,6 +282,7 @@ public class MapaAtencionesService {
                 a.areaVerdeId() == null ? AgrupadorMaterial.SIN_ESPACIO : a.espacio(),
                 a.ejemplarId(),
                 a.ejemplarCodigo(),
+                a.ejemplarAlias(),
                 0,
                 null);
     }

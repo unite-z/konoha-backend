@@ -2,6 +2,9 @@
 
 `./mvnw verify` corre todo: formato, compilación y pruebas. Es lo que ejecuta CI.
 
+Qué prueba cubre cada parte de la configuración de servicios de MOD-03 (RF-PLA-001 y
+RF-PLA-002): en [MOD-03](../modulos/mod03.md#pruebas).
+
 ## Tipos
 
 | Tipo | Qué cubre | Con qué |

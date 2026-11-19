@@ -36,16 +36,17 @@ public class AtencionEspecialService {
                     + " completas' ELSE 'En seguimiento' END";
     static final String ESPECIALES =
             """
-            SELECT ae.id,ae.ejemplar_id,e.codigo ejemplar_codigo,e.area_verde_id,av.nombre area_verde_nombre,ae.plaga_id,pl.nombre plaga_nombre,
+            SELECT ae.id,ae.ejemplar_id,e.codigo ejemplar_codigo,e.alias ejemplar_alias,e.area_verde_id,av.nombre area_verde_nombre,ae.plaga_id,pl.nombre plaga_nombre,
                 ae.aplicaciones_adicionales,ae.aplicaciones_realizadas,
             """
                     + CASE_ESTADO
                     + """
                      estado,
-                        ae.fecha_creacion,ae.usuario_creacion_id,
+                        ae.fecha_creacion,ae.usuario_creacion_id,ucr.nombre usuario_creacion_nombre,
                         ae.cancelado,ae.motivo_cancelacion,ae.fecha_cancelacion,ae.usuario_cancelacion_id,uc.nombre usuario_cancelacion_nombre
                     FROM mod05_atencion_especial ae JOIN mod05_ejemplar e ON e.id=ae.ejemplar_id JOIN mod05_plaga pl ON pl.id=ae.plaga_id
                     LEFT JOIN mod05_areaverde av ON av.id=e.area_verde_id
+                    LEFT JOIN mod05_usuario ucr ON ucr.id=ae.usuario_creacion_id
                     LEFT JOIN mod05_usuario uc ON uc.id=ae.usuario_cancelacion_id
                     """;
 
@@ -65,7 +66,11 @@ public class AtencionEspecialService {
                 new ConsultasService.Catalogo(
                         ESPECIALES + where,
                         "fecha_creacion DESC,id DESC",
-                        List.of("ejemplar_codigo", "plaga_nombre", "area_verde_nombre"),
+                        List.of(
+                                "ejemplar_codigo",
+                                "ejemplar_alias",
+                                "plaga_nombre",
+                                "area_verde_nombre"),
                         Map.of("plaga_id", "id")),
                 params,
                 url,
@@ -107,8 +112,17 @@ public class AtencionEspecialService {
     @Transactional
     public Map<String, Object> marcar(EntradasMaestros.AtencionEspecial in, Usuario user) {
         user.exigir(Usuario.REGISTRAR_ATENCION);
-        if (repo.rows("SELECT id FROM mod05_ejemplar WHERE id=:id", Map.of("id", in.ejemplar_id()))
-                .isEmpty()) throw ApiError.invalid("El ejemplar no existe");
+        var ejemplar =
+                repo.rows(
+                        "SELECT situacion FROM mod02_ejemplar WHERE id=:id",
+                        Map.of("id", in.ejemplar_id()));
+        if (ejemplar.isEmpty()) throw ApiError.invalid("El ejemplar no existe");
+        // AV-154: un ejemplar retirado, muerto, reemplazado o trasladado ya no recibe aplicaciones.
+        if (!"activo".equals(ejemplar.getFirst().get("situacion")))
+            throw ApiError.invalid(
+                    "El ejemplar está "
+                            + ejemplar.getFirst().get("situacion")
+                            + ": solo se marcan ejemplares activos");
         var plaga =
                 repo.rows("SELECT * FROM mod05_plaga WHERE id=:id", Map.of("id", in.plaga_id()));
         if (plaga.isEmpty()) throw ApiError.invalid("La plaga no existe en el catálogo");
@@ -157,6 +171,8 @@ public class AtencionEspecialService {
         if ((boolean) antes.get("cancelado"))
             throw ApiError.conflict("Este seguimiento ya está cancelado");
         String motivo = AtencionService.text(in.motivo());
+        // AV-154 (RF-INV-011): retirar la marca exige su motivo, que queda en el historial.
+        if (motivo.isEmpty()) throw ApiError.invalid("Escribe el motivo de la cancelación");
         repo.update(
                 "atencion_especial",
                 id,
