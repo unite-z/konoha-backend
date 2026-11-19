@@ -47,6 +47,10 @@ Necesitan PostgreSQL con PostGIS en una base terminada en `_test` (`TEST_DB_*` c
 
 Integración de RF-T-005 (cuadrillas, capataces y operarios), RF-PLA-005 (encargos semanales/quincenales) y RF-ACT-003 (participantes). Sus rutas están bajo `/api/v1/operacion-campo/` y se documentan en Swagger. Utilizan la sesión común de MOD-01 con cookie y CSRF: 401 sin sesión, 403 sin permiso. HTTP Basic se conserva para las pruebas, igual que en MOD-03/MOD-05.
 
+El listado y el detalle de encargos incluyen `incidencia_origen_id`: el identificador vinculado
+por MOD-03 al derivar una incidencia, o `null` en encargos sin incidencia de origen. La interfaz
+puede usarlo para abrir la ficha original; su consulta conserva los permisos y el alcance de MOD-03.
+
 | Operaciones | Jefe de sección | Ingeniero / practicante | Capataz |
 | --- | --- | --- | --- |
 | Consultar cuadrillas y encargos | Todas | Todas | Solo los suyos |

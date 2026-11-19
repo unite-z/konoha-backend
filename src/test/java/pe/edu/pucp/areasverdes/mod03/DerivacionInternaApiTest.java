@@ -144,6 +144,23 @@ class DerivacionInternaApiTest extends ApiPlanificacion {
         assertEquals(
                 true,
                 ((String) encargo.get("descripcion")).contains("Incluye: Foto, Descripción."));
+        long encargoId =
+                jdbc.getJdbcTemplate()
+                        .queryForObject(
+                                "SELECT encargo_id FROM mod03_encargo_incidencia WHERE"
+                                        + " incidencia_id = ?",
+                                Long.class,
+                                incidencia);
+        http.perform(
+                        get("/api/v1/operacion-campo/encargos/" + encargoId + "/")
+                                .with(httpBasic("jefe", CLAVE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.incidencia_origen_id").value(incidencia));
+        http.perform(get("/api/v1/operacion-campo/encargos/").with(httpBasic("jefe", CLAVE)))
+                .andExpect(status().isOk())
+                .andExpect(
+                        jsonPath("$.results[*].incidencia_origen_id")
+                                .value(hasItem((int) incidencia)));
         // El capataz recibe el aviso (avisar_capataz) y la cuadrilla queda con un encargo ese día.
         http.perform(get("/api/v1/planificacion/avisos/").with(httpBasic("sinrol", CLAVE)))
                 .andExpect(jsonPath("$[0].texto").value(containsString("encargo ENC-")));
