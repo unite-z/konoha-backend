@@ -152,6 +152,13 @@ class IntervencionesPodaApiTest {
     void conFotoQuedaVerificadaYActualizaElAvance() throws Exception {
         long id = registrar(ejemplarA);
         avance(0, 1, "0.0");
+        // La campaña enlaza la intervención incompleta para poder completarla después.
+        http.perform(
+                        get(CAMPANAS + campana + "/ejemplares/")
+                                .queryParam("q", "PODA-A")
+                                .cookie(ingeniero))
+                .andExpect(jsonPath("$.results[0].estado_intervencion").value("Incompleta"))
+                .andExpect(jsonPath("$.results[0].intervencion_id").value(id));
 
         http.perform(
                         multipart("/api/v1/core/adjuntos/")
@@ -173,12 +180,14 @@ class IntervencionesPodaApiTest {
                         get(CAMPANAS + campana + "/ejemplares/")
                                 .queryParam("q", "PODA-A")
                                 .cookie(ingeniero))
-                .andExpect(jsonPath("$.results[0].estado_intervencion").value("Verificada"));
+                .andExpect(jsonPath("$.results[0].estado_intervencion").value("Verificada"))
+                .andExpect(jsonPath("$.results[0].intervencion_id").value(id));
         http.perform(
                         get(CAMPANAS + campana + "/ejemplares/")
                                 .queryParam("q", "PODA-B")
                                 .cookie(ingeniero))
-                .andExpect(jsonPath("$.results[0].estado_intervencion").value("Pendiente"));
+                .andExpect(jsonPath("$.results[0].estado_intervencion").value("Pendiente"))
+                .andExpect(jsonPath("$.results[0].intervencion_id").doesNotExist());
     }
 
     @Test
