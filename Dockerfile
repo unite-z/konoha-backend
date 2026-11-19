@@ -4,9 +4,10 @@
 FROM maven:3.9.11-eclipse-temurin-21 AS build
 WORKDIR /build
 COPY pom.xml .
-RUN mvn -B -ntp -q dependency:go-offline
+COPY .mvn/settings-ci.xml /build/settings-ci.xml
+RUN mvn -s /build/settings-ci.xml -B -ntp -q dependency:go-offline
 COPY src ./src
-RUN mvn -B -ntp -q -U -DskipTests -Dspotless.skip=true package \
+RUN mvn -s /build/settings-ci.xml -B -ntp -q -U -DskipTests -Dspotless.skip=true package \
     && cp target/*.jar /build/app.jar
 
 FROM eclipse-temurin:21-jre
