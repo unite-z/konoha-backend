@@ -7,7 +7,6 @@ import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
-import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -31,12 +30,13 @@ import pe.edu.pucp.areasverdes.mod06.gestion.servicios.MapaAtencionesService;
  * | Fila | Atención | Destino                   | Tipo                  |
  * |------|----------|---------------------------|-----------------------|
  * | e    | AT-006   | área 3                    | Mantenimiento (corte) |
- * | f    | AT-007   | sin alcance               | Mantenimiento (corte) |
  * | c    | AT-002   | área 2                    | Poda                  |
  * | d    | AT-002   | ejemplar EJ-001 (área 2)  | Poda                  |
  * | a    | AT-001   | área 1                    | Fitosanitario         |
  * | b    | AT-001   | ejemplar EJ-001 (área 2)  | Fitosanitario         |
  * </pre>
+ *
+ * <p>AT-007 no tiene alcance: sin espacio es un error de datos y no se muestra (AV-408).
  */
 class MapaAtencionesApiTest extends ApiGestion {
 
@@ -61,7 +61,7 @@ class MapaAtencionesApiTest extends ApiGestion {
         mapa("").andExpect(status().isOk())
                 .andExpect(jsonPath("$.mapa.type").value("FeatureCollection"))
                 .andExpect(jsonPath("$.mapa.features", hasSize(0)))
-                .andExpect(jsonPath("$.sin_coordenadas.length()").value(6))
+                .andExpect(jsonPath("$.sin_coordenadas.length()").value(5))
                 .andExpect(jsonPath("$.sin_datos").value(false))
                 .andExpect(jsonPath("$.notas", not(hasItem(FuenteUbicacionesNoDisponible.MOTIVO))))
                 .andExpect(jsonPath("$.indicador.codigo").value("RF-REP-007"))
@@ -69,7 +69,7 @@ class MapaAtencionesApiTest extends ApiGestion {
                         jsonPath(
                                 "$.totales_por_tipo[*].tipo_atencion",
                                 contains("Mantenimiento", "Poda", "Fitosanitario")))
-                .andExpect(jsonPath("$.totales_por_tipo[*].total", contains(2, 1, 1)));
+                .andExpect(jsonPath("$.totales_por_tipo[*].total", contains(1, 1, 1)));
     }
 
     @Test
@@ -84,9 +84,18 @@ class MapaAtencionesApiTest extends ApiGestion {
                         jsonPath(
                                 "$.sin_coordenadas[?(@.codigo == 'AT-001')].archivos_asociados",
                                 everyItem(is(2))))
-                .andExpect(jsonPath("$.sin_coordenadas[1].codigo").value("AT-007"))
-                .andExpect(jsonPath("$.sin_coordenadas[1].espacio").value("Sin espacio"))
-                .andExpect(jsonPath("$.sin_coordenadas[1].area_verde_id").value(nullValue()));
+                .andExpect(jsonPath("$.sin_coordenadas[1].codigo").value("AT-002"));
+    }
+
+    /**
+     * Una atención sin espacio es un error de datos: no está en el mapa ni en la lista (AV-408).
+     */
+    @Test
+    void lasAtencionesSinEspacioNoSeMuestran() throws Exception {
+        mapa("").andExpect(jsonPath("$.sin_coordenadas[?(@.codigo == 'AT-007')]").isEmpty())
+                .andExpect(jsonPath("$.sin_coordenadas[?(@.espacio == 'Sin espacio')]").isEmpty())
+                .andExpect(
+                        jsonPath("$.sin_coordenadas[*].area_verde_id", everyItem(notNullValue())));
     }
 
     // --- Filtros
@@ -207,9 +216,9 @@ class MapaAtencionesApiTest extends ApiGestion {
                 .andExpect(jsonPath("$.sin_coordenadas[0].area_verde_id").value(1))
                 .andExpect(jsonPath("$.notas", hasItem(nota)));
 
-        // Sin modalidad, junto a las tercerizadas: el mantenimiento pasa de 2 a 3.
-        mapa("").andExpect(jsonPath("$.sin_coordenadas.length()").value(7))
-                .andExpect(jsonPath("$.totales_por_tipo[*].total", contains(3, 1, 1)));
+        // Sin modalidad, junto a las tercerizadas: el mantenimiento pasa de 1 a 2.
+        mapa("").andExpect(jsonPath("$.sin_coordenadas.length()").value(6))
+                .andExpect(jsonPath("$.totales_por_tipo[*].total", contains(2, 1, 1)));
         // Los filtros de MOD-05 (estado, tipo de servicio, riesgo) dejan fuera las actividades.
         mapa("&tipo_servicio_id=2")
                 .andExpect(jsonPath("$.sin_coordenadas[*].codigo", contains("AT-001", "AT-001")));
@@ -287,8 +296,10 @@ class MapaAtencionesApiTest extends ApiGestion {
                             'Programada', 'Prueba', 'Demanda', '', '2026-10-08 09:00-05',
                             'Reporte adjunto', false, '', 1, 1, 1, 1, id
                         FROM mod05_tiposervicio WHERE nombre = 'Riego tecnificado';
+                        INSERT INTO mod05_alcanceatencion (id, atencion_id, area_verde_id)
+                        SELECT 9801, id, 1 FROM mod05_atenciontercerizada WHERE codigo = 'AT-RIEGO';
                         """);
-        mapa("").andExpect(jsonPath("$.sin_coordenadas.length()").value(6))
+        mapa("").andExpect(jsonPath("$.sin_coordenadas.length()").value(5))
                 .andExpect(
                         jsonPath(
                                 "$.notas",

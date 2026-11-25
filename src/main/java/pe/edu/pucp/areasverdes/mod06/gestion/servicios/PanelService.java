@@ -57,8 +57,8 @@ public class PanelService {
                     "Conforme / cerrado");
 
     public static final String NOTA_FILTROS_PENDIENTES =
-            "Los filtros por cuadrilla y por sector todavía no se pueden aplicar: esos datos aún no"
-                    + " están disponibles en el sistema";
+            "El panel todavía no filtra por cuadrilla ni por sector: para ver las atenciones por"
+                    + " sector, usa el reporte «Atenciones por espacio y sector»";
     public static final String MENSAJE_SIN_DATOS =
             "No hay datos para el periodo y los filtros elegidos";
 

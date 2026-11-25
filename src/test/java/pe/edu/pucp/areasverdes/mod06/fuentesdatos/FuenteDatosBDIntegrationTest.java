@@ -124,9 +124,13 @@ class FuenteDatosBDIntegrationTest {
         assertEquals(90L, registro("Actividad", 9001).get("tiempo_minutos"));
         var operacion = new FuenteOperacionCampoMod04(jdbc);
         var periodo = new RangoFechas(LocalDate.of(2026, 10, 5), LocalDate.of(2026, 10, 5));
+        // Solo las de este escenario: otras pruebas dejan actividades ese mismo día.
         assertEquals(
                 List.of(9001L),
-                operacion.actividades(periodo, null).stream().map(a -> a.id()).toList());
+                operacion.actividades(periodo, null).stream()
+                        .map(a -> a.id())
+                        .filter(id -> id >= 9000)
+                        .toList());
     }
 
     @Test

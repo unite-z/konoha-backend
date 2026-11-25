@@ -36,6 +36,8 @@ import pe.edu.pucp.areasverdes.mod06.servicios.AtencionesEspacioSectorService;
  *   <li>Los filtros de tipo de servicio, estado y riesgo son de MOD-05: con alguno, solo cuentan
  *       las atenciones tercerizadas (una actividad no tiene riesgo, así que «sin riesgo» sí las
  *       deja).
+ *   <li>Las atenciones sin espacio (ni en su alcance ni en el de su ejemplar) no se muestran: son
+ *       un error de datos (AV-408).
  *   <li>Sin geometrías (MOD-02) las atenciones van a {@code sinCoordenadas}; no es «Sin datos»: las
  *       atenciones existen y se listan.
  *   <li>Cada fila lleva el tipo de uso de su espacio (MOD-02) para colorearlo en el mapa.
@@ -66,6 +68,9 @@ public class MapaAtencionesService {
                     + " fitosanitario) que no se muestran: %d";
     // CONFIRMADO (decisión del responsable, 28/10/2026): ver TiposAtencion.
     public static final String NOTA_CORTE = "El corte de césped se muestra como mantenimiento";
+    public static final String NOTA_SOLO_TERCERIZADAS =
+            "Las actividades del personal propio no están disponibles: solo se muestran las"
+                    + " atenciones tercerizadas";
 
     /** Prefijo del código de una actividad del personal propio en el mapa. */
     public static final String PREFIJO_ACTIVIDAD = "ACT-";
@@ -126,6 +131,8 @@ public class MapaAtencionesService {
                                     filtros.tipoServicioId(),
                                     filtros.estado()),
                             filtros.esRiesgo())) {
+                // Sin espacio: error de datos, no se muestra (AV-408).
+                if (f.areaVerdeId() == null) continue;
                 var tipo = TiposAtencion.deTipoServicio(f.tipoServicio());
                 if (tipo.isEmpty()) sinClasificar.add(f.atencionId());
                 else if (pedido(filtros, tipo.get())) clasificadas.add(comoAtencion(f, tipo.get()));
@@ -137,6 +144,7 @@ public class MapaAtencionesService {
         if (conPropias && campo.disponible()) {
             int sinClasificar = 0;
             for (ActividadMapa a : actividades.actividades(periodo, filtros.areaVerdeId())) {
+                if (a.areaVerdeId() == null) continue;
                 var tipo = TiposAtencion.deClaseActividad(a.clase());
                 if (tipo.isEmpty()) sinClasificar++;
                 else if (pedido(filtros, tipo.get()))
@@ -211,7 +219,7 @@ public class MapaAtencionesService {
         // 9. Notas.
         if (!AtencionesEspacioSectorService.TERCERIZADO.equals(filtros.modalidad())
                 && !campo.disponible()) {
-            notas.add(IndicadorAtencionesPorEspacio.NOTA_SOLO_TERCERIZADAS);
+            notas.add(NOTA_SOLO_TERCERIZADAS);
         }
         notas.add(NOTA_CORTE);
 
@@ -262,7 +270,7 @@ public class MapaAtencionesService {
                 f.esRiesgo(),
                 f.proveedor(),
                 f.areaVerdeId(),
-                f.areaVerdeId() == null ? AgrupadorMaterial.SIN_ESPACIO : f.espacio(),
+                f.espacio(),
                 f.ejemplarId(),
                 f.ejemplarCodigo(),
                 f.ejemplarAlias(),
@@ -284,7 +292,7 @@ public class MapaAtencionesService {
                 false,
                 a.cuadrilla(),
                 a.areaVerdeId(),
-                a.areaVerdeId() == null ? AgrupadorMaterial.SIN_ESPACIO : a.espacio(),
+                a.espacio(),
                 a.ejemplarId(),
                 a.ejemplarCodigo(),
                 a.ejemplarAlias(),

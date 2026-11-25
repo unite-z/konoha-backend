@@ -5,7 +5,6 @@ import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
-import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -119,7 +118,7 @@ class MapaAtencionesConUbicacionesApiTest extends ApiGestion {
     void lasAtencionesConUbicacionVanAlMapa() throws Exception {
         mapa("").andExpect(status().isOk())
                 .andExpect(jsonPath("$.mapa.features.length()").value(3))
-                .andExpect(jsonPath("$.sin_coordenadas.length()").value(3))
+                .andExpect(jsonPath("$.sin_coordenadas.length()").value(2))
                 .andExpect(jsonPath("$.mapa.features[0].type").value("Feature"))
                 .andExpect(
                         jsonPath(
@@ -159,10 +158,7 @@ class MapaAtencionesConUbicacionesApiTest extends ApiGestion {
                         jsonPath(
                                 "$.sin_coordenadas[?(@.codigo == 'AT-006')].area_inventario_id",
                                 contains(103)))
-                .andExpect(
-                        jsonPath(
-                                "$.sin_coordenadas[?(@.codigo == 'AT-007')].area_inventario_id",
-                                contains(nullValue())));
+                .andExpect(jsonPath("$.sin_coordenadas[?(@.codigo == 'AT-007')]").isEmpty());
     }
 
     /** Cada fila lleva el tipo de uso de su espacio, para colorearlo; sin espacio, ninguno. */
@@ -177,10 +173,7 @@ class MapaAtencionesConUbicacionesApiTest extends ApiGestion {
                         jsonPath(
                                 "$.sin_coordenadas[?(@.codigo == 'AT-006')].tipo_uso_id",
                                 contains(1)))
-                .andExpect(
-                        jsonPath(
-                                "$.sin_coordenadas[?(@.codigo == 'AT-007')].tipo_uso_id",
-                                contains(nullValue())));
+                .andExpect(jsonPath("$.sin_coordenadas[?(@.codigo == 'AT-007')]").isEmpty());
     }
 
     @Test
