@@ -296,6 +296,8 @@ class MapaAtencionesApiTest extends ApiGestion {
                             'Programada', 'Prueba', 'Demanda', '', '2026-10-08 09:00-05',
                             'Reporte adjunto', false, '', 1, 1, 1, 1, id
                         FROM mod05_tiposervicio WHERE nombre = 'Riego tecnificado';
+                        INSERT INTO mod05_alcanceatencion (id, atencion_id, area_verde_id)
+                        SELECT 9801, id, 1 FROM mod05_atenciontercerizada WHERE codigo = 'AT-RIEGO';
                         """);
         mapa("").andExpect(jsonPath("$.sin_coordenadas.length()").value(5))
                 .andExpect(
