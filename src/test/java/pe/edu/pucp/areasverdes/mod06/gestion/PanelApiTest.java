@@ -16,6 +16,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.ResultActions;
 import pe.edu.pucp.areasverdes.mod06.comun.Periodo;
+import pe.edu.pucp.areasverdes.mod06.gestion.servicios.IndicadorAtencionesPorEspacio;
 import pe.edu.pucp.areasverdes.mod06.gestion.servicios.PanelService;
 
 /**
@@ -155,6 +156,9 @@ class PanelApiTest extends ApiGestion {
     void conPersonalPropioNoHayAtencionesNiCumplimiento() throws Exception {
         panel("&modalidad=PersonalPropio")
                 .andExpect(jsonPath("$.indicadores[2].sin_datos").value(true))
+                .andExpect(
+                        jsonPath("$.indicadores[2].mensaje_sin_datos")
+                                .value(IndicadorAtencionesPorEspacio.MENSAJE_PERSONAL_PROPIO))
                 .andExpect(jsonPath("$.indicadores[4].sin_datos").value(true));
     }
 
@@ -209,10 +213,12 @@ class PanelApiTest extends ApiGestion {
 
     @Test
     void detalleDeAtencionesPorEspacio() throws Exception {
+        // AT-007 no tiene espacio: es un error de datos y no forma par (AV-408).
         detalle("atenciones-por-espacio", "")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.count").value(5))
-                .andExpect(jsonPath("$.results.length()").value(5))
+                .andExpect(jsonPath("$.count").value(4))
+                .andExpect(jsonPath("$.results.length()").value(4))
+                .andExpect(jsonPath("$.results[?(@.codigo == 'AT-007')]").isEmpty())
                 .andExpect(jsonPath("$.next").value(nullValue()))
                 .andExpect(jsonPath("$.results[0].codigo").value("AT-006"));
     }
@@ -266,14 +272,14 @@ class PanelApiTest extends ApiGestion {
                         SELECT id, 1 FROM mod05_atenciontercerizada WHERE codigo LIKE 'AT-X%';
                         """);
         detalle("atenciones-por-espacio", "")
-                .andExpect(jsonPath("$.count").value(35))
+                .andExpect(jsonPath("$.count").value(34))
                 .andExpect(jsonPath("$.results.length()").value(25))
                 .andExpect(jsonPath("$.next", endsWith("page=2")))
                 .andExpect(jsonPath("$.next", containsString("desde=2026-10-01")))
                 .andExpect(jsonPath("$.next", containsString("hasta=2026-10-31")))
                 .andExpect(jsonPath("$.previous").value(nullValue()));
         detalle("atenciones-por-espacio", "&page=2")
-                .andExpect(jsonPath("$.results.length()").value(10))
+                .andExpect(jsonPath("$.results.length()").value(9))
                 .andExpect(jsonPath("$.next").value(nullValue()))
                 .andExpect(jsonPath("$.previous", notNullValue()));
     }

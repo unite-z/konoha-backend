@@ -30,9 +30,8 @@ public class IndicadorCumplimientoTercerizados implements IndicadorPanel {
     public static final String MENSAJE_NO_APLICA_PERSONAL_PROPIO =
             "El cumplimiento de servicios tercerizados no aplica al personal propio";
     public static final String NOTA_CONFORMIDAD =
-            "La conformidad de las atenciones (observada o conforme) todavía no se registra en el"
-                    + " sistema: el cumplimiento se mide como atenciones ejecutadas sobre"
-                    + " registradas";
+            "El cumplimiento se mide como atenciones ejecutadas sobre registradas; la conformidad"
+                    + " de cada una se consulta en el reporte por servicio tercerizado";
     public static final String NOTA_FECHA_REFERENCIA =
             "Una atención pertenece al periodo por su fecha de inicio o, si aún no ha empezado, por"
                     + " su fecha de registro";

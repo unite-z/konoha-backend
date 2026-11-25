@@ -4,7 +4,7 @@ import java.time.LocalDate;
 
 /**
  * Resumen de la atención (CU-MOD06-003, paso 6): tipo, fecha, estado, responsable (proveedor) y
- * evidencias. {@code espacio} es «Sin espacio» si {@code areaVerdeId} es nulo.
+ * evidencias. Siempre tiene espacio: las atenciones sin espacio no llegan al mapa (AV-408).
  *
  * <p>Una fila de personal propio es una actividad de MOD-04: {@code atencionId} es el id de la
  * actividad (puede coincidir con el de una atención tercerizada; la clave es la modalidad y el id),

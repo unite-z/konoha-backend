@@ -27,7 +27,11 @@ import pe.edu.pucp.areasverdes.mod06.servicios.AtencionesEspacioSectorService;
 @Repository
 public class AtencionesTercerizadasRepository {
 
-    /** Pares (atención realizada, espacio) del periodo, con los filtros opcionales. */
+    /**
+     * Pares (atención realizada, espacio) del periodo, con los filtros opcionales. Una atención sin
+     * espacio (ni en su alcance ni en el de su ejemplar) es un error de datos y no forma par
+     * (AV-408).
+     */
     static final String PARES_REALIZADOS =
             """
             WITH pares AS (
@@ -54,7 +58,8 @@ public class AtencionesTercerizadasRepository {
                    av.nombre AS espacio
             FROM pares p
             LEFT JOIN mod05_areaverde av ON av.id = p.area_verde_id
-            WHERE (CAST(:area AS bigint) IS NULL OR p.area_verde_id = :area)
+            WHERE p.area_verde_id IS NOT NULL
+              AND (CAST(:area AS bigint) IS NULL OR p.area_verde_id = :area)
             """;
 
     /**

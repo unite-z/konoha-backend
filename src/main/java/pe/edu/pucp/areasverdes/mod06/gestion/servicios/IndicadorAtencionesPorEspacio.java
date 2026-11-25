@@ -18,21 +18,24 @@ import pe.edu.pucp.areasverdes.mod06.servicios.AtencionesEspacioSectorService;
  * Panel, indicador 3 (CU-MOD06-001, paso 4): atenciones por espacio, con las reglas de RF-REP-006
  * (pares atención-espacio de las atenciones tercerizadas realizadas).
  *
- * <p>La modalidad de toda atención tercerizada es {@code Tercerizado}. Las actividades del personal
- * propio (MOD-04) todavía no están en el sistema, así que con {@code PersonalPropio} no hay nada
- * que contar. El sector (HU v2: agrupador principal) tampoco está: se agrupa por espacio.
+ * <p>La modalidad de toda atención tercerizada es {@code Tercerizado}. Este indicador todavía no
+ * cuenta las actividades del personal propio (MOD-04): con {@code PersonalPropio} lo dice en vez de
+ * mostrar un cero, y remite al reporte «Atenciones por espacio y sector», que sí las cuenta y
+ * agrupa por sector. Las atenciones sin espacio no cuentan: son un error de datos (AV-408).
  */
 @Component
 public class IndicadorAtencionesPorEspacio implements IndicadorPanel {
 
     public static final String CLAVE = "atenciones-por-espacio";
-    public static final String SIN_ESPACIO = AgrupadorMaterial.SIN_ESPACIO;
     public static final String NOTA_SIN_SECTOR =
-            "El sector de los espacios todavía no está disponible en el sistema: las atenciones se"
-                    + " agrupan por espacio";
+            "El panel agrupa las atenciones por espacio; el reporte «Atenciones por espacio y"
+                    + " sector» las agrupa por sector";
     public static final String NOTA_SOLO_TERCERIZADAS =
-            "Por ahora solo se cuentan las atenciones tercerizadas: las actividades del personal"
-                    + " propio todavía no están disponibles en el sistema";
+            "Este indicador solo cuenta las atenciones tercerizadas; las actividades del personal"
+                    + " propio se cuentan en el reporte «Atenciones por espacio y sector»";
+    public static final String MENSAJE_PERSONAL_PROPIO =
+            "Este indicador todavía no cuenta las actividades del personal propio: consúltalas en"
+                + " el reporte «Atenciones por espacio y sector»";
 
     private final AtencionesTercerizadasRepository atenciones;
     private final FuenteOperacionCampo operacion;
@@ -63,11 +66,8 @@ public class IndicadorAtencionesPorEspacio implements IndicadorPanel {
         if (soloPersonalPropio(consulta)) {
             return ResultadoIndicador.sinDatos(this, motivoPersonalPropio(), notas);
         }
-        // Una atención sin espacio asociado es un error de datos, no un grupo del panel (AV-408).
-        List<ConteoEspacio> conteos =
-                atenciones.contarPorEspacio(consulta.comoFiltroAtenciones()).stream()
-                        .filter(c -> c.areaVerdeId() != null)
-                        .toList();
+        // Los pares ya excluyen las atenciones sin espacio (AV-408).
+        List<ConteoEspacio> conteos = atenciones.contarPorEspacio(consulta.comoFiltroAtenciones());
         long total = conteos.stream().mapToLong(ConteoEspacio::total).sum();
         if (total == 0) {
             return ResultadoIndicador.sinDatos(
@@ -76,8 +76,7 @@ public class IndicadorAtencionesPorEspacio implements IndicadorPanel {
         Collator textos = Collator.getInstance(Locale.forLanguageTag("es-ES"));
         List<ConteoEspacio> ordenados = new ArrayList<>(conteos);
         ordenados.sort(
-                Comparator.comparing((ConteoEspacio c) -> c.areaVerdeId() == null)
-                        .thenComparing(ConteoEspacio::total, Comparator.reverseOrder())
+                Comparator.comparing(ConteoEspacio::total, Comparator.<Long>reverseOrder())
                         .thenComparing(c -> nombre(c), textos));
         List<ElementoDesglose> desglose =
                 ordenados.stream()
@@ -113,27 +112,22 @@ public class IndicadorAtencionesPorEspacio implements IndicadorPanel {
                 consulta.filtros().modalidad());
     }
 
-    // TODO (cuando se fusione MOD-04 y FuenteOperacionCampo tenga consultas): contar aquí las
-    // actividades del personal
-    // propio con las mismas reglas de RF-REP-006.
+    // TODO: contar aquí las actividades del personal propio (FuenteOperacionCampo) con las mismas
+    // reglas de RF-REP-006, como ya hace el reporte «Atenciones por espacio y sector».
     private String motivoPersonalPropio() {
         Disponibilidad d = operacion.disponibilidad();
-        return d.disponible() ? AtencionesEspacioSectorService.MENSAJE_SIN_DATOS : d.motivo();
+        return d.disponible() ? MENSAJE_PERSONAL_PROPIO : d.motivo();
     }
 
     private List<String> notas(ConsultaPanel consulta) {
         boolean soloTercerizado =
                 AtencionesEspacioSectorService.TERCERIZADO.equals(consulta.filtros().modalidad());
-        if (!soloTercerizado && !operacion.disponibilidad().disponible()) {
-            return List.of(NOTA_SIN_SECTOR, NOTA_SOLO_TERCERIZADAS);
-        }
-        return List.of(NOTA_SIN_SECTOR);
+        return soloTercerizado
+                ? List.of(NOTA_SIN_SECTOR)
+                : List.of(NOTA_SIN_SECTOR, NOTA_SOLO_TERCERIZADAS);
     }
 
     private static String nombre(ConteoEspacio c) {
-        if (c.areaVerdeId() == null) {
-            return SIN_ESPACIO;
-        }
         return c.espacio() == null ? "" : c.espacio();
     }
 }
