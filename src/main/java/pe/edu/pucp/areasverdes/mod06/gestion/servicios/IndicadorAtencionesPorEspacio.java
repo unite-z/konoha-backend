@@ -35,7 +35,7 @@ public class IndicadorAtencionesPorEspacio implements IndicadorPanel {
                     + " propio se cuentan en el reporte «Atenciones por espacio y sector»";
     public static final String MENSAJE_PERSONAL_PROPIO =
             "Este indicador todavía no cuenta las actividades del personal propio: consúltalas en"
-                + " el reporte «Atenciones por espacio y sector»";
+                    + " el reporte «Atenciones por espacio y sector»";
 
     private final AtencionesTercerizadasRepository atenciones;
     private final FuenteOperacionCampo operacion;
