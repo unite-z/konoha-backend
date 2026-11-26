@@ -11,8 +11,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.DataClassRowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -25,19 +23,19 @@ import pe.edu.pucp.areasverdes.mod02.api.ContornoAreaController.ContornoArea;
 import pe.edu.pucp.areasverdes.mod02.api.ContornoAreaController.ImpactoContorno;
 import pe.edu.pucp.areasverdes.mod02.api.ErrorCoberturas;
 import pe.edu.pucp.areasverdes.mod02.api.MapaAreasController.EjemplarAfectado;
+import pe.edu.pucp.areasverdes.mod02.servicios.ContornoAreaService.ContornoValido;
 import pe.edu.pucp.areasverdes.mod05.Usuario;
 
 /**
  * Redibuja el contorno de un área verde existente (AV-445).
  *
- * <p>Las validaciones y los códigos de error son los de la creación con contorno (AV-430): polígono
- * simple y cerrado en EPSG:4326, dentro del campus y sin solape con otras áreas activas más allá de
- * {@code mod02.contorno.tolerancia-solape-m2}. Cuando AV-430 esté en {@code main}, {@link #validar}
- * debe delegar en su validador común.
+ * <p>Valida con {@link ContornoAreaService} (AV-430), sin contar el solape con el contorno vigente
+ * de la propia área: polígono simple y cerrado en EPSG:4326, dentro del campus y sin solape con
+ * otras áreas activas más allá de {@code mod02.contorno.tolerancia-solape-m2}.
  *
- * <p>La geometría vive en {@code mod02_mapa_geometria}; además se actualiza la capa {@code
- * mod02_mapa_capa}, que es lo que sirve {@code GET /inventario/mapa/geometria}, para que el mapa
- * enseñe el contorno nuevo.
+ * <p>La geometría vive en {@code mod02_mapa_geometria}. Un área sin contorno estrena uno con {@code
+ * origen = 'dibujo'}, que {@code GET /inventario/mapa/geometria} ya lee vivo; si el polígono venía
+ * de la capa de referencia, se sustituye también en {@code mod02_mapa_capa}.
  */
 @Service
 public class RedibujoContornoService {
@@ -50,22 +48,19 @@ public class RedibujoContornoService {
 
     private final NamedParameterJdbcTemplate jdbc;
     private final GeometriaCampus geometria;
+    private final ContornoAreaService contornos;
     private final ObjectMapper json;
-    private final BigDecimal toleranciaSolapeM2;
 
     public RedibujoContornoService(
             NamedParameterJdbcTemplate jdbc,
             GeometriaCampus geometria,
-            ObjectMapper json,
-            @Value("${mod02.contorno.tolerancia-solape-m2:1}") BigDecimal toleranciaSolapeM2) {
+            ContornoAreaService contornos,
+            ObjectMapper json) {
         this.jdbc = jdbc;
         this.geometria = geometria;
+        this.contornos = contornos;
         this.json = json;
-        this.toleranciaSolapeM2 = toleranciaSolapeM2;
     }
-
-    /** Contorno ya comprobado: GeoJSON tal como llegó y superficie en m² con dos decimales. */
-    private record ContornoValido(String geojson, BigDecimal superficieM2) {}
 
     private record Vigente(BigDecimal superficieRegistrada, List<UUID> poligonos) {}
 
@@ -98,7 +93,7 @@ public class RedibujoContornoService {
         AccesoCoberturas.gestionar(usuario);
         Vigente vigente = vigente(areaId);
         exigirUnSoloContorno(vigente);
-        ContornoValido valido = validar(areaId, contorno);
+        ContornoValido valido = contornos.validar(contorno, areaId);
         return calcular(areaId, vigente, valido);
     }
 
@@ -108,7 +103,7 @@ public class RedibujoContornoService {
         geometria.bloquearCambios();
         Vigente vigente = vigente(areaId);
         exigirUnSoloContorno(vigente);
-        ContornoValido valido = validar(areaId, cambio.contorno());
+        ContornoValido valido = contornos.validar(cambio.contorno(), areaId);
         if (!vigente.poligonos().isEmpty() && igualAlVigente(vigente.poligonos().get(0), valido)) {
             // Reenviar el mismo contorno no cambia nada ni deja otra fila en el historial.
             return consultar(areaId, usuario);
@@ -163,9 +158,10 @@ public class RedibujoContornoService {
                     parametros);
         }
         jdbc.update(
-                "INSERT INTO mod02_mapa_geometria (id_fuente, geometria) VALUES (:fuente, "
+                "INSERT INTO mod02_mapa_geometria (id_fuente, geometria, origen) VALUES (:fuente, "
                         + NUEVO
-                        + ") ON CONFLICT (id_fuente) DO UPDATE SET geometria = EXCLUDED.geometria",
+                        + ", 'dibujo') ON CONFLICT (id_fuente) DO UPDATE SET geometria ="
+                        + " EXCLUDED.geometria",
                 parametros);
         if (!ids.isEmpty()) {
             jdbc.update(
@@ -177,7 +173,9 @@ public class RedibujoContornoService {
                 "UPDATE mod02_area_verde SET superficie_m2 = :superficie, fecha_modificacion ="
                         + " now(), usuario_modificacion_id = :usuario WHERE id = :area",
                 parametros);
-        actualizarCapa(parametros, nuevo);
+        if (!nuevo) {
+            actualizarCapa(parametros);
+        }
         jdbc.update(
                 "INSERT INTO mod02_historial_contorno_area (area_verde_id, id_fuente, usuario_id,"
                     + " superficie_anterior_m2, superficie_nueva_m2, ejemplares_desvinculados)"
@@ -259,115 +257,6 @@ public class RedibujoContornoService {
                         Boolean.class));
     }
 
-    /**
-     * Mismas reglas que AV-430: forma GeoJSON, polígono simple, dentro del campus y solape
-     * tolerado. Lanza 422 con el código del motivo.
-     */
-    private ContornoValido validar(long areaId, JsonNode contorno) {
-        validarForma(contorno);
-        String geojson = contorno.toString();
-        var parametros =
-                new MapSqlParameterSource("contorno", geojson)
-                        .addValue("area", areaId)
-                        .addValue("srid", SRID_METRICO);
-        Object[] validez;
-        try {
-            validez =
-                    jdbc.queryForObject(
-                            "SELECT ST_IsValid(g), ST_IsValidReason(g),"
-                                    + " round(CAST(ST_Area(ST_Transform(g, :srid)) AS numeric), 2)"
-                                    + " FROM (SELECT "
-                                    + NUEVO
-                                    + " g) n",
-                            parametros,
-                            (rs, n) ->
-                                    new Object[] {
-                                        rs.getBoolean(1), rs.getString(2), rs.getBigDecimal(3)
-                                    });
-        } catch (DataAccessException e) {
-            throw invalido("contorno-invalido", "El contorno no es un polígono bien formado.");
-        }
-        if (!(Boolean) validez[0]) {
-            throw invalido(
-                    "contorno-invalido",
-                    "El contorno no es un polígono simple: " + validez[1] + ".");
-        }
-        BigDecimal superficie = (BigDecimal) validez[2];
-        if (superficie.signum() <= 0) {
-            throw invalido("contorno-invalido", "El contorno no encierra ninguna superficie.");
-        }
-        Boolean dentro =
-                jdbc.query(
-                        "SELECT ST_Covers(ST_ConvexHull(ST_Collect(geometria)), "
-                                + NUEVO
-                                + ") FROM mod02_mapa_geometria HAVING count(*) > 0",
-                        parametros,
-                        rs -> rs.next() ? rs.getBoolean(1) : null);
-        if (Boolean.FALSE.equals(dentro)) {
-            throw invalido(
-                    "contorno-fuera-del-campus",
-                    "El contorno queda fuera del perímetro del campus.");
-        }
-        var solape =
-                jdbc.query(
-                        "SELECT a.nombre, ST_Area(ST_Transform(ST_Intersection(g.geometria, "
-                                + NUEVO
-                                + "), :srid)) solape FROM mod02_mapa_poligono p JOIN"
-                                + " mod02_mapa_geometria g USING (id_fuente) JOIN mod02_area_verde"
-                                + " a ON a.id = p.area_verde_id WHERE a.activo AND a.id <> :area"
-                                + " AND ST_Intersects(g.geometria, "
-                                + NUEVO
-                                + ") ORDER BY 2 DESC LIMIT 1",
-                        parametros,
-                        rs -> rs.next() ? Map.entry(rs.getString(1), rs.getBigDecimal(2)) : null);
-        if (solape != null && solape.getValue().compareTo(toleranciaSolapeM2) > 0) {
-            throw invalido(
-                    "contorno-solapado",
-                    "El contorno se solapa %s m² con «%s»; la tolerancia es de %s m²."
-                            .formatted(
-                                    solape.getValue().setScale(2, RoundingMode.HALF_UP),
-                                    solape.getKey(),
-                                    toleranciaSolapeM2.stripTrailingZeros().toPlainString()));
-        }
-        return new ContornoValido(geojson, superficie);
-    }
-
-    /** Igual que {@code ContornoAreaService.validarForma} de AV-430. */
-    private static void validarForma(JsonNode c) {
-        if (c == null || !c.isObject() || !"Polygon".equals(c.path("type").asText(null))) {
-            throw invalido("contorno-invalido", "El contorno debe ser un GeoJSON de tipo Polygon.");
-        }
-        JsonNode anillos = c.path("coordinates");
-        if (!anillos.isArray() || anillos.isEmpty()) {
-            throw invalido("contorno-invalido", "El contorno no tiene coordenadas.");
-        }
-        for (JsonNode anillo : anillos) {
-            if (!anillo.isArray() || anillo.size() < 4) {
-                throw invalido(
-                        "contorno-invalido",
-                        "Cada anillo del contorno necesita al menos cuatro puntos.");
-            }
-            for (JsonNode punto : anillo) {
-                if (!punto.isArray()
-                        || punto.size() < 2
-                        || punto.size() > 3
-                        || !punto.get(0).isNumber()
-                        || !punto.get(1).isNumber()
-                        || Math.abs(punto.get(0).asDouble()) > 180
-                        || Math.abs(punto.get(1).asDouble()) > 90) {
-                    throw invalido(
-                            "contorno-invalido",
-                            "Las coordenadas deben ser [longitud, latitud] en EPSG:4326.");
-                }
-            }
-            if (!anillo.get(0).equals(anillo.get(anillo.size() - 1))) {
-                throw invalido(
-                        "contorno-no-cerrado",
-                        "El contorno no está cerrado: el último punto debe repetir el primero.");
-            }
-        }
-    }
-
     private ImpactoContorno calcular(long areaId, Vigente vigente, ContornoValido valido) {
         var parametros =
                 new MapSqlParameterSource("contorno", valido.geojson()).addValue("area", areaId);
@@ -411,30 +300,10 @@ public class RedibujoContornoService {
     }
 
     /**
-     * Lleva el contorno nuevo a la capa que sirve {@code GET /mapa/geometria}: sustituye la
-     * geometría del polígono si ya estaba en la capa y añade uno nuevo si el área no tenía
-     * contorno. Un polígono que no viene de la capa (dibujado con AV-430) ya se lee vivo.
+     * Sustituye la geometría del polígono en la capa que sirve {@code GET /mapa/geometria}, si
+     * venía de ella. Un contorno dibujado (AV-430) no está en la capa: se lee vivo.
      */
-    private void actualizarCapa(MapSqlParameterSource parametros, boolean nuevo) {
-        if (nuevo) {
-            jdbc.update(
-                    """
-                    UPDATE mod02_mapa_capa c
-                    SET geojson = jsonb_set(c.geojson, '{features}',
-                        (c.geojson->'features') || jsonb_build_array(jsonb_build_object(
-                            'type', 'Feature',
-                            'properties', jsonb_build_object(
-                                'Nombre', a.nombre, 'Área', a.superficie_m2, 'Uso', tu.nombre,
-                                'Perimetro', round(CAST(ST_Perimeter(ST_Transform(g.geometria, :srid)) AS numeric), 3),
-                                'mapa_id', CAST(g.id_fuente AS text), 'area_verde_id', a.id),
-                            'geometry', CAST(ST_AsGeoJSON(ST_Multi(g.geometria)) AS jsonb))))
-                    FROM mod02_mapa_geometria g, mod02_area_verde a
-                    LEFT JOIN mod02_tipo_uso tu ON tu.id = a.tipo_uso_id
-                    WHERE c.unica AND g.id_fuente = :fuente AND a.id = :area
-                    """,
-                    parametros);
-            return;
-        }
+    private void actualizarCapa(MapSqlParameterSource parametros) {
         jdbc.update(
                 """
                 UPDATE mod02_mapa_capa c
@@ -465,9 +334,5 @@ public class RedibujoContornoService {
 
     private static BigDecimal redondear(Number valor) {
         return new BigDecimal(valor.toString()).setScale(2, RoundingMode.HALF_UP);
-    }
-
-    private static ErrorCoberturas invalido(String codigo, String detalle) {
-        return new ErrorCoberturas(422, codigo, detalle);
     }
 }

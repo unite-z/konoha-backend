@@ -347,7 +347,7 @@ public class ContornoAreaApiTest {
                                 .getContentAsString(),
                         "$.features.length()");
 
-        // Un área sin contorno estrena polígono: aparece como un elemento más de la capa.
+        // Un área sin contorno estrena un contorno dibujado (AV-430): el mapa lo añade vivo.
         long sinContorno = crearArea("Área nueva en el mapa contorno");
         String creado =
                 redibujar(sinContorno, cuadrado(0.0003, 0, 0.0001), null)
@@ -359,8 +359,16 @@ public class ContornoAreaApiTest {
         String filtro = "$.features[?(@.properties.mapa_id == '" + fuente + "')]";
         http.perform(get(capa).with(httpBasic("jefe", CLAVE)))
                 .andExpect(jsonPath("$.features.length()").value(antes + 1))
-                .andExpect(jsonPath(filtro + ".geometry.type").value("MultiPolygon"))
+                .andExpect(jsonPath(filtro + ".geometry.type").value("Polygon"))
+                .andExpect(jsonPath(filtro + ".properties.origen").value("dibujo"))
                 .andExpect(jsonPath(filtro + ".properties.area_verde_id").value((int) sinContorno));
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT origen FROM mod02_mapa_geometria WHERE id_fuente ="
+                                        + " CAST(:id AS uuid)",
+                                Map.of("id", fuente),
+                                String.class))
+                .isEqualTo("dibujo");
 
         // Un área ya vinculada a un polígono de la capa: se sustituye la geometría, no se añade.
         long bosque = crearArea("Área del bosque contorno");
