@@ -253,13 +253,20 @@ public class IncidenciasController {
         return incidencias.ficha(id).resumen();
     }
 
-    @Operation(summary = "Bandeja de incidencias de la oficina (jefe)")
+    @Operation(
+            summary = "Bandeja de incidencias de la oficina (jefe)",
+            description =
+                    "Filtros opcionales: grupo (abiertas, en_proceso o cerradas), q (código, tipo,"
+                            + " espacio o descripción) y area_verde_id. Sin"
+                            + " PLA.INCIDENCIA.CONSULTAR_TODAS, solo las propias y las de su"
+                            + " cuadrilla.")
     @GetMapping({"", "/"})
     public List<Resumen> bandeja(
             UsuarioPlanificacion usuario,
             @RequestParam(required = false) String grupo,
-            @RequestParam(required = false) String q) {
-        return incidencias.bandeja(grupo, q, usuario);
+            @RequestParam(required = false) String q,
+            @RequestParam(name = "area_verde_id", required = false) Long areaVerdeId) {
+        return incidencias.bandeja(grupo, q, areaVerdeId, usuario);
     }
 
     @Operation(summary = "Las incidencias que reportó el usuario")
