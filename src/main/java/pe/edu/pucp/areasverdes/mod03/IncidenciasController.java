@@ -253,7 +253,13 @@ public class IncidenciasController {
         return incidencias.ficha(id).resumen();
     }
 
-    @Operation(summary = "Bandeja de incidencias de la oficina (jefe)")
+    @Operation(
+            summary = "Bandeja de incidencias de la oficina (jefe)",
+            description =
+                    "Filtros opcionales: grupo (abiertas, en_proceso o cerradas), q (código, tipo,"
+                            + " espacio o descripción) y area_verde_id. Sin"
+                            + " PLA.INCIDENCIA.CONSULTAR_TODAS, solo las propias y las de su"
+                            + " cuadrilla.")
     @GetMapping({"", "/"})
     public List<Resumen> bandeja(
             UsuarioPlanificacion usuario,

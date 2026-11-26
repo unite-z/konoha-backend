@@ -221,6 +221,11 @@ class IncidenciasPorAlcanceApiTest extends ApiPlanificacion {
                         "SELECT id FROM mod02_area_verde WHERE nombre = 'Otro jardín AV-436'",
                         Long.class);
         sql.update("UPDATE mod03_incidencia SET area_verde_id = ? WHERE id = ?", otra, ajena);
+        long ejemplar =
+                sql.queryForObject(
+                        "INSERT INTO mod02_ejemplar (codigo) VALUES ('T-AV436') RETURNING id",
+                        Long.class);
+        sql.update("UPDATE mod03_incidencia SET ejemplar_id = ? WHERE id = ?", ejemplar, asignada);
 
         bandejaJefe(null)
                 .andExpect(
@@ -228,7 +233,17 @@ class IncidenciasPorAlcanceApiTest extends ApiPlanificacion {
                                 .value((int) otra))
                 .andExpect(
                         jsonPath("$[?(@.id == %d)].ejemplar_id".formatted(ajena))
-                                .value((Object) null));
+                                .value((Object) null))
+                .andExpect(
+                        jsonPath("$[?(@.id == %d)].area_verde_id".formatted(asignada))
+                                .value((int) area))
+                .andExpect(
+                        jsonPath("$[?(@.id == %d)].ejemplar_id".formatted(asignada))
+                                .value((int) ejemplar));
+        // La ficha comparte la fila de la bandeja.
+        http.perform(get(RUTA + asignada + "/").with(httpBasic("jefe", CLAVE)))
+                .andExpect(jsonPath("$.area_verde_id").value((int) area))
+                .andExpect(jsonPath("$.ejemplar_id").value((int) ejemplar));
         http.perform(
                         get(RUTA)
                                 .param("area_verde_id", String.valueOf(otra))
@@ -240,6 +255,25 @@ class IncidenciasPorAlcanceApiTest extends ApiPlanificacion {
                                 .param("area_verde_id", String.valueOf(area))
                                 .with(httpBasic("jefe", CLAVE)))
                 .andExpect(jsonPath("$", hasSize(2)));
+        // Se combina con la búsqueda y con el grupo.
+        http.perform(
+                        get(RUTA)
+                                .param("area_verde_id", String.valueOf(area))
+                                .param("q", "árbol")
+                                .with(httpBasic("jefe", CLAVE)))
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].id").value((int) deSuCuadrilla));
+        http.perform(
+                        get(RUTA)
+                                .param("area_verde_id", String.valueOf(otra))
+                                .param("grupo", "cerradas")
+                                .with(httpBasic("jefe", CLAVE)))
+                .andExpect(jsonPath("$", hasSize(0)));
+        http.perform(get(RUTA).param("area_verde_id", "-1").with(httpBasic("jefe", CLAVE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(0)));
+        http.perform(get(RUTA).param("area_verde_id", "abc").with(httpBasic("jefe", CLAVE)))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

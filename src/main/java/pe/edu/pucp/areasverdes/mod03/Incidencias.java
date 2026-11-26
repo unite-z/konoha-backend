@@ -72,7 +72,8 @@ public class Incidencias {
      * Fila de la bandeja y de «Mis incidencias». {@code responsable}: capataz o proveedor. {@code
      * nivel_plazo} (RN-019, AV-280): en las sencillas del personal propio sin atender,
      * «SuperaObjetivo» pasadas 24 h, «CercaMaximo» desde 40 h y «Vencida» pasadas 48 h; si no,
-     * nulo.
+     * nulo. {@code area_verde_id} y {@code ejemplar_id} (AV-436): los ids de MOD-02 para situar la
+     * incidencia en el mapa; el ejemplar es nulo si no lo hay.
      */
     public record Resumen(
             long id,
@@ -456,7 +457,8 @@ public class Incidencias {
 
     /**
      * La bandeja de la oficina, de la más reciente a la más antigua. {@code grupo}: abiertas, en
-     * proceso o cerradas (AV-279); sin él, todas.
+     * proceso o cerradas (AV-279); sin él, todas. {@code areaVerdeId}: solo las de esa área
+     * (AV-436); sin él, de todas.
      */
     public List<Resumen> bandeja(
             String grupo, String q, Long areaVerdeId, UsuarioPlanificacion usuario) {
