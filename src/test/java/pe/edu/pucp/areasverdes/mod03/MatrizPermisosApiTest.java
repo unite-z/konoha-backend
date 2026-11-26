@@ -38,6 +38,7 @@ public class MatrizPermisosApiTest extends ApiPlanificacion {
     static final List<String> CONSULTAS =
             List.of(
                     "alertas/",
+                    "resumen-sectores/",
                     "tipos-restriccion/",
                     "restricciones/?desde=2027-01-01&hasta=2027-01-31",
                     "programaciones/?desde=2027-01-01&hasta=2027-01-31",

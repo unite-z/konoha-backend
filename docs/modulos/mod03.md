@@ -51,6 +51,22 @@ Bajo `/api/v1/planificacion/`, con o sin barra final.
 | `GET servicios/{id}/valores-iniciales/` | `PLA.PLANIFICACION.CONSULTAR` | Valores iniciales de la sección; 404 `sin-valores-iniciales` si no hay |
 | `GET servicios/{id}/historial/` | `PLA.PLANIFICACION.CONSULTAR` | Cambios de la configuración, del más reciente al más antiguo: `campo`, `estacion`, `anterior`, `nuevo`, `fecha_hora` y `autor`; la primera configuración es una sola fila `inicial` |
 | `GET servicios/{id}/propuesta/` | `PLA.PLANIFICACION.CONSULTAR` | Fechas del siguiente ciclo con la frecuencia de la estación actual y la duración |
+| `GET resumen-sectores/?ciclo_id=&desde=&hasta=` | `PLA.PLANIFICACION.CONSULTAR` | Avance por sector y servicio (AV-433); ver abajo |
+
+### Avance por sector y servicio (AV-433)
+
+`GET resumen-sectores/` no sustituye al reporte `GET /api/v1/reportes/programado-ejecutado`, que agrupa por tipo de servicio y por programación, no por sector. Filtros opcionales: `ciclo_id` (404 `ciclo-no-encontrado`) y `desde`/`hasta` (ciclos que se solapan con el rango; 400 `periodo-invalido` si `hasta < desde`). Sin filtros cuenta todos los ciclos no cancelados.
+
+Devuelve todos los sectores activos, cada uno con `corte`, `riego` y `poda` (por el nombre del tipo de servicio), aunque no tengan nada programado:
+
+```json
+{"ciclo_id": null, "desde": null, "hasta": null, "generado_en": "2027-01-12T10:00:00-05:00",
+ "sectores": [{"sector_id": 1, "sector": "Ciencias", "servicios": [
+   {"servicio": "corte", "programado": 2, "ejecutado": 1, "porcentaje": 50.0,
+    "actualizado_en": "2027-01-10T15:00:00-05:00"}]}]}
+```
+
+`programado` cuenta las áreas del sector asignadas a un ciclo (asignación o ruta de corte); `ejecutado`, las que tienen su jardín `Cortado` o, sin ruta para esa área, el ciclo `Completada`. `porcentaje` lleva un decimal (0 si no hay programado). `actualizado_en` es la última modificación del ciclo o marca de corte, y `null` si no hay datos.
 
 `estacion` es `Verano`, `Otoño`, `Invierno` o `Primavera` (en la URL, `Oto%C3%B1o`).
 
@@ -119,6 +135,7 @@ y `AccesoTest`, que son unitarias.
 | `ConfigurarFrecuenciaApiTest`, `ConfigurarDuracionApiTest` | Casos básicos del contrato y auditoría con valor anterior |
 | `ConfiguracionServiciosApiTest` | Verificación de RF-PLA-001 y RF-PLA-002: cuatro estaciones independientes; rechazos que no cambian la fila ni la auditoría; permisos de escritura (401/403) sin cambios; autor, instante y valores de cada cambio con dos jefes distintos, también por `historial`; lectura por los tres roles; servicio inactivo, no periódico o inexistente; la propuesta y el alta de ciclos consumen lo guardado por HTTP |
 | `FrecuenciaDuracionIntegrationTest` | Restricciones de la base de `V2` |
+| `ResumenSectoresApiTest`, `ResumenSectoresTest` | Avance por sector y servicio: dos sectores, tres servicios, filtros por ciclo y fechas |
 | `ServiciosApiTest`, `HistorialServicioApiTest`, `PropuestaApiTest`, `AltaProgramacionApiTest` | Listado, historial, propuesta y RN-002 |
 | `MatrizPermisosApiTest`, `SeguridadApiTest`, `CuentaSoloMod01ApiTest`, `AccesoTest` | Permisos por endpoint, sesión y cuentas solo de MOD-01 |
 
