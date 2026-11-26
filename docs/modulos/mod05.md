@@ -120,6 +120,8 @@ Después de finalizar una solicitud de unidad:
 
 Atenciones: `q`, `estado`, `origen`, `clase`, `contrato_id`, `page`. Búsqueda global antes de paginar, sin distinguir mayúsculas, hasta 100 caracteres y ocho palabras; cada palabra debe aparecer en al menos un campo buscable. Se busca en código, descripción, OC, contrato, proveedor, servicio y unidad.
 
+Contratos (`contratos/` y `contratos/{id}/`): cada contrato lleva el avance de sus atenciones, calculado en la misma consulta con un agregado (sin consultas por fila): `atenciones` (total), `atenciones_conformes` (estado «Conforme / cerrado»), `atenciones_observadas` («Observado») y `atenciones_pendientes` (pendientes de verificación: «Reporte adjunto», a la espera de la conformidad del jefe). Un contrato sin atenciones devuelve los cuatro a 0. Los campos previos no cambian.
+
 Catálogos de solo lectura bajo `catalogos/`, todos con `q` y `page`:
 
 | Catálogo | Filtros adicionales |

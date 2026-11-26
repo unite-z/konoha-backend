@@ -42,9 +42,15 @@ public class MaestrosService {
             SELECT c.id,c.numero,c.proveedor_id,p.razon_social proveedor_nombre,c.tipo_servicio_id,t.nombre tipo_servicio_nombre,
                 c.vigencia_inicio,c.vigencia_fin,d.area_metrado_estimado,d.monto_fijo,d.frecuencia_pactada,
                 d.frecuencia_cantidad,d.frecuencia_unidad,COALESCE(d.condiciones,'') condiciones,
-                (SELECT count(*) FROM mod05_atenciontercerizada a WHERE a.contrato_id=c.id) atenciones
+                av.atenciones,av.atenciones_conformes,av.atenciones_observadas,av.atenciones_pendientes
             FROM mod05_contrato c JOIN mod05_proveedor p ON p.id=c.proveedor_id JOIN mod05_tiposervicio t ON t.id=c.tipo_servicio_id
             LEFT JOIN mod05_contrato_detalle d ON d.contrato_id=c.id
+            CROSS JOIN LATERAL (
+                SELECT count(*) atenciones,
+                    count(*) FILTER (WHERE a.estado='Conforme / cerrado') atenciones_conformes,
+                    count(*) FILTER (WHERE a.estado='Observado') atenciones_observadas,
+                    count(*) FILTER (WHERE a.estado='Reporte adjunto') atenciones_pendientes
+                FROM mod05_atenciontercerizada a WHERE a.contrato_id=c.id) av
             """;
     static final Map<String, String> PERIODOS_FRECUENCIA =
             Map.of("Dia", "al día", "Semana", "a la semana", "Mes", "al mes", "Anio", "al año");
