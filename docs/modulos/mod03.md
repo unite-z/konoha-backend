@@ -66,7 +66,7 @@ Devuelve todos los sectores activos, cada uno con `corte`, `riego` y `poda` (por
     "actualizado_en": "2027-01-10T15:00:00-05:00"}]}]}
 ```
 
-`programado` cuenta las áreas del sector asignadas a un ciclo (asignación o ruta de corte); `ejecutado`, las que tienen su jardín `Cortado` o, sin ruta para esa área, el ciclo `Completada`. `porcentaje` lleva un decimal (0 si no hay programado). `actualizado_en` es la última modificación del ciclo o marca de corte, y `null` si no hay datos.
+`programado` cuenta las áreas del sector asignadas a un ciclo (asignación o ruta de corte); `ejecutado`, las que tienen su jardín `Cortado` o, sin ruta para esa área, el ciclo `Completada`. `porcentaje` lleva siempre un decimal (`0.0` si no hay programado). `actualizado_en` es la última modificación del ciclo o marca de corte, y `null` si no hay datos.
 
 `estacion` es `Verano`, `Otoño`, `Invierno` o `Primavera` (en la URL, `Oto%C3%B1o`).
 
@@ -135,7 +135,7 @@ y `AccesoTest`, que son unitarias.
 | `ConfigurarFrecuenciaApiTest`, `ConfigurarDuracionApiTest` | Casos básicos del contrato y auditoría con valor anterior |
 | `ConfiguracionServiciosApiTest` | Verificación de RF-PLA-001 y RF-PLA-002: cuatro estaciones independientes; rechazos que no cambian la fila ni la auditoría; permisos de escritura (401/403) sin cambios; autor, instante y valores de cada cambio con dos jefes distintos, también por `historial`; lectura por los tres roles; servicio inactivo, no periódico o inexistente; la propuesta y el alta de ciclos consumen lo guardado por HTTP |
 | `FrecuenciaDuracionIntegrationTest` | Restricciones de la base de `V2` |
-| `ResumenSectoresApiTest`, `ResumenSectoresTest` | Avance por sector y servicio: dos sectores, tres servicios, filtros por ciclo y fechas |
+| `ResumenSectoresApiTest`, `ResumenSectoresTest` | Avance por sector y servicio: dos sectores, tres servicios, filtros por ciclo y fechas, la ruta manda sobre el estado del ciclo y no salen sectores inactivos |
 | `ServiciosApiTest`, `HistorialServicioApiTest`, `PropuestaApiTest`, `AltaProgramacionApiTest` | Listado, historial, propuesta y RN-002 |
 | `MatrizPermisosApiTest`, `SeguridadApiTest`, `CuentaSoloMod01ApiTest`, `AccesoTest` | Permisos por endpoint, sesión y cuentas solo de MOD-01 |
 

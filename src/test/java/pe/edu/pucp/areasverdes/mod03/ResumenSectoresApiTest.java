@@ -160,6 +160,48 @@ class ResumenSectoresApiTest extends ApiPlanificacion {
     }
 
     @Test
+    void laRutaMandaSobreElEstadoDelCicloYNoSalenSectoresInactivos() throws Exception {
+        var sql = jdbc.getJdbcTemplate();
+        // Corte completado en marzo con una ruta que dejó el jardín C2 pendiente: no está ejecutado
+        // aunque el ciclo esté cerrado. C1, sin fila de ruta, toma el estado del ciclo.
+        long marzo = ciclo(1, "Completada", "2027-03-10", "2027-03-12", c1Id(), c2Id());
+        sql.update(
+                "INSERT INTO mod03_ruta_corte (programacion_id, area_verde_id, zona, orden)"
+                        + " VALUES (?, ?, 'Z', 1)",
+                marzo,
+                c2Id());
+        // Poda en curso sin ruta: programada, no ejecutada.
+        ciclo(3, "EnCurso", "2027-03-10", "2027-03-12", c1Id());
+        long inactivo = sector("Antiguo");
+        area("Jardín A1", inactivo);
+        sql.update("UPDATE mod02_sector SET activo = false WHERE id = ?", inactivo);
+        resumen("?desde=2027-03-01&hasta=2027-03-31")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sectores.length()").value(2))
+                .andExpect(jsonPath("$.sectores[0].servicios[0].programado").value(2))
+                .andExpect(jsonPath("$.sectores[0].servicios[0].ejecutado").value(1))
+                .andExpect(jsonPath("$.sectores[0].servicios[2].servicio").value("poda"))
+                .andExpect(jsonPath("$.sectores[0].servicios[2].programado").value(1))
+                .andExpect(jsonPath("$.sectores[0].servicios[2].ejecutado").value(0))
+                .andExpect(jsonPath("$.sectores[0].servicios[2].actualizado_en").isNotEmpty())
+                .andExpect(jsonPath("$.sectores[1].servicios[0].programado").value(0));
+    }
+
+    long c1Id() {
+        return areaId("Jardín C1");
+    }
+
+    long c2Id() {
+        return areaId("Jardín C2");
+    }
+
+    long areaId(String nombre) {
+        return jdbc.getJdbcTemplate()
+                .queryForObject(
+                        "SELECT id FROM mod02_area_verde WHERE nombre = ?", Long.class, nombre);
+    }
+
+    @Test
     void rechazaCicloInexistenteYPeriodoInvertido() throws Exception {
         resumen("?ciclo_id=99999")
                 .andExpect(status().isNotFound())

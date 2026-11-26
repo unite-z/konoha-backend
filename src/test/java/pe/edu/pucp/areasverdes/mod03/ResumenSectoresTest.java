@@ -15,6 +15,6 @@ class ResumenSectoresTest {
 
     @Test
     void sinProgramadoEsCero() {
-        assertEquals(BigDecimal.ZERO, ResumenSectores.porcentaje(0, 0));
+        assertEquals(new BigDecimal("0.0"), ResumenSectores.porcentaje(0, 0));
     }
 }

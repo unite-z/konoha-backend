@@ -29,6 +29,8 @@ public class ResumenSectores {
 
     static final List<String> SERVICIOS = List.of("corte", "riego", "poda");
 
+    private static final BigDecimal CERO = BigDecimal.ZERO.setScale(1);
+
     public record Servicio(
             String servicio,
             int programado,
@@ -131,7 +133,7 @@ public class ResumenSectores {
                         var a = acumulados.get(id + "/" + servicio);
                         servicios.add(
                                 a == null
-                                        ? new Servicio(servicio, 0, 0, BigDecimal.ZERO, null)
+                                        ? new Servicio(servicio, 0, 0, CERO, null)
                                         : new Servicio(
                                                 servicio,
                                                 a.programado(),
@@ -146,7 +148,7 @@ public class ResumenSectores {
 
     static BigDecimal porcentaje(int ejecutado, int programado) {
         if (programado == 0) {
-            return BigDecimal.ZERO;
+            return CERO;
         }
         return BigDecimal.valueOf(ejecutado * 100L)
                 .divide(BigDecimal.valueOf(programado), 1, RoundingMode.HALF_UP);
