@@ -21,7 +21,23 @@ public class GeometriaCampus {
     public String geojson() {
         return jdbc.getJdbcTemplate()
                 .queryForObject(
-                        "SELECT geojson::text FROM mod02_mapa_capa WHERE unica", String.class);
+                        """
+                        SELECT jsonb_set(c.geojson, '{features}', (c.geojson->'features') || coalesce((
+                            SELECT jsonb_agg(jsonb_build_object(
+                                'type', 'Feature',
+                                'properties', jsonb_build_object(
+                                    'Nombre', a.nombre, 'Área', a.superficie_m2, 'Uso', tu.nombre,
+                                    'mapa_id', g.id_fuente, 'area_verde_id', a.id, 'origen', g.origen),
+                                'geometry', ST_AsGeoJSON(g.geometria)::jsonb)
+                                ORDER BY g.fecha_creacion, g.id_fuente)
+                            FROM mod02_mapa_geometria g
+                            JOIN mod02_mapa_poligono p USING (id_fuente)
+                            JOIN mod02_area_verde a ON a.id = p.area_verde_id
+                            LEFT JOIN mod02_tipo_uso tu ON tu.id = a.tipo_uso_id
+                            WHERE g.origen = 'dibujo' AND a.activo), '[]'::jsonb))::text
+                        FROM mod02_mapa_capa c WHERE c.unica
+                        """,
+                        String.class);
     }
 
     /** Serializa escrituras que afectan conjuntamente a polígonos y ejemplares. */

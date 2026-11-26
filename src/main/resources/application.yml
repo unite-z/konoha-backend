@@ -57,6 +57,9 @@ mod02:
   poda:
     # Promedio diario a partir del cual se destaca una campaña (HU-MOD02-023). Pendiente de confirmar.
     umbral-rendimiento: ${MOD02_UMBRAL_RENDIMIENTO:18}
+  contorno:
+    # Solape máximo, en m², que se tolera entre un contorno dibujado y otra área (AV-430).
+    tolerancia-solape-m2: ${MOD02_CONTORNO_TOLERANCIA_SOLAPE_M2:1}
 mod04:
   # Días que se recuerda una clave de operación: cubre la cola sin conexión de la PWA (AV-226).
   idempotencia:

@@ -1,6 +1,7 @@
 package pe.edu.pucp.areasverdes.mod02.api;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -8,7 +9,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.net.URI;
@@ -55,7 +55,9 @@ public class AreasController {
             String cuartelNumero,
             Long sectorId,
             String sectorNombre,
-            boolean activo) {}
+            boolean activo,
+            UUID poligonoMapaId,
+            JsonNode contorno) {}
 
     public record PaginaAreas(int count, Integer next, Integer previous, List<AreaVerde> results) {}
 
@@ -63,14 +65,14 @@ public class AreasController {
             @NotBlank(message = "Indica el nombre del área") @Size(max = 150) String nombre,
             @NotBlank(message = "Indica el lugar o referente") @Size(max = 150) String lugar,
             @NotBlank(message = "Indica la ubicación") @Size(max = 250) String ubicacion,
-            @NotNull(message = "Indica la superficie")
-                    @DecimalMin(value = "0.01", message = "La superficie debe ser mayor que cero")
+            @DecimalMin(value = "0.01", message = "La superficie debe ser mayor que cero")
                     BigDecimal superficieM2,
             Long tipoCoberturaId,
             Long tipoUsoId,
             Long cuartelId,
             Long sectorId,
-            UUID poligonoMapaId) {}
+            UUID poligonoMapaId,
+            JsonNode contorno) {}
 
     public record CambioAreaVerde(
             @Size(max = 150) String nombre,
@@ -109,12 +111,20 @@ public class AreasController {
         return areas.obtenerPorId(id);
     }
 
-    @Operation(summary = "Registra un área verde")
+    @Operation(
+            summary = "Registra un área verde",
+            description =
+                    "Con `contorno` (GeoJSON Polygon, EPSG:4326) el servidor guarda la geometría,"
+                            + " la vincula al área y calcula `superficie_m2` en UTM 18S; sin él,"
+                            + " `superficie_m2` es obligatoria.")
     @ApiResponse(responseCode = "201", description = "Área verde registrada")
     @ApiResponse(responseCode = "400", description = "Datos no válidos")
     @ApiResponse(
             responseCode = "404",
             description = "La cobertura indicada no existe o está inactiva")
+    @ApiResponse(
+            responseCode = "422",
+            description = "Contorno no simple, abierto, fuera del campus o solapado")
     @PostMapping(
             value = {"", "/"},
             consumes = MediaType.APPLICATION_JSON_VALUE)
