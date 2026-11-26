@@ -654,6 +654,106 @@ class Mod05IntegrationTest {
                 .andExpect(jsonPath("$.count").value(0));
     }
 
+    void fijarInicio(long id, String instante) {
+        repo.jdbc()
+                .update(
+                        "UPDATE mod05_atenciontercerizada SET"
+                                + " fecha_hora_inicio=CAST(:t AS timestamptz) WHERE id=:id",
+                        Map.of("t", instante, "id", id));
+    }
+
+    @Test
+    void elListadoFiltraPorRangoDeFechasYPorAreaYAmpliaLaPaginaConRango() throws Exception {
+        long otraArea = repo.insert("areaverde", values("nombre", "Jardín B", "activo", true));
+        long lunes = create().get("id").asLong();
+        long viernes = create().get("id").asLong();
+        long enOtraArea = crearAtencionEnArea(otraArea);
+        long viaEjemplar = crearAtencionConEjemplar();
+        fijarInicio(lunes, "2026-11-23T08:00:00-05:00");
+        fijarInicio(viernes, "2026-11-27T23:30:00-05:00");
+        fijarInicio(enOtraArea, "2026-11-25T10:00:00-05:00");
+        fijarInicio(viaEjemplar, "2026-12-10T10:00:00-05:00");
+
+        // Rango: los extremos se cuentan por fecha de Lima, con límites incluidos.
+        consultar("desde", "2026-11-23", "hasta", "2026-11-27")
+                .andExpect(jsonPath("$.count").value(3));
+        consultar("desde", "2026-11-24", "hasta", "2026-11-26")
+                .andExpect(jsonPath("$.count").value(1))
+                .andExpect(jsonPath("$.results[0].id").value(enOtraArea));
+        consultar("desde", "2026-11-28").andExpect(jsonPath("$.count").value(1));
+        consultar("hasta", "2026-11-22").andExpect(jsonPath("$.count").value(0));
+
+        // Área: alcance directo o por ejemplar de esa área.
+        consultar("area_verde_id", String.valueOf(otraArea))
+                .andExpect(jsonPath("$.count").value(1))
+                .andExpect(jsonPath("$.results[0].id").value(enOtraArea));
+        consultar("area_verde_id", String.valueOf(area)).andExpect(jsonPath("$.count").value(3));
+        consultar(
+                        "area_verde_id",
+                        String.valueOf(area),
+                        "desde",
+                        "2026-11-23",
+                        "hasta",
+                        "2026-11-27")
+                .andExpect(jsonPath("$.count").value(2));
+
+        // Validaciones.
+        consultar("desde", "23/11/2026").andExpect(status().isBadRequest());
+        consultar("hasta", "mañana").andExpect(status().isBadRequest());
+        consultar("area_verde_id", "abc").andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void conRangoSePuedePedirHasta200PorPaginaYSinRangoSiguenSiendo25() throws Exception {
+        for (int i = 0; i < 30; i++)
+            service.crear(json.convertValue(input(), Entradas.Crear.class), jefe);
+        // Sin rango, page_size se ignora.
+        consultar("page_size", "100")
+                .andExpect(jsonPath("$.results.length()").value(25))
+                .andExpect(jsonPath("$.next").isNotEmpty());
+        consultar("desde", "2020-01-01", "page_size", "100")
+                .andExpect(jsonPath("$.results.length()").value(25));
+        // Con rango completo, el tamaño pedido manda.
+        consultar("desde", "2020-01-01", "hasta", "2099-12-31", "page_size", "200")
+                .andExpect(jsonPath("$.count").value(30))
+                .andExpect(jsonPath("$.results.length()").value(30))
+                .andExpect(jsonPath("$.next").doesNotExist());
+        consultar("desde", "2020-01-01", "hasta", "2099-12-31", "page_size", "10")
+                .andExpect(jsonPath("$.results.length()").value(10))
+                .andExpect(jsonPath("$.next").isNotEmpty());
+        consultar("desde", "2020-01-01", "hasta", "2099-12-31", "page_size", "201")
+                .andExpect(status().isBadRequest());
+        consultar("desde", "2020-01-01", "hasta", "2099-12-31", "page_size", "0")
+                .andExpect(status().isBadRequest());
+        consultar("desde", "2020-01-01", "hasta", "2099-12-31")
+                .andExpect(jsonPath("$.results.length()").value(25));
+    }
+
+    ResultActions consultar(String... parametros) throws Exception {
+        var request = get(BASE).with(httpBasic("jefe", PASSWORD));
+        for (int i = 0; i < parametros.length; i += 2)
+            request = request.param(parametros[i], parametros[i + 1]);
+        return http.perform(request);
+    }
+
+    long crearAtencionEnArea(long areaId) {
+        var entrada = input();
+        entrada.put("alcances", List.of(values("area_verde_id", areaId)));
+        return ((Number)
+                        service.crear(json.convertValue(entrada, Entradas.Crear.class), jefe)
+                                .get("id"))
+                .longValue();
+    }
+
+    long crearAtencionConEjemplar() {
+        var entrada = input();
+        entrada.put("alcances", List.of(values("ejemplar_id", ejemplar)));
+        return ((Number)
+                        service.crear(json.convertValue(entrada, Entradas.Crear.class), jefe)
+                                .get("id"))
+                .longValue();
+    }
+
     @Test
     void validacionAdjuntosYNoCruzarAtenciones() throws Exception {
         long id = create().get("id").asLong(), other = create().get("id").asLong();
