@@ -1,8 +1,13 @@
 package pe.edu.pucp.areasverdes.mod02.servicios;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.DataClassRowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -13,6 +18,7 @@ import pe.edu.pucp.areasverdes.mod02.api.AreasController.AreaVerde;
 import pe.edu.pucp.areasverdes.mod02.api.AreasController.AsignacionSector;
 import pe.edu.pucp.areasverdes.mod02.api.AreasController.NuevaAreaVerde;
 import pe.edu.pucp.areasverdes.mod02.api.AreasController.PaginaAreas;
+import pe.edu.pucp.areasverdes.mod02.api.AreasController.SugerenciaArea;
 import pe.edu.pucp.areasverdes.mod02.api.ErrorCoberturas;
 import pe.edu.pucp.areasverdes.mod05.Usuario;
 
@@ -21,19 +27,21 @@ public class AreasService {
 
     private static final int TAMANO_PAGINA = 25;
     private static final String CONSULTA =
-            "SELECT a.id, a.nombre, a.lugar, a.ubicacion, a.superficie_m2, a.tipo_cobertura_id,"
-                + " c.nombre tipo_cobertura_nombre, a.tipo_uso_id, tu.nombre tipo_uso_nombre,"
-                + " a.cuartel_id, q.numero cuartel_numero, h.sector_id, s.nombre sector_nombre,"
-                + " a.activo, CAST(NULL AS uuid) poligono_mapa_id, CAST(NULL AS text) contorno FROM"
-                + " mod02_area_verde a LEFT JOIN mod02_cobertura_vegetal c ON c.id ="
-                + " a.tipo_cobertura_id LEFT JOIN mod02_tipo_uso tu ON tu.id = a.tipo_uso_id LEFT"
-                + " JOIN mod02_cuartel q ON q.id = a.cuartel_id LEFT JOIN"
+            "SELECT a.id, a.codigo, a.nombre, a.lugar, a.ubicacion, a.superficie_m2,"
+                + " a.tipo_cobertura_id, c.nombre tipo_cobertura_nombre, a.tipo_uso_id, tu.nombre"
+                + " tipo_uso_nombre, a.cuartel_id, q.numero cuartel_numero, h.sector_id, s.nombre"
+                + " sector_nombre, a.activo, CAST(NULL AS uuid) poligono_mapa_id, CAST(NULL AS"
+                + " text) contorno FROM mod02_area_verde a LEFT JOIN mod02_cobertura_vegetal c ON"
+                + " c.id = a.tipo_cobertura_id LEFT JOIN mod02_tipo_uso tu ON tu.id ="
+                + " a.tipo_uso_id LEFT JOIN mod02_cuartel q ON q.id = a.cuartel_id LEFT JOIN"
                 + " mod02_historial_area_sector h ON h.area_verde_id = a.id AND h.fecha_fin IS NULL"
                 + " LEFT JOIN mod02_sector s ON s.id = h.sector_id WHERE (:incluir_inactivas OR"
                 + " a.activo) AND (:q = '' OR a.nombre ILIKE '%' || :q || '%') AND (CAST(:cuartel"
                 + " AS bigint) IS NULL OR a.cuartel_id = :cuartel) AND (CAST(:sector AS bigint) IS"
                 + " NULL OR h.sector_id = :sector) AND (CAST(:tipo_uso AS bigint) IS NULL OR"
                 + " a.tipo_uso_id = :tipo_uso)";
+
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     private final NamedParameterJdbcTemplate jdbc;
 
@@ -87,6 +95,93 @@ public class AreasService {
 
     public AreaVerde obtenerPorId(long id) {
         return obtener(id);
+    }
+
+    /** El código que tocaría es orientativo: se asigna de verdad al guardar. */
+    public SugerenciaArea sugerir(String contorno, Usuario usuario) {
+        AccesoCoberturas.registrar(usuario);
+        String geojson = geometriaGeoJson(contorno);
+        BigDecimal superficie;
+        try {
+            superficie =
+                    jdbc.queryForObject(
+                            "SELECT CASE WHEN GeometryType(g) <> 'POLYGON' THEN NULL WHEN NOT"
+                                + " ST_IsValid(g) THEN -1 ELSE ST_Area(ST_Transform(g, 32718)) END"
+                                + " FROM (SELECT"
+                                + " ST_SetSRID(ST_Force2D(ST_GeomFromGeoJSON(:contorno)), 4326) g)"
+                                + " c",
+                            Map.of("contorno", geojson),
+                            BigDecimal.class);
+        } catch (DataAccessException e) {
+            throw contornoNoValido();
+        }
+        if (superficie == null) {
+            throw contornoNoValido();
+        }
+        if (superficie.signum() <= 0) {
+            throw new ErrorCoberturas(
+                    422, "contorno-no-valido", "El contorno no es un polígono simple y cerrado");
+        }
+        long numero =
+                jdbc.queryForObject(
+                        "SELECT CASE WHEN is_called THEN last_value + 1 ELSE last_value END FROM"
+                                + " mod02_area_verde_codigo_seq",
+                        Map.of(),
+                        Long.class);
+        String codigo =
+                jdbc.queryForObject(
+                        "SELECT mod02_codigo_area_verde(:numero)",
+                        Map.of("numero", numero),
+                        String.class);
+        // El sector es el del área con sector más cercana al contorno (distancia en metros).
+        return jdbc.query(
+                "SELECT s.id, s.nombre, ST_Distance(g.geometria::geography,"
+                        + " ST_SetSRID(ST_Force2D(ST_GeomFromGeoJSON(:contorno)),"
+                        + " 4326)::geography) distancia FROM mod02_mapa_poligono p JOIN"
+                        + " mod02_mapa_geometria g ON g.id_fuente = p.id_fuente JOIN"
+                        + " mod02_area_verde a ON a.id = p.area_verde_id AND a.activo JOIN"
+                        + " mod02_historial_area_sector h ON h.area_verde_id = a.id AND"
+                        + " h.fecha_fin IS NULL JOIN mod02_sector s ON s.id = h.sector_id AND"
+                        + " s.activo ORDER BY distancia, a.id LIMIT 1",
+                Map.of("contorno", geojson),
+                rs ->
+                        rs.next()
+                                ? new SugerenciaArea(
+                                        codigo,
+                                        superficie
+                                                .setScale(2, RoundingMode.HALF_UP)
+                                                .toPlainString(),
+                                        rs.getLong(1),
+                                        rs.getString(2),
+                                        rs.getBigDecimal(3).setScale(1, RoundingMode.HALF_UP))
+                                : new SugerenciaArea(
+                                        codigo,
+                                        superficie
+                                                .setScale(2, RoundingMode.HALF_UP)
+                                                .toPlainString(),
+                                        null,
+                                        null,
+                                        null));
+    }
+
+    private static String geometriaGeoJson(String contorno) {
+        try {
+            JsonNode nodo = JSON.readTree(contorno);
+            if (nodo != null && nodo.isObject() && nodo.hasNonNull("geometry")) {
+                nodo = nodo.get("geometry");
+            }
+            if (nodo == null || !nodo.isObject() || !"Polygon".equals(nodo.path("type").asText())) {
+                throw contornoNoValido();
+            }
+            return nodo.toString();
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw contornoNoValido();
+        }
+    }
+
+    private static ErrorCoberturas contornoNoValido() {
+        return new ErrorCoberturas(
+                400, "contorno-no-valido", "El contorno debe ser un polígono GeoJSON (EPSG:4326)");
     }
 
     @Transactional
@@ -161,6 +256,7 @@ public class AreasService {
         // El mapa recibe el área y su contorno en una sola respuesta (AV-430).
         return new AreaVerde(
                 area.id(),
+                area.codigo(),
                 area.nombre(),
                 area.lugar(),
                 area.ubicacion(),
