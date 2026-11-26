@@ -203,4 +203,49 @@ class IncidenciasPorAlcanceApiTest extends ApiPlanificacion {
         bandejaJefe("_").andExpect(jsonPath("$", hasSize(0)));
         bandejaJefe("x".repeat(101)).andExpect(status().isBadRequest());
     }
+
+    @Test
+    void elListadoTraeAreaYEjemplarYFiltraPorArea() throws Exception {
+        var sql = jdbc.getJdbcTemplate();
+        long area =
+                sql.queryForObject(
+                        "SELECT area_verde_id FROM mod03_incidencia WHERE id = ?",
+                        Long.class,
+                        asignada);
+        sql.update(
+                "INSERT INTO mod02_area_verde (nombre, lugar, ubicacion, superficie_m2,"
+                        + " usuario_creacion_id, usuario_modificacion_id) VALUES ('Otro jardín"
+                        + " AV-436', 'Biblioteca', 'Campus', 80, 1, 1)");
+        long otra =
+                sql.queryForObject(
+                        "SELECT id FROM mod02_area_verde WHERE nombre = 'Otro jardín AV-436'",
+                        Long.class);
+        sql.update("UPDATE mod03_incidencia SET area_verde_id = ? WHERE id = ?", otra, ajena);
+
+        bandejaJefe(null)
+                .andExpect(jsonPath("$[?(@.id == %d)].area_verde_id".formatted(ajena))
+                        .value((int) otra))
+                .andExpect(jsonPath("$[?(@.id == %d)].ejemplar_id".formatted(ajena)).value((Object) null));
+        http.perform(get(RUTA).param("area_verde_id", String.valueOf(otra)).with(httpBasic("jefe", CLAVE)))
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].id").value((int) ajena));
+        http.perform(get(RUTA).param("area_verde_id", String.valueOf(area)).with(httpBasic("jefe", CLAVE)))
+                .andExpect(jsonPath("$", hasSize(2)));
+    }
+
+    @Test
+    void elFiltroPorAreaRespetaElAlcanceDeLaCapataz() throws Exception {
+        long area =
+                jdbc.getJdbcTemplate()
+                        .queryForObject(
+                                "SELECT area_verde_id FROM mod03_incidencia WHERE id = ?",
+                                Long.class,
+                                asignada);
+        // Las tres están en la misma área: la capataz sigue viendo solo las suyas.
+        http.perform(get(RUTA).param("area_verde_id", String.valueOf(area)).cookie(capataz))
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(
+                        jsonPath("$[*].id")
+                                .value(containsInAnyOrder((int) asignada, (int) deSuCuadrilla)));
+    }
 }

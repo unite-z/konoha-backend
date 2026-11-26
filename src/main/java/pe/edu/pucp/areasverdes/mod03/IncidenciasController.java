@@ -258,8 +258,9 @@ public class IncidenciasController {
     public List<Resumen> bandeja(
             UsuarioPlanificacion usuario,
             @RequestParam(required = false) String grupo,
-            @RequestParam(required = false) String q) {
-        return incidencias.bandeja(grupo, q, usuario);
+            @RequestParam(required = false) String q,
+            @RequestParam(name = "area_verde_id", required = false) Long areaVerdeId) {
+        return incidencias.bandeja(grupo, q, areaVerdeId, usuario);
     }
 
     @Operation(summary = "Las incidencias que reportó el usuario")

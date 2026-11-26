@@ -9,6 +9,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Types;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -87,7 +88,9 @@ public class Incidencias {
             OffsetDateTime fechaCierre,
             String responsable,
             Long minutosCierre,
-            String nivelPlazo) {}
+            String nivelPlazo,
+            Long areaVerdeId,
+            Long ejemplarId) {}
 
     public record Ejemplar(String codigo, String alias, String especie, Double alturaM) {}
 
@@ -194,7 +197,8 @@ public class Incidencias {
                         WHEN now() - i.fecha_registro >= interval '40 hours' THEN 'CercaMaximo'
                         WHEN now() - i.fecha_registro > interval '24 hours' THEN 'SuperaObjetivo'
                     END
-                END nivel_plazo
+                END nivel_plazo,
+                i.area_verde_id, i.ejemplar_id
             FROM mod03_incidencia i
             JOIN mod03_tipo_incidencia t ON t.id = i.tipo_incidencia_id
             JOIN mod02_area_verde a ON a.id = i.area_verde_id
@@ -454,7 +458,8 @@ public class Incidencias {
      * La bandeja de la oficina, de la más reciente a la más antigua. {@code grupo}: abiertas, en
      * proceso o cerradas (AV-279); sin él, todas.
      */
-    public List<Resumen> bandeja(String grupo, String q, UsuarioPlanificacion usuario) {
+    public List<Resumen> bandeja(
+            String grupo, String q, Long areaVerdeId, UsuarioPlanificacion usuario) {
         Acceso.consultarIncidencias(usuario);
         derivacion.sincronizar();
         interna.sincronizar();
@@ -474,8 +479,11 @@ public class Incidencias {
                         + ALCANCE_PROPIO
                         + ") AND (:q = '' OR i.codigo ILIKE :patron OR t.nombre ILIKE :patron"
                         + " OR a.nombre ILIKE :patron OR i.descripcion ILIKE :patron)"
+                        + " AND (CAST(:areaVerde AS bigint) IS NULL"
+                        + " OR i.area_verde_id = :areaVerde)"
                         + " ORDER BY i.fecha_registro DESC, i.id DESC",
                 new MapSqlParameterSource()
+                        .addValue("areaVerde", areaVerdeId, Types.BIGINT)
                         .addValue("todas", grupo == null)
                         .addValue("estados", grupo == null ? List.of("") : GRUPOS.get(grupo))
                         .addValue("veTodas", Acceso.veTodasLasIncidencias(usuario))
@@ -756,7 +764,9 @@ public class Incidencias {
                 instante(rs, "fecha_cierre"),
                 rs.getString("responsable"),
                 rs.getObject("minutos_cierre", Long.class),
-                rs.getString("nivel_plazo"));
+                rs.getString("nivel_plazo"),
+                rs.getObject("area_verde_id", Long.class),
+                rs.getObject("ejemplar_id", Long.class));
     }
 
     static OffsetDateTime instante(ResultSet rs, String columna) throws SQLException {
