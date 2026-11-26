@@ -18,6 +18,11 @@ public class GeometriaCampus {
         this.jdbc = jdbc;
     }
 
+    /**
+     * Capa de referencia del campus más los contornos dibujados de áreas activas (AV-430). En
+     * estos, {@code Uso} lleva el tipo de uso del sistema (no hay uso original de la capa) y {@code
+     * tipo_uso_id} y {@code origen = 'dibujo'} permiten distinguirlos.
+     */
     public String geojson() {
         return jdbc.getJdbcTemplate()
                 .queryForObject(
@@ -27,7 +32,8 @@ public class GeometriaCampus {
                                 'type', 'Feature',
                                 'properties', jsonb_build_object(
                                     'Nombre', a.nombre, 'Área', a.superficie_m2, 'Uso', tu.nombre,
-                                    'mapa_id', g.id_fuente, 'area_verde_id', a.id, 'origen', g.origen),
+                                    'mapa_id', g.id_fuente, 'area_verde_id', a.id,
+                                    'tipo_uso_id', a.tipo_uso_id, 'origen', g.origen),
                                 'geometry', ST_AsGeoJSON(g.geometria)::jsonb)
                                 ORDER BY g.fecha_creacion, g.id_fuente)
                             FROM mod02_mapa_geometria g

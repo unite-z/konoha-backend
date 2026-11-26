@@ -115,8 +115,11 @@ public class AreasController {
             summary = "Registra un área verde",
             description =
                     "Con `contorno` (GeoJSON Polygon, EPSG:4326) el servidor guarda la geometría,"
-                            + " la vincula al área y calcula `superficie_m2` en UTM 18S; sin él,"
-                            + " `superficie_m2` es obligatoria.")
+                            + " la vincula al área y calcula `superficie_m2` en UTM 18S (ignora la"
+                            + " enviada); sin él, `superficie_m2` es obligatoria. Dibujar el"
+                            + " contorno exige además CORE.CATALOGO.GESTIONAR, como vincular un"
+                            + " polígono existente. Con `contorno` o `poligono_mapa_id`, la"
+                            + " respuesta incluye `poligono_mapa_id` y `contorno` (GeoJSON).")
     @ApiResponse(responseCode = "201", description = "Área verde registrada")
     @ApiResponse(responseCode = "400", description = "Datos no válidos")
     @ApiResponse(
@@ -124,7 +127,9 @@ public class AreasController {
             description = "La cobertura indicada no existe o está inactiva")
     @ApiResponse(
             responseCode = "422",
-            description = "Contorno no simple, abierto, fuera del campus o solapado")
+            description =
+                    "Contorno no válido: contorno-invalido, contorno-no-cerrado,"
+                            + " contorno-fuera-del-campus, contorno-solapado o contorno-y-poligono")
     @PostMapping(
             value = {"", "/"},
             consumes = MediaType.APPLICATION_JSON_VALUE)

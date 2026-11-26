@@ -92,12 +92,19 @@ public class AreasService {
     @Transactional
     public AreaVerde crear(NuevaAreaVerde nueva, Usuario usuario) {
         AccesoCoberturas.registrar(usuario);
+        // «"contorno": null» llega como NullNode: equivale a no enviarlo.
+        boolean conContorno = nueva.contorno() != null && !nueva.contorno().isNull();
+        if (conContorno) {
+            // Dibujar un contorno crea y vincula una geometría del mapa: exige el mismo permiso
+            // que vincular un polígono existente (MapaAreasService.vincularPoligonoLibre).
+            AccesoCoberturas.gestionar(usuario);
+        }
         validarCobertura(nueva.tipoCoberturaId());
         validarTipoUso(nueva.tipoUsoId());
         validarReferencia("mod02_cuartel", nueva.cuartelId(), "estado", "cuartel", false);
         validarReferencia("mod02_sector", nueva.sectorId(), "activo", "sector", true);
         ContornoAreaService.ContornoValido contorno = null;
-        if (nueva.contorno() != null) {
+        if (conContorno) {
             if (nueva.poligonoMapaId() != null) {
                 throw new ErrorCoberturas(
                         422,
@@ -142,30 +149,33 @@ public class AreasService {
                         + " 'mod02_area_verde', a.id, 'Alta', :usuario, now(), '{}'::jsonb,"
                         + " to_jsonb(a), '' FROM mod02_area_verde a WHERE a.id = :id",
                 Map.of("id", id, "usuario", usuario.id()));
-        if (nueva.poligonoMapaId() != null) {
-            mapa.vincularPoligonoLibre(nueva.poligonoMapaId(), id, usuario);
+        UUID idFuente = nueva.poligonoMapaId();
+        if (idFuente != null) {
+            mapa.vincularPoligonoLibre(idFuente, id, usuario);
+        } else if (contorno != null) {
+            idFuente = contornos.guardar(contorno, id, usuario);
         }
-        if (contorno != null) {
-            UUID idFuente = contornos.guardar(contorno, id, usuario);
-            return new AreaVerde(
-                    area.id(),
-                    area.nombre(),
-                    area.lugar(),
-                    area.ubicacion(),
-                    area.superficieM2(),
-                    area.tipoCoberturaId(),
-                    area.tipoCoberturaNombre(),
-                    area.tipoUsoId(),
-                    area.tipoUsoNombre(),
-                    area.cuartelId(),
-                    area.cuartelNumero(),
-                    area.sectorId(),
-                    area.sectorNombre(),
-                    area.activo(),
-                    idFuente,
-                    contornos.contorno(idFuente));
+        if (idFuente == null) {
+            return area;
         }
-        return area;
+        // El mapa recibe el área y su contorno en una sola respuesta (AV-430).
+        return new AreaVerde(
+                area.id(),
+                area.nombre(),
+                area.lugar(),
+                area.ubicacion(),
+                area.superficieM2(),
+                area.tipoCoberturaId(),
+                area.tipoCoberturaNombre(),
+                area.tipoUsoId(),
+                area.tipoUsoNombre(),
+                area.cuartelId(),
+                area.cuartelNumero(),
+                area.sectorId(),
+                area.sectorNombre(),
+                area.activo(),
+                idFuente,
+                contornos.contorno(idFuente));
     }
 
     @Transactional

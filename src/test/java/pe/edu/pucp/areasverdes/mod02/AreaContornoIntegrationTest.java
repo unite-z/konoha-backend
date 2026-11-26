@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.jayway.jsonpath.JsonPath;
 import java.math.BigDecimal;
 import java.util.Map;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -49,20 +50,9 @@ class AreaContornoIntegrationTest {
         jdbc.getJdbcTemplate().execute("DELETE FROM mod02_mapa_geometria WHERE origen = 'dibujo'");
         jdbc.getJdbcTemplate()
                 .execute("TRUNCATE core_usuario, mod05_usuario RESTART IDENTITY CASCADE");
-        long id =
-                jdbc.queryForObject(
-                        "INSERT INTO mod05_usuario(usuario, nombre, password_hash, activo) VALUES"
-                                + " ('jefe', 'jefe', :clave, true) RETURNING id",
-                        Map.of("clave", claves.encode(CLAVE)),
-                        Long.class);
-        jdbc.update(
-                "INSERT INTO mod05_usuario_rol (usuario_id, rol) VALUES (:id, 'Jefe de sección')",
-                Map.of("id", id));
-        jdbc.update(
-                "INSERT INTO core_usuario (id, nombre_usuario, nombre, credencial_hash, rol_id,"
-                        + " activo) VALUES (:id, 'jefe', 'jefe', :hash, (SELECT id FROM core_rol"
-                        + " WHERE codigo = 'jefe-seccion'), true)",
-                Map.of("id", id, "hash", claves.encode(CLAVE)));
+        crearUsuario("jefe", "Jefe de sección", "jefe-seccion");
+        // Registra áreas, pero no gestiona el catálogo (no vincula polígonos del mapa).
+        crearUsuario("ingeniero", "Ingeniero de campo", "ingeniero-campo");
         // Punto interior del polígono más grande de la capa: está dentro del campus.
         var punto =
                 jdbc.queryForMap(
@@ -72,6 +62,16 @@ class AreaContornoIntegrationTest {
                         Map.of());
         lon = ((Number) punto.get("lon")).doubleValue();
         lat = ((Number) punto.get("lat")).doubleValue();
+    }
+
+    /**
+     * Los contornos dibujados se solapan con la capa del campus: si quedaran en la base, otras
+     * suites verían dos polígonos donde esperan uno (p. ej. {@code nombre_poligono}).
+     */
+    @AfterEach
+    void limpiar() {
+        jdbc.getJdbcTemplate().execute("TRUNCATE mod02_area_verde RESTART IDENTITY CASCADE");
+        jdbc.getJdbcTemplate().execute("DELETE FROM mod02_mapa_geometria WHERE origen = 'dibujo'");
     }
 
     @Test
@@ -112,7 +112,9 @@ class AreaContornoIntegrationTest {
         java.util.List<Map<String, Object>> nuevos =
                 JsonPath.read(capa, "$.features[?(@.properties.mapa_id == '" + idFuente + "')]");
         assertThat(nuevos).hasSize(1);
-        assertThat(nuevos.get(0).get("properties").toString()).contains("Nombre=Área dibujada");
+        assertThat(nuevos.get(0).get("properties").toString())
+                .contains("Nombre=Área dibujada")
+                .contains("origen=dibujo");
     }
 
     @Test
@@ -191,18 +193,116 @@ class AreaContornoIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.superficie_m2").value("85.50"))
                 .andExpect(jsonPath("$.contorno").doesNotExist());
+        // «"contorno": null» es lo mismo que no enviarlo (Jackson lo entrega como NullNode).
+        crear(http("null", "12.00"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.superficie_m2").value("12.00"))
+                .andExpect(jsonPath("$.poligono_mapa_id").doesNotExist());
+        crear(http("null", null))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.codigo").value("superficie-obligatoria"));
         crear(http(null, null))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.codigo").value("superficie-obligatoria"));
+        // Quien registra áreas sin gestionar el catálogo sigue pudiendo darlas de alta sin mapa.
+        crear(http(null, "40.00"), "ingeniero").andExpect(status().isCreated());
+    }
+
+    @Test
+    void dibujarElContornoExigeElPermisoDeVincularPoligonos() throws Exception {
+        crear(http(contorno(0, 0, LADO), null), "ingeniero")
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.codigo").value("sin-permiso"));
+        assertThat(contar("SELECT count(*) FROM mod02_area_verde")).isZero();
+        assertThat(contar("SELECT count(*) FROM mod02_mapa_geometria WHERE origen = 'dibujo'"))
+                .isZero();
+    }
+
+    @Test
+    void elContornoQuedaVinculadoAlAreaEnElMapa() throws Exception {
+        String respuesta =
+                crear(http(contorno(0, 0, LADO), null))
+                        .andExpect(status().isCreated())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString();
+        int areaId = JsonPath.read(respuesta, "$.id");
+        String idFuente = JsonPath.read(respuesta, "$.poligono_mapa_id");
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT g.origen || ':' || p.area_verde_id FROM"
+                                        + " mod02_mapa_geometria g JOIN mod02_mapa_poligono p"
+                                        + " USING (id_fuente) WHERE id_fuente = CAST(:id AS uuid)",
+                                Map.of("id", idFuente),
+                                String.class))
+                .isEqualTo("dibujo:" + areaId);
+        // Un punto en el centro del contorno cae en el área nueva.
+        http.perform(
+                        get("/api/v1/inventario/mapa/ubicacion")
+                                .with(httpBasic("jefe", CLAVE))
+                                .param("latitud", String.valueOf(lat + LADO / 2))
+                                .param("longitud", String.valueOf(lon + LADO / 2))
+                                .param("area_verde_id", String.valueOf(areaId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estado").value("dentro"));
+    }
+
+    @Test
+    void contornoYPoligonoALaVezDa422YElPoligonoDeLaCapaCuentaParaElSolape() throws Exception {
+        String poligono =
+                jdbc.queryForObject(
+                        "SELECT id_fuente::text FROM mod02_mapa_geometria WHERE origen = 'capa'"
+                                + " ORDER BY ST_Area(geometria) DESC LIMIT 1",
+                        Map.of(),
+                        String.class);
+        crear(http(contorno(0, 0, LADO), null, poligono))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.codigo").value("contorno-y-poligono"));
+        // Con un polígono existente, la respuesta también trae su contorno.
+        crear(http(null, "900.00", poligono))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.poligono_mapa_id").value(poligono))
+                .andExpect(jsonPath("$.contorno.type").isNotEmpty());
+        // El contorno dibujado cae dentro de ese polígono, ya vinculado a un área activa.
+        crear(http(contorno(0, 0, LADO), null))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.codigo").value("contorno-solapado"));
+        assertThat(contar("SELECT count(*) FROM mod02_area_verde")).isEqualTo(1);
     }
 
     private org.springframework.test.web.servlet.ResultActions crear(String cuerpo)
             throws Exception {
+        return crear(cuerpo, "jefe");
+    }
+
+    private org.springframework.test.web.servlet.ResultActions crear(String cuerpo, String usuario)
+            throws Exception {
         return http.perform(
                 post(AREAS)
-                        .with(httpBasic("jefe", CLAVE))
+                        .with(httpBasic(usuario, CLAVE))
                         .contentType("application/json")
                         .content(cuerpo));
+    }
+
+    private int contar(String sql) {
+        return jdbc.queryForObject(sql, Map.of(), Integer.class);
+    }
+
+    private void crearUsuario(String nombre, String rol, String codigoRol) {
+        long id =
+                jdbc.queryForObject(
+                        "INSERT INTO mod05_usuario(usuario, nombre, password_hash, activo) VALUES"
+                                + " (:nombre, :nombre, :clave, true) RETURNING id",
+                        Map.of("nombre", nombre, "clave", claves.encode(CLAVE)),
+                        Long.class);
+        jdbc.update(
+                "INSERT INTO mod05_usuario_rol (usuario_id, rol) VALUES (:id, :rol)",
+                Map.of("id", id, "rol", rol));
+        jdbc.update(
+                "INSERT INTO core_usuario (id, nombre_usuario, nombre, credencial_hash, rol_id,"
+                        + " activo) VALUES (:id, :nombre, :nombre, :hash, (SELECT id FROM core_rol"
+                        + " WHERE codigo = :rol), true)",
+                Map.of("id", id, "nombre", nombre, "hash", claves.encode(CLAVE), "rol", codigoRol));
     }
 
     /** Cuadrado de {@code lado} grados con la esquina inferior izquierda desplazada. */
@@ -233,9 +333,14 @@ class AreaContornoIntegrationTest {
     }
 
     private String http(String contorno, String superficie) {
+        return http(contorno, superficie, null);
+    }
+
+    private String http(String contorno, String superficie, String poligonoMapaId) {
         return "{\"nombre\":\"Área dibujada\",\"lugar\":\"Campus\",\"ubicacion\":\"Zona de prueba\""
                 + (superficie == null ? "" : ",\"superficie_m2\":\"" + superficie + "\"")
                 + (contorno == null ? "" : ",\"contorno\":" + contorno)
+                + (poligonoMapaId == null ? "" : ",\"poligono_mapa_id\":\"" + poligonoMapaId + "\"")
                 + "}";
     }
 }

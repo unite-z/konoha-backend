@@ -134,14 +134,17 @@ public class ContornoAreaService {
         return id;
     }
 
-    /** El contorno guardado, tal como lo devuelve PostGIS. */
+    /** El contorno guardado, tal como lo devuelve PostGIS; {@code null} si no hay geometría. */
     public JsonNode contorno(UUID idFuente) {
         String texto =
-                jdbc.queryForObject(
+                jdbc.query(
                         "SELECT ST_AsGeoJSON(geometria) FROM mod02_mapa_geometria WHERE id_fuente"
                                 + " = :id",
                         new MapSqlParameterSource("id", idFuente),
-                        String.class);
+                        rs -> rs.next() ? rs.getString(1) : null);
+        if (texto == null) {
+            return null;
+        }
         try {
             return json.readTree(texto);
         } catch (JsonProcessingException e) {
