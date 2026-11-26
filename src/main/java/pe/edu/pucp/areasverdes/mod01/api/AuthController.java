@@ -1,5 +1,6 @@
 package pe.edu.pucp.areasverdes.mod01.api;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.enums.SecuritySchemeIn;
 import io.swagger.v3.oas.annotations.enums.SecuritySchemeType;
@@ -15,6 +16,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
@@ -62,14 +64,35 @@ public class AuthController {
     public record Apariencia(
             @NotBlank
                     @Pattern(
-                            regexp = "claro|oscuro|calido|sistema",
-                            message = "El tema es claro, oscuro, calido o sistema")
+                            regexp = "claro|oscuro|calido|amarillento|sistema",
+                            message = "El tema es claro, oscuro, calido, amarillento o sistema")
                     String tema,
             @NotBlank
                     @Pattern(
                             regexp = "institucional|azul|verde|morado|magenta",
                             message = "Color de acento desconocido")
-                    String acento) {}
+                    String acento,
+            /** AV-414: {@code null} = nunca eligió; {@code true} o {@code false} = su elección. */
+            Boolean disenoNuevo) {}
+
+    /**
+     * Petición de apariencia. {@code disenoNuevo}: campo ausente ({@code null}) = conserva lo
+     * guardado; {@code null} explícito ({@code NullNode}) = «sin elegir»; true o false = su
+     * elección. Va como {@code JsonNode} porque {@code Optional} no distingue ausente de {@code
+     * null}.
+     */
+    public record AparienciaEntrada(
+            @NotBlank
+                    @Pattern(
+                            regexp = "claro|oscuro|calido|amarillento|sistema",
+                            message = "El tema es claro, oscuro, calido, amarillento o sistema")
+                    String tema,
+            @NotBlank
+                    @Pattern(
+                            regexp = "institucional|azul|verde|morado|magenta",
+                            message = "Color de acento desconocido")
+                    String acento,
+            JsonNode disenoNuevo) {}
 
     /** Lo que la interfaz necesita para armar el menú del rol (CU-MOD01-006 paso 1). */
     public record Sesion(
@@ -89,7 +112,7 @@ public class AuthController {
                     List.copyOf(u.permisos()),
                     u.debeCambiarContrasena(),
                     expira,
-                    a == null ? null : new Apariencia(a.tema(), a.acento()));
+                    a == null ? null : new Apariencia(a.tema(), a.acento(), a.disenoNuevo()));
         }
     }
 
@@ -159,11 +182,20 @@ public class AuthController {
     @PutMapping({"/apariencia", "/apariencia/"})
     public Apariencia guardarApariencia(
             @AuthenticationPrincipal UsuarioSesion usuario,
-            @Valid @RequestBody Apariencia apariencia) {
+            @Valid @RequestBody AparienciaEntrada apariencia) {
+        JsonNode nuevo = apariencia.disenoNuevo();
+        if (nuevo != null && !nuevo.isNull() && !nuevo.isBoolean()) {
+            throw ErrorCore.invalido("diseno-nuevo-invalido", "diseno_nuevo es true, false o null");
+        }
         apariencias.guardar(
                 usuario.id(),
-                new AparienciaRepository.Apariencia(apariencia.tema(), apariencia.acento()));
-        return apariencia;
+                apariencia.tema(),
+                apariencia.acento(),
+                nuevo == null
+                        ? null
+                        : nuevo.isNull() ? Optional.empty() : Optional.of(nuevo.booleanValue()));
+        var guardada = apariencias.de(usuario.id());
+        return new Apariencia(guardada.tema(), guardada.acento(), guardada.disenoNuevo());
     }
 
     /** Invalida la sesión de este dispositivo. Los registros locales del móvil no se tocan. */
