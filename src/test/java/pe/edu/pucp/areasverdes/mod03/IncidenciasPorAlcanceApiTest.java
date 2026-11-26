@@ -223,13 +223,22 @@ class IncidenciasPorAlcanceApiTest extends ApiPlanificacion {
         sql.update("UPDATE mod03_incidencia SET area_verde_id = ? WHERE id = ?", otra, ajena);
 
         bandejaJefe(null)
-                .andExpect(jsonPath("$[?(@.id == %d)].area_verde_id".formatted(ajena))
-                        .value((int) otra))
-                .andExpect(jsonPath("$[?(@.id == %d)].ejemplar_id".formatted(ajena)).value((Object) null));
-        http.perform(get(RUTA).param("area_verde_id", String.valueOf(otra)).with(httpBasic("jefe", CLAVE)))
+                .andExpect(
+                        jsonPath("$[?(@.id == %d)].area_verde_id".formatted(ajena))
+                                .value((int) otra))
+                .andExpect(
+                        jsonPath("$[?(@.id == %d)].ejemplar_id".formatted(ajena))
+                                .value((Object) null));
+        http.perform(
+                        get(RUTA)
+                                .param("area_verde_id", String.valueOf(otra))
+                                .with(httpBasic("jefe", CLAVE)))
                 .andExpect(jsonPath("$", hasSize(1)))
                 .andExpect(jsonPath("$[0].id").value((int) ajena));
-        http.perform(get(RUTA).param("area_verde_id", String.valueOf(area)).with(httpBasic("jefe", CLAVE)))
+        http.perform(
+                        get(RUTA)
+                                .param("area_verde_id", String.valueOf(area))
+                                .with(httpBasic("jefe", CLAVE)))
                 .andExpect(jsonPath("$", hasSize(2)));
     }
 
