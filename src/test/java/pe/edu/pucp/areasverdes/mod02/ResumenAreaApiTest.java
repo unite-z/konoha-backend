@@ -1,5 +1,12 @@
 package pe.edu.pucp.areasverdes.mod02;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
 import jakarta.servlet.http.Cookie;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -11,12 +18,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.ResultActions;
 import pe.edu.pucp.areasverdes.comun.BasePruebaGlobal;
 import pe.edu.pucp.areasverdes.mod01.config.SeguridadMod01;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * Resumen e historial agregados del área (AV-431): un área con datos de cada fuente, el alcance por
@@ -54,7 +55,8 @@ public class ResumenAreaApiTest extends BasePruebaGlobal {
 
         area = area("Jardín Central");
         otraArea = area("Plaza de Armas");
-        for (String nombre : new String[] {"Jardín Central", "Plaza de Armas"}) {
+        // Un espacio de MOD-05 sin equivalente desplaza los id: el cruce tiene que ir por nombre.
+        for (String nombre : new String[] {"Almacén", "Plaza de Armas", "Jardín Central"}) {
             jdbc.update(
                     "INSERT INTO mod05_areaverde (nombre, activo) VALUES (:n, true)",
                     Map.of("n", nombre));
@@ -110,9 +112,9 @@ public class ResumenAreaApiTest extends BasePruebaGlobal {
                         + " proveedor_id, tipo_servicio_id) VALUES (1, 'CT-1', '2026-01-01',"
                         + " '2026-12-31', 1, 1)",
                 Map.of());
-        atencion("AT-001", "2026-10-08 09:00-05", 1);
-        atencion("AT-002", "2026-10-25 09:00-05", 1);
-        atencion("AT-003", "2026-10-26 09:00-05", 2);
+        atencion("AT-001", "2026-10-08 09:00-05", "Jardín Central");
+        atencion("AT-002", "2026-10-25 09:00-05", "Jardín Central");
+        atencion("AT-003", "2026-10-26 09:00-05", "Plaza de Armas");
 
         // Programación: la completada no cuenta; entre las vigentes manda la más cercana.
         programacion("Completada", "current_date - 20", "current_date - 15");
@@ -131,6 +133,9 @@ public class ResumenAreaApiTest extends BasePruebaGlobal {
                     :u, '2026-10-27 10:00-05', :u, :u)
                 """,
                 Map.of("a", area, "u", usuarioJefe));
+        // Ni una rechazada posterior ni una validada que no incluye el área cambian la prioridad.
+        prioridad("Rechazada", area, "Baja", "2026-10-28 10:00-05");
+        prioridad("Validada", otraArea, "Media", "2026-10-29 10:00-05");
     }
 
     @Test
@@ -184,16 +189,34 @@ public class ResumenAreaApiTest extends BasePruebaGlobal {
                 .andExpect(jsonPath("$.historial.count").value(10))
                 .andExpect(jsonPath("$.historial.results.length()").value(4))
                 .andExpect(jsonPath("$.historial.previous").isEmpty())
-                .andExpect(jsonPath("$.historial.next").value(2));
+                .andExpect(
+                        jsonPath("$.historial.next")
+                                .value(
+                                        org.hamcrest.Matchers.allOf(
+                                                org.hamcrest.Matchers.containsString(
+                                                        "/api/v1/inventario/areas-verdes/"
+                                                                + area
+                                                                + "/resumen?"),
+                                                org.hamcrest.Matchers.containsString("page=2"),
+                                                org.hamcrest.Matchers.containsString(
+                                                        "page_size=4"))));
         pedir(JEFE, "page_size=4&page=2")
                 .andExpect(jsonPath("$.historial.results.length()").value(4))
                 .andExpect(jsonPath("$.historial.results[0].tipo").value("incidencia"))
-                .andExpect(jsonPath("$.historial.previous").value(1))
-                .andExpect(jsonPath("$.historial.next").value(3));
+                .andExpect(
+                        jsonPath("$.historial.previous")
+                                .value(org.hamcrest.Matchers.containsString("page=1")))
+                .andExpect(
+                        jsonPath("$.historial.next")
+                                .value(org.hamcrest.Matchers.containsString("page=3")));
         pedir(JEFE, "page_size=4&page=3")
                 .andExpect(jsonPath("$.historial.results.length()").value(2))
                 .andExpect(jsonPath("$.historial.results[1].estado").value("finalizada"))
                 .andExpect(jsonPath("$.historial.next").isEmpty());
+        // Más allá de la última página: vacía, sin error.
+        pedir(JEFE, "page_size=4&page=9")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.historial.results.length()").value(0));
     }
 
     @Test
@@ -250,7 +273,7 @@ public class ResumenAreaApiTest extends BasePruebaGlobal {
 
         for (int i = 0; i < 30; i++) {
             incidencia(area, "Registrada", "2026-09-01 09:00-05", usuarioJefe);
-            atencion("AT-9" + i, "2026-09-02 09:00-05", 1);
+            atencion("AT-9" + i, "2026-09-02 09:00-05", "Jardín Central");
         }
         ejemplares(area, "activo", 30);
         int muchas = consultasDeUnaLlamada(cookie);
@@ -271,6 +294,20 @@ public class ResumenAreaApiTest extends BasePruebaGlobal {
                 Mockito.mockingDetails(consultas).getInvocations().stream()
                         .filter(i -> i.getMethod().getName().startsWith("query"))
                         .count();
+    }
+
+    private void prioridad(String estado, long areaId, String valor, String fecha) {
+        jdbc.update(
+                """
+                INSERT INTO mod06_sugerencia_ia (tipo, estado, contenido, validador_id,
+                    fecha_validacion, usuario_creacion_id, usuario_modificacion_id)
+                VALUES ('Priorizacion', :e,
+                    jsonb_build_object('decision', jsonb_build_object('por_elemento',
+                        jsonb_build_object('area-' || :a, jsonb_build_object('accion', 'corregir',
+                            'prioridad_final', CAST(:v AS text))))),
+                    :u, CAST(:f AS timestamptz), :u, :u)
+                """,
+                Map.of("e", estado, "a", areaId, "v", valor, "f", fecha, "u", usuarioJefe));
     }
 
     private ResultActions pedir(String correo, String extra) throws Exception {
@@ -364,7 +401,7 @@ public class ResumenAreaApiTest extends BasePruebaGlobal {
                 Map.of("p", parte, "f", fecha, "o", observaciones, "u", usuarioJefe));
     }
 
-    private void atencion(String codigo, String inicio, long espacio) {
+    private void atencion(String codigo, String inicio, String espacio) {
         jdbc.update(
                 """
                 WITH nueva AS (
@@ -377,7 +414,7 @@ public class ResumenAreaApiTest extends BasePruebaGlobal {
                         '', 1, 1, 1, 1, 1)
                     RETURNING id)
                 INSERT INTO mod05_alcanceatencion (atencion_id, area_verde_id)
-                SELECT id, :e FROM nueva
+                SELECT nueva.id, m.id FROM nueva, mod05_areaverde m WHERE m.nombre = :e
                 """,
                 Map.of("f", inicio, "c", codigo, "e", espacio));
     }

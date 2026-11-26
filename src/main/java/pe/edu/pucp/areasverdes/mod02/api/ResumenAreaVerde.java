@@ -46,6 +46,7 @@ public record ResumenAreaVerde(
             String detalle,
             String estado) {}
 
+    /** Paginación del estándar ({@code docs/estandares/api.md}): enlaces absolutos o nulos. */
     public record PaginaHistorial(
-            int count, Integer next, Integer previous, List<EntradaHistorial> results) {}
+            int count, String next, String previous, List<EntradaHistorial> results) {}
 }

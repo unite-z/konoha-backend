@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.IntFunction;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -17,12 +18,12 @@ import org.springframework.transaction.annotation.Transactional;
 import pe.edu.pucp.areasverdes.AreasVerdesApplication;
 import pe.edu.pucp.areasverdes.mod02.api.AreasController.AreaVerde;
 import pe.edu.pucp.areasverdes.mod02.api.ErrorCoberturas;
+import pe.edu.pucp.areasverdes.mod02.api.ResumenAreaVerde;
 import pe.edu.pucp.areasverdes.mod02.api.ResumenAreaVerde.EntradaHistorial;
 import pe.edu.pucp.areasverdes.mod02.api.ResumenAreaVerde.PaginaHistorial;
 import pe.edu.pucp.areasverdes.mod02.api.ResumenAreaVerde.PrioridadValidada;
 import pe.edu.pucp.areasverdes.mod02.api.ResumenAreaVerde.ProximaActividad;
 import pe.edu.pucp.areasverdes.mod02.api.ResumenAreaVerde.UltimaAtencion;
-import pe.edu.pucp.areasverdes.mod02.api.ResumenAreaVerde;
 import pe.edu.pucp.areasverdes.mod05.Usuario;
 
 /**
@@ -36,7 +37,7 @@ import pe.edu.pucp.areasverdes.mod05.Usuario;
 @Service
 public class ResumenAreaService {
 
-    static final int TAMANO_PAGINA = 20;
+    static final int TAMANO_PAGINA = 25;
     static final int TAMANO_MAXIMO = 100;
     static final List<String> SITUACIONES =
             List.of("activo", "retirado", "muerto", "reemplazado", "trasladado");
@@ -48,7 +49,9 @@ public class ResumenAreaService {
     static final String VER_TODAS_INCIDENCIAS = "PLA.INCIDENCIA.CONSULTAR_TODAS";
     static final String VER_ATENCIONES = "SER.ATENCION.REGISTRAR";
     static final String VER_PROGRAMACION = "PLA.PLANIFICACION.CONSULTAR";
-    static final String VER_PRIORIDAD = "IA.PROPUESTA.PROPONER";
+
+    /** Consultar sugerencias de la IA, como {@code GET /api/v1/ia/priorizaciones}. */
+    static final String VER_PRIORIDAD = "REP.INDICADOR.CONSULTAR";
 
     /** Espacios de MOD-05 que equivalen al área de inventario (mismo nombre). */
     private static final String ESPACIOS =
@@ -69,12 +72,14 @@ public class ResumenAreaService {
                     + ALCANCE_PROPIO
                     + ")";
 
+    /** Como MOD-04: el capataz solo ve las actividades de sus partes (personal activo propio). */
     private static final String FILTRO_ACTIVIDADES =
             "ac.area_verde_id IN ("
                     + ESPACIOS
                     + ") AND :ver_actividades AND (NOT :actividades_propias OR EXISTS (SELECT 1"
                     + " FROM mod04_parte_diario pd WHERE pd.id = ac.parte_id AND pd.capataz_id IN"
-                    + " (SELECT pe.id FROM mod04_personal pe WHERE pe.usuario_id = :usuario)))";
+                    + " (SELECT pe.id FROM mod04_personal pe WHERE pe.usuario_id = :usuario AND"
+                    + " pe.activo AND pe.tipo_personal = 'Capataz')))";
 
     private static final String FILTRO_ATENCIONES =
             "EXISTS (SELECT 1 FROM mod05_alcanceatencion al WHERE al.atencion_id = at.id AND"
@@ -111,7 +116,7 @@ public class ResumenAreaService {
                     + " at.estado FROM mod05_atenciontercerizada at WHERE at.fecha_hora_inicio IS"
                     + " NOT NULL AND "
                     + FILTRO_ATENCIONES
-                    + ") u ORDER BY fecha DESC, id DESC LIMIT 1";
+                    + ") u ORDER BY fecha DESC, tipo, id DESC LIMIT 1";
 
     private final NamedParameterJdbcTemplate jdbc;
     private final AreasService areas;
@@ -124,7 +129,8 @@ public class ResumenAreaService {
     }
 
     @Transactional(readOnly = true)
-    public ResumenAreaVerde resumen(long id, int pagina, int tamano, Usuario usuario) {
+    public ResumenAreaVerde resumen(
+            long id, int pagina, int tamano, Usuario usuario, IntFunction<String> enlace) {
         AccesoCoberturas.consultar(usuario);
         if (pagina < 1) {
             throw new ErrorCoberturas(400, "pagina-invalida", "La página debe ser mayor que cero");
@@ -145,7 +151,7 @@ public class ResumenAreaService {
                 fuentes.programacion() ? proximaActividad(id) : null,
                 fuentes.prioridad() ? prioridadValidada(id) : null,
                 fuentes.visibles(),
-                historial(p, pagina, tamano));
+                historial(p, pagina, tamano, enlace));
     }
 
     private Map<String, Integer> ejemplaresPorSituacion(long id) {
@@ -238,7 +244,8 @@ public class ResumenAreaService {
                 .orElse(null);
     }
 
-    private PaginaHistorial historial(MapSqlParameterSource p, int pagina, int tamano) {
+    private PaginaHistorial historial(
+            MapSqlParameterSource p, int pagina, int tamano, IntFunction<String> enlace) {
         Integer total =
                 jdbc.queryForObject("SELECT count(*) FROM (" + HISTORIAL + ") h", p, Integer.class);
         int count = total == null ? 0 : total;
@@ -248,14 +255,14 @@ public class ResumenAreaService {
                         : jdbc.query(
                                 "SELECT * FROM ("
                                         + HISTORIAL
-                                        + ") h ORDER BY fecha DESC, tipo, id DESC LIMIT :limite"
-                                        + " OFFSET :desplazamiento",
+                                        + ") h ORDER BY fecha DESC NULLS LAST, tipo, id DESC LIMIT"
+                                        + " :limite OFFSET :desplazamiento",
                                 new MapSqlParameterSource(p.getValues())
                                         .addValue("limite", tamano)
                                         .addValue("desplazamiento", (pagina - 1) * tamano),
                                 entrada());
-        Integer anterior = pagina > 1 ? pagina - 1 : null;
-        Integer siguiente = (long) pagina * tamano < count ? pagina + 1 : null;
+        String anterior = pagina > 1 ? enlace.apply(pagina - 1) : null;
+        String siguiente = (long) pagina * tamano < count ? enlace.apply(pagina + 1) : null;
         return new PaginaHistorial(count, siguiente, anterior, entradas);
     }
 
