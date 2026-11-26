@@ -161,10 +161,13 @@ class AvanceContratosIntegrationTest {
                         Atencion.REPORTE,
                         Atencion.REPORTE,
                         Atencion.EJECUCION,
+                        // Sin informe del proveedor aún: no está pendiente de verificación.
+                        Atencion.EJECUTADO,
+                        Atencion.OC,
                         Atencion.REQUERIMIENTO)) atencion(a, e);
         atencion(b, Atencion.OBSERVADO);
         var lista = listado();
-        avance(fila(lista, "CT-A"), 8, 2, 1, 3);
+        avance(fila(lista, "CT-A"), 10, 2, 1, 3);
         avance(fila(lista, "CT-B"), 1, 0, 1, 0);
         // El detalle de un contrato trae las mismas cifras.
         var detalle =
@@ -176,7 +179,7 @@ class AvanceContratosIntegrationTest {
                                 .andReturn()
                                 .getResponse()
                                 .getContentAsByteArray());
-        avance(detalle, 8, 2, 1, 3);
+        avance(detalle, 10, 2, 1, 3);
     }
 
     @Test
@@ -186,6 +189,9 @@ class AvanceContratosIntegrationTest {
         clearInvocations(jdbcEspiado);
         listado();
         int conUno = consultas();
+        // El espía cuenta también las llamadas internas de la plantilla; basta con que vea algo,
+        // porque si no viera nada la igualdad de abajo pasaría sin probar nada.
+        assertTrue(conUno > 0, "El espía no registra las consultas del listado");
 
         for (int i = 2; i <= 6; i++) atencion(contrato("CT-" + i), Atencion.CONFORME);
         clearInvocations(jdbcEspiado);
