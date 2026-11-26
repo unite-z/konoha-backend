@@ -19,10 +19,10 @@
   <properties>
     <java.version>21</java.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <springdoc.version>2.8.9</springdoc.version>
-    <google-genai.version>1.78.0</google-genai.version>
-    <pdfbox.version>3.0.7</pdfbox.version>
-    <spotless.version>2.44.4</spotless.version>
+    <springdoc.version>2.10.0</springdoc.version>
+    <google-genai.version>1.80.0</google-genai.version>
+    <pdfbox.version>3.0.8</pdfbox.version>
+    <spotless.version>2.46.1</spotless.version>
     <google-java-format.version>1.27.0</google-java-format.version>
     <!-- Spotless solo formatea y comprueba lo que cambia respecto a esta referencia. -->
     <spotless.ratchetFrom>origin/main</spotless.ratchetFrom>
@@ -43,7 +43,7 @@
     <dependency>
       <groupId>com.github.librepdf</groupId>
       <artifactId>openpdf</artifactId>
-      <version>2.0.3</version>
+      <version>2.4.0</version>
     </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
