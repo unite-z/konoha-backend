@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import jakarta.servlet.http.Cookie;
 import java.util.Map;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -22,6 +23,9 @@ import pe.edu.pucp.areasverdes.mod01.config.SeguridadMod01;
 /**
  * Resumen e historial agregados del área (AV-431): un área con datos de cada fuente, el alcance por
  * permiso (capataz) y el número de consultas, que no crece con los datos.
+ *
+ * <p>La base es compartida con el resto de la suite: ninguna fila lleva id fijo (las secuencias
+ * quedan coherentes) y {@link #limpiar()} borra lo que crea esta clase.
  */
 public class ResumenAreaApiTest extends BasePruebaGlobal {
 
@@ -29,6 +33,7 @@ public class ResumenAreaApiTest extends BasePruebaGlobal {
     private static final String JEFE = "jefe-seccion@resumen.prueba.pucp.edu.pe";
     private static final String CAPATAZ = "capataz@resumen.prueba.pucp.edu.pe";
     private static final String OTRO_CAPATAZ = "otro-capataz@resumen.prueba.pucp.edu.pe";
+    private static final String TIPO_ACTIVIDAD = "Riego prueba";
 
     @MockitoSpyBean NamedParameterJdbcTemplate consultas;
 
@@ -36,22 +41,23 @@ public class ResumenAreaApiTest extends BasePruebaGlobal {
     private long otraArea;
     private long usuarioJefe;
     private long usuarioCapataz;
+    private long solicitante;
+    private long tipoServicio;
+    private long contrato;
+    private long tipoActividad;
 
     @BeforeEach
     void preparar() {
-        jdbc.getJdbcTemplate()
-                .execute(
-                        "TRUNCATE core_sesion, core_registro_acceso, core_registro_auditoria,"
-                                + " core_usuario, mod05_usuario, mod05_areaverde, mod05_proveedor,"
-                                + " mod05_tiposervicio, mod02_area_verde, mod02_sector,"
-                                + " mod04_personal, mod06_sugerencia_ia RESTART IDENTITY CASCADE");
+        vaciar();
         usuarioJefe = usuario(JEFE, "jefe-seccion");
         usuarioCapataz = usuario(CAPATAZ, "capataz");
         long otroUsuario = usuario(OTRO_CAPATAZ, "capataz");
-        jdbc.update(
-                "INSERT INTO mod05_usuario (usuario, nombre, password_hash, activo) VALUES"
-                        + " ('solicitante', 'Solicitante', 'x', true)",
-                Map.of());
+        solicitante =
+                jdbc.queryForObject(
+                        "INSERT INTO mod05_usuario (usuario, nombre, password_hash, activo) VALUES"
+                                + " ('solicitante', 'Solicitante', 'x', true) RETURNING id",
+                        Map.of(),
+                        Long.class);
 
         area = area("Jardín Central");
         otraArea = area("Plaza de Armas");
@@ -90,28 +96,40 @@ public class ResumenAreaApiTest extends BasePruebaGlobal {
 
         // Actividades: una del capataz de la sesión y otra de otro capataz.
         jdbc.update(
-                "INSERT INTO mod04_tipo_actividad (id, nombre, activo) VALUES (9431, 'Riego"
-                        + " prueba', true) ON CONFLICT (id) DO NOTHING",
-                Map.of());
+                "INSERT INTO mod04_tipo_actividad (nombre, activo) VALUES (:n, true)"
+                        + " ON CONFLICT DO NOTHING",
+                Map.of("n", TIPO_ACTIVIDAD));
+        tipoActividad =
+                jdbc.queryForObject(
+                        "SELECT id FROM mod04_tipo_actividad WHERE nombre = :n",
+                        Map.of("n", TIPO_ACTIVIDAD),
+                        Long.class);
         long propio = capataz("Rosa", usuarioCapataz);
         long ajeno = capataz("Pedro", otroUsuario);
         actividad(propio, "2026-10-05 08:00-05", "Riego del césped");
         actividad(ajeno, "2026-10-20 08:00-05", "Riego de la zona alta");
 
         // Atenciones tercerizadas: dos en el área y una en la otra.
-        jdbc.update(
-                "INSERT INTO mod05_tiposervicio (id, nombre, ejecutor, es_riesgo, activo)"
-                        + " VALUES (1, 'Corte de césped', 'Tercerizado', false, true)",
-                Map.of());
-        jdbc.update(
-                "INSERT INTO mod05_proveedor (id, razon_social, ruc, activo) VALUES"
-                        + " (1, 'Proveedor prueba', '20100000001', true)",
-                Map.of());
-        jdbc.update(
-                "INSERT INTO mod05_contrato (id, numero, vigencia_inicio, vigencia_fin,"
-                        + " proveedor_id, tipo_servicio_id) VALUES (1, 'CT-1', '2026-01-01',"
-                        + " '2026-12-31', 1, 1)",
-                Map.of());
+        tipoServicio =
+                jdbc.queryForObject(
+                        "INSERT INTO mod05_tiposervicio (nombre, ejecutor, es_riesgo, activo)"
+                                + " VALUES ('Corte de césped', 'Tercerizado', false, true)"
+                                + " RETURNING id",
+                        Map.of(),
+                        Long.class);
+        long proveedor =
+                jdbc.queryForObject(
+                        "INSERT INTO mod05_proveedor (razon_social, ruc, activo) VALUES"
+                                + " ('Proveedor prueba', '20100000001', true) RETURNING id",
+                        Map.of(),
+                        Long.class);
+        contrato =
+                jdbc.queryForObject(
+                        "INSERT INTO mod05_contrato (numero, vigencia_inicio, vigencia_fin,"
+                                + " proveedor_id, tipo_servicio_id) VALUES ('CT-1', '2026-01-01',"
+                                + " '2026-12-31', :p, :t) RETURNING id",
+                        Map.of("p", proveedor, "t", tipoServicio),
+                        Long.class);
         atencion("AT-001", "2026-10-08 09:00-05", "Jardín Central");
         atencion("AT-002", "2026-10-25 09:00-05", "Jardín Central");
         atencion("AT-003", "2026-10-26 09:00-05", "Plaza de Armas");
@@ -136,6 +154,23 @@ public class ResumenAreaApiTest extends BasePruebaGlobal {
         // Ni una rechazada posterior ni una validada que no incluye el área cambian la prioridad.
         prioridad("Rechazada", area, "Baja", "2026-10-28 10:00-05");
         prioridad("Validada", otraArea, "Media", "2026-10-29 10:00-05");
+    }
+
+    @AfterEach
+    void limpiar() {
+        vaciar();
+        jdbc.update(
+                "DELETE FROM mod04_tipo_actividad WHERE nombre = :n", Map.of("n", TIPO_ACTIVIDAD));
+    }
+
+    /** Vacía las tablas de la prueba; CASCADE arrastra contratos, atenciones y programaciones. */
+    private void vaciar() {
+        jdbc.getJdbcTemplate()
+                .execute(
+                        "TRUNCATE core_sesion, core_registro_acceso, core_registro_auditoria,"
+                                + " core_usuario, mod05_usuario, mod05_areaverde, mod05_proveedor,"
+                                + " mod05_tiposervicio, mod02_area_verde, mod02_sector,"
+                                + " mod04_personal, mod06_sugerencia_ia RESTART IDENTITY CASCADE");
     }
 
     @Test
@@ -396,9 +431,19 @@ public class ResumenAreaApiTest extends BasePruebaGlobal {
         jdbc.update(
                 "INSERT INTO mod04_actividad (parte_id, tipo_actividad_id, area_verde_id,"
                         + " fecha_hora_actividad, tiempo_minutos, observaciones,"
-                        + " usuario_creacion_id) SELECT :p, 9431, m.id, CAST(:f AS timestamptz),"
+                        + " usuario_creacion_id) SELECT :p, :t, m.id, CAST(:f AS timestamptz),"
                         + " 60, :o, :u FROM mod05_areaverde m WHERE m.nombre = 'Jardín Central'",
-                Map.of("p", parte, "f", fecha, "o", observaciones, "u", usuarioJefe));
+                Map.of(
+                        "p",
+                        parte,
+                        "t",
+                        tipoActividad,
+                        "f",
+                        fecha,
+                        "o",
+                        observaciones,
+                        "u",
+                        usuarioJefe));
     }
 
     private void atencion(String codigo, String inicio, String espacio) {
@@ -411,12 +456,24 @@ public class ResumenAreaApiTest extends BasePruebaGlobal {
                         usuario_creacion_id, usuario_modificacion_id, contrato_id, tipo_servicio_id)
                     VALUES (CAST(:f AS timestamptz), CAST(:f AS timestamptz), :c, 'Programada',
                         'Prueba', 'Demanda', '', CAST(:f AS timestamptz), 'En ejecución', false,
-                        '', 1, 1, 1, 1, 1)
+                        '', :s, :s, :s, :k, :t)
                     RETURNING id)
                 INSERT INTO mod05_alcanceatencion (atencion_id, area_verde_id)
                 SELECT nueva.id, m.id FROM nueva, mod05_areaverde m WHERE m.nombre = :e
                 """,
-                Map.of("f", inicio, "c", codigo, "e", espacio));
+                Map.of(
+                        "f",
+                        inicio,
+                        "c",
+                        codigo,
+                        "e",
+                        espacio,
+                        "s",
+                        solicitante,
+                        "k",
+                        contrato,
+                        "t",
+                        tipoServicio));
     }
 
     private void programacion(String estado, String inicio, String fin) {
@@ -425,12 +482,12 @@ public class ResumenAreaApiTest extends BasePruebaGlobal {
                         "INSERT INTO mod03_programacion_servicio (tipo_servicio_id, estacion,"
                                 + " fecha_inicio_prevista, fecha_fin_prevista, estado,"
                                 + " creado_por_id, usuario_creacion_id, usuario_modificacion_id)"
-                                + " VALUES (1, 'Verano', "
+                                + " VALUES (:t, 'Verano', "
                                 + inicio
                                 + ", "
                                 + fin
-                                + ", :e, 1, 1, 1) RETURNING id",
-                        Map.of("e", estado),
+                                + ", :e, :s, :s, :s) RETURNING id",
+                        Map.of("t", tipoServicio, "e", estado, "s", solicitante),
                         Long.class);
         jdbc.update(
                 "INSERT INTO mod03_programacion_area (programacion_id, area_verde_id) VALUES"
