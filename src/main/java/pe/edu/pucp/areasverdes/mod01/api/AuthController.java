@@ -62,14 +62,16 @@ public class AuthController {
     public record Apariencia(
             @NotBlank
                     @Pattern(
-                            regexp = "claro|oscuro|calido|sistema",
-                            message = "El tema es claro, oscuro, calido o sistema")
+                            regexp = "claro|oscuro|calido|amarillento|sistema",
+                            message = "El tema es claro, oscuro, calido, amarillento o sistema")
                     String tema,
             @NotBlank
                     @Pattern(
                             regexp = "institucional|azul|verde|morado|magenta",
                             message = "Color de acento desconocido")
-                    String acento) {}
+                    String acento,
+            /** AV-414: {@code null} = nunca eligió; {@code true} o {@code false} = su elección. */
+            Boolean disenoNuevo) {}
 
     /** Lo que la interfaz necesita para armar el menú del rol (CU-MOD01-006 paso 1). */
     public record Sesion(
@@ -89,7 +91,7 @@ public class AuthController {
                     List.copyOf(u.permisos()),
                     u.debeCambiarContrasena(),
                     expira,
-                    a == null ? null : new Apariencia(a.tema(), a.acento()));
+                    a == null ? null : new Apariencia(a.tema(), a.acento(), a.disenoNuevo()));
         }
     }
 
@@ -162,7 +164,8 @@ public class AuthController {
             @Valid @RequestBody Apariencia apariencia) {
         apariencias.guardar(
                 usuario.id(),
-                new AparienciaRepository.Apariencia(apariencia.tema(), apariencia.acento()));
+                new AparienciaRepository.Apariencia(
+                        apariencia.tema(), apariencia.acento(), apariencia.disenoNuevo()));
         return apariencia;
     }
 

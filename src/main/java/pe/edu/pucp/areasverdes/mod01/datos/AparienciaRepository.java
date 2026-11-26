@@ -12,8 +12,11 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class AparienciaRepository {
 
-    /** Tema y acento; cualquiera de los dos puede faltar (la interfaz usa el predeterminado). */
-    public record Apariencia(String tema, String acento) {}
+    /**
+     * Tema, acento y diseño nuevo (AV-414: {@code null} = nunca eligió); cualquiera puede faltar
+     * (la interfaz usa el predeterminado).
+     */
+    public record Apariencia(String tema, String acento, Boolean disenoNuevo) {}
 
     private final NamedParameterJdbcTemplate jdbc;
 
@@ -25,13 +28,16 @@ public class AparienciaRepository {
     public Apariencia de(long usuarioId) {
         return jdbc
                 .query(
-                        "SELECT apariencia_tema, apariencia_acento FROM core_usuario WHERE id = :id"
-                            + " AND (apariencia_tema IS NOT NULL OR apariencia_acento IS NOT NULL)",
+                        "SELECT apariencia_tema, apariencia_acento, apariencia_diseno_nuevo FROM"
+                                + " core_usuario WHERE id = :id AND (apariencia_tema IS NOT NULL OR"
+                                + " apariencia_acento IS NOT NULL OR apariencia_diseno_nuevo IS NOT"
+                                + " NULL)",
                         Map.of("id", usuarioId),
                         (rs, n) ->
                                 new Apariencia(
                                         rs.getString("apariencia_tema"),
-                                        rs.getString("apariencia_acento")))
+                                        rs.getString("apariencia_acento"),
+                                        (Boolean) rs.getObject("apariencia_diseno_nuevo")))
                 .stream()
                 .findFirst()
                 .orElse(null);
@@ -39,11 +45,12 @@ public class AparienciaRepository {
 
     public void guardar(long usuarioId, Apariencia apariencia) {
         jdbc.update(
-                "UPDATE core_usuario SET apariencia_tema = :tema, apariencia_acento = :acento"
-                        + " WHERE id = :id",
+                "UPDATE core_usuario SET apariencia_tema = :tema, apariencia_acento = :acento,"
+                        + " apariencia_diseno_nuevo = :disenoNuevo WHERE id = :id",
                 new MapSqlParameterSource()
                         .addValue("id", usuarioId)
                         .addValue("tema", apariencia.tema())
-                        .addValue("acento", apariencia.acento()));
+                        .addValue("acento", apariencia.acento())
+                        .addValue("disenoNuevo", apariencia.disenoNuevo()));
     }
 }

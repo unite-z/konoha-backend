@@ -236,6 +236,43 @@ class AuthApiTest extends ApiCore {
     }
 
     @Test
+    void elTemaAmarillentoYElDisenoNuevoTienenTresValores() throws Exception {
+        var sesion = sesion("jefe");
+        String url = "/api/v1/core/auth/apariencia/";
+        // Cliente actual: sin diseno_nuevo, sigue funcionando y queda sin elegir.
+        http.perform(
+                        escribir(
+                                put(url),
+                                sesion,
+                                "{\"tema\": \"amarillento\", \"acento\": \"azul\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tema").value("amarillento"));
+        http.perform(get("/api/v1/core/auth/sesion/").cookie(sesion))
+                .andExpect(jsonPath("$.apariencia.tema").value("amarillento"))
+                .andExpect(jsonPath("$.apariencia.diseno_nuevo").doesNotExist());
+
+        for (String valor : new String[] {"true", "false", "null"}) {
+            http.perform(
+                            escribir(
+                                    put(url),
+                                    sesion,
+                                    "{\"tema\": \"amarillento\", \"acento\": \"azul\","
+                                            + " \"diseno_nuevo\": "
+                                            + valor
+                                            + "}"))
+                    .andExpect(status().isOk());
+            var lectura = jsonPath("$.apariencia.diseno_nuevo");
+            http.perform(get("/api/v1/core/auth/sesion/").cookie(sesion))
+                    .andExpect(
+                            "null".equals(valor)
+                                    ? lectura.doesNotExist()
+                                    : lectura.value(Boolean.parseBoolean(valor)));
+        }
+        http.perform(escribir(put(url), sesion, "{\"tema\": \"fucsia\", \"acento\": \"azul\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void lasEscriturasSinTokenCsrfSeRechazan() throws Exception {
         var sesion = sesion("jefe");
         http.perform(post("/api/v1/core/auth/logout/").cookie(sesion))
