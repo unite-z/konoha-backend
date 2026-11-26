@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.TransientDataAccessException;
 import org.springframework.jdbc.core.DataClassRowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -112,7 +114,10 @@ public class AreasService {
                                 + " c",
                             Map.of("contorno", geojson),
                             BigDecimal.class);
+        } catch (DataAccessResourceFailureException | TransientDataAccessException e) {
+            throw e;
         } catch (DataAccessException e) {
+            // PostGIS rechaza el GeoJSON o las coordenadas (fuera de EPSG:4326).
             throw contornoNoValido();
         }
         if (superficie == null) {
@@ -133,35 +138,36 @@ public class AreasService {
                         "SELECT mod02_codigo_area_verde(:numero)",
                         Map.of("numero", numero),
                         String.class);
-        // El sector es el del área con sector más cercana al contorno (distancia en metros).
+        String superficieTexto = superficie.setScale(2, RoundingMode.HALF_UP).toPlainString();
+        // El sector es el del área activa con sector vigente más cercana al contorno. Las
+        // candidatas salen del índice GiST (KNN con <->, en grados) y se ordenan después por la
+        // distancia geodésica en metros: así no se calcula la distancia a todo el campus.
         return jdbc.query(
-                "SELECT s.id, s.nombre, ST_Distance(g.geometria::geography,"
-                        + " ST_SetSRID(ST_Force2D(ST_GeomFromGeoJSON(:contorno)),"
-                        + " 4326)::geography) distancia FROM mod02_mapa_poligono p JOIN"
-                        + " mod02_mapa_geometria g ON g.id_fuente = p.id_fuente JOIN"
-                        + " mod02_area_verde a ON a.id = p.area_verde_id AND a.activo JOIN"
-                        + " mod02_historial_area_sector h ON h.area_verde_id = a.id AND"
-                        + " h.fecha_fin IS NULL JOIN mod02_sector s ON s.id = h.sector_id AND"
-                        + " s.activo ORDER BY distancia, a.id LIMIT 1",
+                "WITH contorno AS (SELECT ST_SetSRID(ST_Force2D(ST_GeomFromGeoJSON(:contorno)),"
+                        + " 4326) g), candidatas AS (SELECT s.id, s.nombre, a.id area_id,"
+                        + " g.geometria FROM mod02_mapa_geometria g JOIN mod02_mapa_poligono p"
+                        + " ON p.id_fuente = g.id_fuente JOIN mod02_area_verde a ON a.id ="
+                        + " p.area_verde_id AND a.activo JOIN mod02_historial_area_sector h ON"
+                        + " h.area_verde_id = a.id AND h.fecha_fin IS NULL JOIN mod02_sector s"
+                        + " ON s.id = h.sector_id AND s.activo WHERE NOT"
+                        + " ST_IsEmpty(g.geometria) ORDER BY g.geometria <-> (SELECT g FROM"
+                        + " contorno) LIMIT 10) SELECT c.id, c.nombre,"
+                        + " ST_Distance(c.geometria::geography, (SELECT g FROM"
+                        + " contorno)::geography) distancia FROM candidatas c ORDER BY"
+                        + " distancia, c.area_id LIMIT 1",
                 Map.of("contorno", geojson),
-                rs ->
-                        rs.next()
-                                ? new SugerenciaArea(
-                                        codigo,
-                                        superficie
-                                                .setScale(2, RoundingMode.HALF_UP)
-                                                .toPlainString(),
-                                        rs.getLong(1),
-                                        rs.getString(2),
-                                        rs.getBigDecimal(3).setScale(1, RoundingMode.HALF_UP))
-                                : new SugerenciaArea(
-                                        codigo,
-                                        superficie
-                                                .setScale(2, RoundingMode.HALF_UP)
-                                                .toPlainString(),
-                                        null,
-                                        null,
-                                        null));
+                rs -> {
+                    if (!rs.next()) {
+                        return new SugerenciaArea(codigo, superficieTexto, null, null, null);
+                    }
+                    BigDecimal distancia = rs.getBigDecimal(3);
+                    return new SugerenciaArea(
+                            codigo,
+                            superficieTexto,
+                            rs.getLong(1),
+                            rs.getString(2),
+                            distancia == null ? null : distancia.setScale(1, RoundingMode.HALF_UP));
+                });
     }
 
     private static String geometriaGeoJson(String contorno) {

@@ -3,6 +3,7 @@ package pe.edu.pucp.areasverdes.mod02.api;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -116,10 +117,16 @@ public class AreasController {
     @Operation(summary = "Sugiere código, superficie y sector para un contorno antes de registrar")
     @ApiResponse(responseCode = "200", description = "Sugerencia; sin sector si no hay vecinos")
     @ApiResponse(responseCode = "400", description = "El contorno no es un GeoJSON de polígono")
-    @ApiResponse(responseCode = "422", description = "El polígono no es válido")
+    @ApiResponse(responseCode = "422", description = "El polígono no es simple y cerrado")
     @GetMapping({"/sugerencia", "/sugerencia/"})
     public SugerenciaArea sugerir(
-            @AuthenticationPrincipal Usuario usuario, @RequestParam String contorno) {
+            @AuthenticationPrincipal Usuario usuario,
+            @Parameter(
+                            description =
+                                    "Contorno dibujado: GeoJSON Polygon (o Feature con ese"
+                                            + " Polygon) en EPSG:4326, codificado en la URL")
+                    @RequestParam
+                    String contorno) {
         return areas.sugerir(contorno, usuario);
     }
 

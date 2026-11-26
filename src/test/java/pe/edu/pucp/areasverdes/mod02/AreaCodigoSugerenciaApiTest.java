@@ -46,6 +46,11 @@ class AreaCodigoSugerenciaApiTest {
             "{\"type\":\"Polygon\",\"coordinates\":[[[-77.0800,-12.0700],[-77.0799,-12.0699],"
                     + "[-77.0799,-12.0700],[-77.0800,-12.0699],[-77.0800,-12.0700]]]}";
 
+    // Anillo sin cerrar: el último vértice no repite el primero.
+    private static final String ABIERTO =
+            "{\"type\":\"Polygon\",\"coordinates\":[[[-77.0800,-12.0700],[-77.0799,-12.0700],"
+                    + "[-77.0799,-12.0699],[-77.0800,-12.0699]]]}";
+
     @DynamicPropertySource
     static void baseDePruebas(DynamicPropertyRegistry propiedades) {
         BaseDePruebas.registrar(propiedades);
@@ -148,20 +153,71 @@ class AreaCodigoSugerenciaApiTest {
     void sugerenciaTomaElSectorDelAreaMasCercanaYElCodigoSiguiente() throws Exception {
         long norte = crearSector("Sector Norte");
         long sur = crearSector("Sector Sur");
-        // Vecina cercana (norte) y vecina lejana (sur); una tercera, sin sector, aún más cerca.
+        long baja = crearSector("Sector de un área dada de baja");
+        // Vecina cercana (norte) y vecina lejana (sur); más cerca aún hay una sin sector y otra
+        // dada de baja, que no cuentan.
         vincularGeometria(crearAreaSql("Cerca del contorno"), norte, -77.0798, -12.0700);
         vincularGeometria(crearAreaSql("Lejos del contorno"), sur, -77.0700, -12.0600);
         vincularGeometria(crearAreaSql("Pegada sin sector"), null, -77.07995, -12.07005);
+        long inactiva = crearAreaSql("Pegada pero inactiva");
+        vincularGeometria(inactiva, baja, -77.07998, -12.07002);
+        jdbc.update(
+                "UPDATE mod02_area_verde SET activo = false WHERE id = :id",
+                Map.of("id", inactiva));
 
         http.perform(
                         get(AREAS + "/sugerencia")
                                 .queryParam("contorno", CUADRADO)
                                 .with(httpBasic("jefe", CLAVE)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.codigo").value("AREA-0004"))
+                .andExpect(jsonPath("$.codigo").value("AREA-0005"))
                 .andExpect(jsonPath("$.sector_id").value(norte))
                 .andExpect(jsonPath("$.sector_nombre").value("Sector Norte"))
                 .andExpect(jsonPath("$.distancia_sector_m").isNumber());
+    }
+
+    @Test
+    void sugerenciaIgnoraLasGeometriasVacias() throws Exception {
+        long sector = crearSector("Sector con geometría vacía");
+        long area = crearAreaSql("Área sin forma");
+        UUID fuente = UUID.randomUUID();
+        jdbc.update(
+                "INSERT INTO mod02_mapa_geometria (id_fuente, geometria) VALUES (:f,"
+                        + " ST_GeomFromText('POLYGON EMPTY', 4326))",
+                Map.of("f", fuente));
+        jdbc.update(
+                "INSERT INTO mod02_mapa_poligono (id_fuente, area_verde_id) VALUES (:f, :a)",
+                Map.of("f", fuente, "a", area));
+        jdbc.update(
+                "INSERT INTO mod02_historial_area_sector (area_verde_id, sector_id, usuario_id)"
+                        + " VALUES (:a, :s, :u)",
+                Map.of("a", area, "s", sector, "u", idCore("jefe")));
+
+        http.perform(
+                        get(AREAS + "/sugerencia")
+                                .queryParam("contorno", CUADRADO)
+                                .with(httpBasic("jefe", CLAVE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sector_id").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(
+                        jsonPath("$.distancia_sector_m").value(org.hamcrest.Matchers.nullValue()));
+    }
+
+    @Test
+    void elAltaRechazaQueElClienteIndiqueElCodigo() throws Exception {
+        http.perform(
+                        post(AREAS + "/")
+                                .with(httpBasic("jefe", CLAVE))
+                                .contentType("application/json")
+                                .content(
+                                        "{\"nombre\":\"Jardín\",\"lugar\":\"Campus\","
+                                                + "\"ubicacion\":\"Zona\",\"superficie_m2\":"
+                                                + "\"10\",\"codigo\":\"AREA-9999\"}"))
+                .andExpect(status().isBadRequest());
+        assertThat(
+                        jdbc.queryForObject(
+                                "SELECT count(*) FROM mod02_area_verde", Map.of(), Long.class))
+                .isZero();
     }
 
     @Test
@@ -197,6 +253,21 @@ class AreaCodigoSugerenciaApiTest {
                                 .with(httpBasic("jefe", CLAVE)))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.codigo").value("contorno-no-valido"));
+        http.perform(
+                        get(AREAS + "/sugerencia")
+                                .queryParam("contorno", ABIERTO)
+                                .with(httpBasic("jefe", CLAVE)))
+                .andExpect(status().isUnprocessableEntity());
+        // Una Feature con el polígono dentro también vale.
+        http.perform(
+                        get(AREAS + "/sugerencia")
+                                .queryParam(
+                                        "contorno",
+                                        "{\"type\":\"Feature\",\"properties\":{},\"geometry\":"
+                                                + CUADRADO
+                                                + "}")
+                                .with(httpBasic("jefe", CLAVE)))
+                .andExpect(status().isOk());
         http.perform(get(AREAS + "/sugerencia").queryParam("contorno", CUADRADO))
                 .andExpect(status().isUnauthorized());
         http.perform(
