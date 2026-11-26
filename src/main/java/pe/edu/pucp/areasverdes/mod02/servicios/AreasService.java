@@ -2,6 +2,7 @@ package pe.edu.pucp.areasverdes.mod02.servicios;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import org.springframework.jdbc.core.DataClassRowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -23,7 +24,8 @@ public class AreasService {
             "SELECT a.id, a.nombre, a.lugar, a.ubicacion, a.superficie_m2, a.tipo_cobertura_id,"
                 + " c.nombre tipo_cobertura_nombre, a.tipo_uso_id, tu.nombre tipo_uso_nombre,"
                 + " a.cuartel_id, q.numero cuartel_numero, h.sector_id, s.nombre sector_nombre,"
-                + " a.activo FROM mod02_area_verde a LEFT JOIN mod02_cobertura_vegetal c ON c.id ="
+                + " a.activo, CAST(NULL AS uuid) poligono_mapa_id, CAST(NULL AS text) contorno FROM"
+                + " mod02_area_verde a LEFT JOIN mod02_cobertura_vegetal c ON c.id ="
                 + " a.tipo_cobertura_id LEFT JOIN mod02_tipo_uso tu ON tu.id = a.tipo_uso_id LEFT"
                 + " JOIN mod02_cuartel q ON q.id = a.cuartel_id LEFT JOIN"
                 + " mod02_historial_area_sector h ON h.area_verde_id = a.id AND h.fecha_fin IS NULL"
@@ -37,9 +39,13 @@ public class AreasService {
 
     private final MapaAreasService mapa;
 
-    public AreasService(NamedParameterJdbcTemplate jdbc, MapaAreasService mapa) {
+    private final ContornoAreaService contornos;
+
+    public AreasService(
+            NamedParameterJdbcTemplate jdbc, MapaAreasService mapa, ContornoAreaService contornos) {
         this.jdbc = jdbc;
         this.mapa = mapa;
+        this.contornos = contornos;
     }
 
     public PaginaAreas listar(String q, Long tipoUso, Long sector, Long cuartel, int pagina) {
@@ -86,16 +92,37 @@ public class AreasService {
     @Transactional
     public AreaVerde crear(NuevaAreaVerde nueva, Usuario usuario) {
         AccesoCoberturas.registrar(usuario);
+        // «"contorno": null» llega como NullNode: equivale a no enviarlo.
+        boolean conContorno = nueva.contorno() != null && !nueva.contorno().isNull();
+        if (conContorno) {
+            // Dibujar un contorno crea y vincula una geometría del mapa: exige el mismo permiso
+            // que vincular un polígono existente (MapaAreasService.vincularPoligonoLibre).
+            AccesoCoberturas.gestionar(usuario);
+        }
         validarCobertura(nueva.tipoCoberturaId());
         validarTipoUso(nueva.tipoUsoId());
         validarReferencia("mod02_cuartel", nueva.cuartelId(), "estado", "cuartel", false);
         validarReferencia("mod02_sector", nueva.sectorId(), "activo", "sector", true);
+        ContornoAreaService.ContornoValido contorno = null;
+        if (conContorno) {
+            if (nueva.poligonoMapaId() != null) {
+                throw new ErrorCoberturas(
+                        422,
+                        "contorno-y-poligono",
+                        "Indica el contorno dibujado o un polígono existente, no los dos");
+            }
+            contorno = contornos.validar(nueva.contorno());
+        } else if (nueva.superficieM2() == null) {
+            throw new ErrorCoberturas(400, "superficie-obligatoria", "Indica la superficie");
+        }
         MapSqlParameterSource parametros =
                 new MapSqlParameterSource()
                         .addValue("nombre", nueva.nombre().trim())
                         .addValue("lugar", nueva.lugar().trim())
                         .addValue("ubicacion", nueva.ubicacion().trim())
-                        .addValue("superficie", nueva.superficieM2())
+                        .addValue(
+                                "superficie",
+                                contorno != null ? contorno.superficieM2() : nueva.superficieM2())
                         .addValue("cobertura", nueva.tipoCoberturaId())
                         .addValue("tipoUso", nueva.tipoUsoId())
                         .addValue("cuartel", nueva.cuartelId())
@@ -122,10 +149,33 @@ public class AreasService {
                         + " 'mod02_area_verde', a.id, 'Alta', :usuario, now(), '{}'::jsonb,"
                         + " to_jsonb(a), '' FROM mod02_area_verde a WHERE a.id = :id",
                 Map.of("id", id, "usuario", usuario.id()));
-        if (nueva.poligonoMapaId() != null) {
-            mapa.vincularPoligonoLibre(nueva.poligonoMapaId(), id, usuario);
+        UUID idFuente = nueva.poligonoMapaId();
+        if (idFuente != null) {
+            mapa.vincularPoligonoLibre(idFuente, id, usuario);
+        } else if (contorno != null) {
+            idFuente = contornos.guardar(contorno, id, usuario);
         }
-        return area;
+        if (idFuente == null) {
+            return area;
+        }
+        // El mapa recibe el área y su contorno en una sola respuesta (AV-430).
+        return new AreaVerde(
+                area.id(),
+                area.nombre(),
+                area.lugar(),
+                area.ubicacion(),
+                area.superficieM2(),
+                area.tipoCoberturaId(),
+                area.tipoCoberturaNombre(),
+                area.tipoUsoId(),
+                area.tipoUsoNombre(),
+                area.cuartelId(),
+                area.cuartelNumero(),
+                area.sectorId(),
+                area.sectorNombre(),
+                area.activo(),
+                idFuente,
+                contornos.contorno(idFuente));
     }
 
     @Transactional
