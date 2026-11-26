@@ -3,6 +3,7 @@ package pe.edu.pucp.areasverdes.mod02.api;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -43,6 +44,7 @@ public class AreasController {
 
     public record AreaVerde(
             long id,
+            String codigo,
             String nombre,
             String lugar,
             String ubicacion,
@@ -87,6 +89,14 @@ public class AreasController {
 
     public record CambioSectorArea(@JsonAlias("sector_id") Long sectorId) {}
 
+    /** Datos calculados por el servidor para el formulario de alta; no reserva el código. */
+    public record SugerenciaArea(
+            String codigo,
+            String superficieM2,
+            Long sectorId,
+            String sectorNombre,
+            BigDecimal distanciaSectorM) {}
+
     public record AsignacionSector(
             long id, long sectorId, String sectorNombre, String fechaInicio, String fechaFin) {}
 
@@ -102,6 +112,22 @@ public class AreasController {
             @RequestParam(defaultValue = "1") int page) {
         AccesoCoberturas.consultar(usuario);
         return areas.listar(q, tipoUsoId, sectorId, cuartelId, page);
+    }
+
+    @Operation(summary = "Sugiere código, superficie y sector para un contorno antes de registrar")
+    @ApiResponse(responseCode = "200", description = "Sugerencia; sin sector si no hay vecinos")
+    @ApiResponse(responseCode = "400", description = "El contorno no es un GeoJSON de polígono")
+    @ApiResponse(responseCode = "422", description = "El polígono no es simple y cerrado")
+    @GetMapping({"/sugerencia", "/sugerencia/"})
+    public SugerenciaArea sugerir(
+            @AuthenticationPrincipal Usuario usuario,
+            @Parameter(
+                            description =
+                                    "Contorno dibujado: GeoJSON Polygon (o Feature con ese"
+                                            + " Polygon) en EPSG:4326, codificado en la URL")
+                    @RequestParam
+                    String contorno) {
+        return areas.sugerir(contorno, usuario);
     }
 
     @GetMapping({"/{id}", "/{id}/"})
