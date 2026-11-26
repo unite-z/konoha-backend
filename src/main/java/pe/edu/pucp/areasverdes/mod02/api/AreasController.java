@@ -27,6 +27,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import pe.edu.pucp.areasverdes.mod02.servicios.AccesoCoberturas;
 import pe.edu.pucp.areasverdes.mod02.servicios.AreasService;
+import pe.edu.pucp.areasverdes.mod02.servicios.ResumenAreaService;
 import pe.edu.pucp.areasverdes.mod05.Usuario;
 
 @RestController
@@ -36,9 +37,11 @@ import pe.edu.pucp.areasverdes.mod05.Usuario;
 public class AreasController {
 
     private final AreasService areas;
+    private final ResumenAreaService resumenes;
 
-    public AreasController(AreasService areas) {
+    public AreasController(AreasService areas, ResumenAreaService resumenes) {
         this.areas = areas;
+        this.resumenes = resumenes;
     }
 
     public record AreaVerde(
@@ -164,5 +167,24 @@ public class AreasController {
             @AuthenticationPrincipal Usuario usuario, @PathVariable long id) {
         AccesoCoberturas.consultar(usuario);
         return areas.historialSector(id);
+    }
+
+    @GetMapping({"/{id}/resumen", "/{id}/resumen/"})
+    @Operation(
+            summary = "Resumen e historial agregados de un área verde",
+            description =
+                    "Ficha, ejemplares por situación, incidencias abiertas, última atención,"
+                        + " próxima actividad programada, prioridad validada e historial paginado"
+                        + " (actividades, incidencias, atenciones y cambios de sector, de más"
+                        + " reciente a más antiguo). Cada fuente exige su permiso: sin él, su dato"
+                        + " llega nulo y no entra en el historial; fuentes_visibles dice cuáles se"
+                        + " consultaron.")
+    @ApiResponse(responseCode = "404", description = "No existe esa área verde")
+    public ResumenAreaVerde resumen(
+            @AuthenticationPrincipal Usuario usuario,
+            @PathVariable long id,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(name = "page_size", defaultValue = "20") int pageSize) {
+        return resumenes.resumen(id, page, pageSize, usuario);
     }
 }
