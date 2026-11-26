@@ -700,6 +700,7 @@ class Mod05IntegrationTest {
         // Validaciones.
         consultar("desde", "23/11/2026").andExpect(status().isBadRequest());
         consultar("hasta", "mañana").andExpect(status().isBadRequest());
+        consultar("desde", "2026-11-27", "hasta", "2026-11-23").andExpect(status().isBadRequest());
         consultar("area_verde_id", "abc").andExpect(status().isBadRequest());
     }
 

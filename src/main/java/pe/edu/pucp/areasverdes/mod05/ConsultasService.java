@@ -97,6 +97,7 @@ public class ConsultasService {
     }
 
     public Pagina atenciones(Map<String, String> params, String url) {
+        validarRango(params);
         return list(
                 new Catalogo(
                         Mod05Repository.ATENCIONES,
@@ -287,6 +288,15 @@ public class ConsultasService {
             throw ApiError.invalid(
                     "page_size admite hasta " + PAGINA_MAXIMA + " con desde y hasta");
         return (int) n;
+    }
+
+    /** Con `desde` y `hasta` a la vez, `desde` no puede ser posterior a `hasta`. */
+    static void validarRango(Map<String, String> query) {
+        String desde = query.getOrDefault("desde", "").strip();
+        String hasta = query.getOrDefault("hasta", "").strip();
+        if (desde.isEmpty() || hasta.isEmpty()) return;
+        if (fecha("desde", desde).isAfter(fecha("hasta", hasta)))
+            throw ApiError.invalid("desde no puede ser posterior a hasta");
     }
 
     static LocalDate fecha(String campo, String text) {
