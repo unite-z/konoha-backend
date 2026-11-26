@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
@@ -26,8 +27,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import pe.edu.pucp.areasverdes.mod02.servicios.AccesoCoberturas;
 import pe.edu.pucp.areasverdes.mod02.servicios.AreasService;
+import pe.edu.pucp.areasverdes.mod02.servicios.ResumenAreaService;
 import pe.edu.pucp.areasverdes.mod05.Usuario;
 
 @RestController
@@ -37,9 +40,11 @@ import pe.edu.pucp.areasverdes.mod05.Usuario;
 public class AreasController {
 
     private final AreasService areas;
+    private final ResumenAreaService resumenes;
 
-    public AreasController(AreasService areas) {
+    public AreasController(AreasService areas, ResumenAreaService resumenes) {
         this.areas = areas;
+        this.resumenes = resumenes;
     }
 
     public record AreaVerde(
@@ -190,5 +195,40 @@ public class AreasController {
             @AuthenticationPrincipal Usuario usuario, @PathVariable long id) {
         AccesoCoberturas.consultar(usuario);
         return areas.historialSector(id);
+    }
+
+    @GetMapping({"/{id}/resumen", "/{id}/resumen/"})
+    @Operation(
+            summary = "Resumen e historial agregados de un área verde",
+            description =
+                    "Ficha, ejemplares por situación, incidencias abiertas, última atención,"
+                        + " próxima actividad programada, prioridad validada e historial paginado"
+                        + " (actividades, incidencias, atenciones y cambios de sector, de más"
+                        + " reciente a más antiguo; ?page=N y ?page_size=1..100, 25 por defecto)."
+                        + " Exige INV.INVENTARIO.CONSULTAR y cada fuente su permiso: actividades"
+                        + " CAM.PARTE.CONSULTAR (el capataz, solo las suyas), incidencias"
+                        + " PLA.INCIDENCIA.REGISTRAR (sin CONSULTAR_TODAS, solo las propias),"
+                        + " atenciones SER.ATENCION.REGISTRAR, programación"
+                        + " PLA.PLANIFICACION.CONSULTAR y prioridad REP.INDICADOR.CONSULTAR. Sin"
+                        + " él, su dato llega nulo y no entra en el historial; fuentes_visibles"
+                        + " dice cuáles se consultaron.")
+    @ApiResponse(responseCode = "404", description = "No existe esa área verde")
+    @ApiResponse(responseCode = "400", description = "page o page_size fuera de rango")
+    public ResumenAreaVerde resumen(
+            @AuthenticationPrincipal Usuario usuario,
+            @PathVariable long id,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(name = "page_size", defaultValue = "25") int pageSize,
+            HttpServletRequest peticion) {
+        return resumenes.resumen(
+                id,
+                page,
+                pageSize,
+                usuario,
+                pagina ->
+                        ServletUriComponentsBuilder.fromRequest(peticion)
+                                .replaceQueryParam("page", pagina)
+                                .build()
+                                .toUriString());
     }
 }
