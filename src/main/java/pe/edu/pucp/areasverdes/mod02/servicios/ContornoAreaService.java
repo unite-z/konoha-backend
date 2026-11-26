@@ -48,6 +48,14 @@ public class ContornoAreaService {
 
     /** Debe llamarse dentro de la transacción que guardará el contorno. */
     public ContornoValido validar(JsonNode contorno) {
+        return validar(contorno, null);
+    }
+
+    /**
+     * Igual que {@link #validar(JsonNode)}, pero sin contar el solape con {@code areaExcluida}: al
+     * redibujar un área (AV-445) su contorno vigente no compite con el nuevo.
+     */
+    public ContornoValido validar(JsonNode contorno, Long areaExcluida) {
         validarForma(contorno);
         String geojson = contorno.toString();
         campus.bloquearCambios();
@@ -90,12 +98,13 @@ public class ContornoAreaService {
                     "contorno-fuera-del-campus",
                     "El contorno queda fuera del perímetro del campus.");
         }
-        parametros.addValue("tolerancia", toleranciaSolapeM2);
+        parametros.addValue("tolerancia", toleranciaSolapeM2).addValue("excluida", areaExcluida);
         String solapada =
                 jdbc.query(
                         "SELECT a.nombre FROM mod02_mapa_geometria g JOIN mod02_mapa_poligono p"
                                 + " USING (id_fuente) JOIN mod02_area_verde a ON a.id ="
-                                + " p.area_verde_id WHERE a.activo AND ST_Intersects(g.geometria, "
+                                + " p.area_verde_id WHERE a.activo AND a.id IS DISTINCT FROM"
+                                + " CAST(:excluida AS bigint) AND ST_Intersects(g.geometria, "
                                 + GEOMETRIA
                                 + ") AND ST_Area(ST_Transform(ST_Intersection(g.geometria, "
                                 + GEOMETRIA
