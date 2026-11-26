@@ -16,6 +16,14 @@ public class ConsultasService {
         this.clock = clock;
     }
 
+    static final int PAGINA = 25;
+    static final int PAGINA_MAXIMA = 200;
+
+    /** Fecha local (Lima) de la atención: la de inicio o, si aún no empezó, la de creación. */
+    static final String FECHA_ATENCION =
+            "(coalesce(datos.fecha_hora_inicio,datos.fecha_creacion) AT TIME ZONE"
+                    + " 'America/Lima')::date";
+
     public record Pagina(
             long count, String next, String previous, List<Map<String, Object>> results) {}
 
@@ -89,6 +97,7 @@ public class ConsultasService {
     }
 
     public Pagina atenciones(Map<String, String> params, String url) {
+        validarRango(params);
         return list(
                 new Catalogo(
                         Mod05Repository.ATENCIONES,
@@ -109,7 +118,13 @@ public class ConsultasService {
                                 "clase",
                                 "clase",
                                 "contrato_id",
-                                "id")),
+                                "id",
+                                "desde",
+                                "fecha_desde",
+                                "hasta",
+                                "fecha_hasta",
+                                "area_verde_id",
+                                "atencion_area")),
                 params,
                 url,
                 repo::enrich);
@@ -171,6 +186,21 @@ public class ConsultasService {
                                 args.put("hoy", LocalDate.now(clock));
                                 where.append(vigente ? " AND " : " AND NOT ")
                                         .append("(vigencia_inicio<=:hoy AND vigencia_fin>=:hoy)");
+                            } else if (type.equals("fecha_desde") || type.equals("fecha_hasta")) {
+                                args.put(field, fecha(field, text));
+                                where.append(" AND ")
+                                        .append(FECHA_ATENCION)
+                                        .append(type.equals("fecha_desde") ? ">=:" : "<=:")
+                                        .append(field);
+                            } else if (type.equals("atencion_area")) {
+                                args.put(field, positive(text));
+                                where.append(
+                                        """
+                                         AND EXISTS (SELECT 1 FROM mod05_alcanceatencion al
+                                            LEFT JOIN mod05_ejemplar ej ON ej.id=al.ejemplar_id
+                                            WHERE al.atencion_id=datos.id
+                                            AND coalesce(al.area_verde_id,ej.area_verde_id)=:area_verde_id)
+                                        """);
                             } else {
                                 Object value =
                                         switch (type) {
@@ -214,7 +244,8 @@ public class ConsultasService {
                         });
         String base = " FROM (" + config.sql() + ") datos" + where;
         long count = repo.jdbc().queryForObject("SELECT count(*)" + base, args, Long.class);
-        long totalPages = Math.max(1, (count + 24) / 25);
+        int size = tamanoPagina(config, query);
+        long totalPages = Math.max(1, (count + size - 1) / size);
         String requested = query.getOrDefault("page", "1");
         long page;
         try {
@@ -223,7 +254,8 @@ public class ConsultasService {
             throw ApiError.missing("Página inválida");
         }
         if (page < 1 || page > totalPages) throw ApiError.missing("Página inexistente");
-        args.put("offset", (page - 1) * 25);
+        args.put("offset", (page - 1) * size);
+        args.put("limite", size);
         var results =
                 repo
                         .rows(
@@ -231,7 +263,7 @@ public class ConsultasService {
                                         + base
                                         + " ORDER BY "
                                         + config.order()
-                                        + " LIMIT 25 OFFSET :offset",
+                                        + " LIMIT :limite OFFSET :offset",
                                 args)
                         .stream()
                         .map(enrich)
@@ -241,6 +273,38 @@ public class ConsultasService {
                 page < totalPages ? link(url, query, page + 1) : null,
                 page > 1 ? link(url, query, page - 1) : null,
                 results);
+    }
+
+    /** 25 por página; con rango de fechas (solo atenciones) se admite `page_size` hasta 200. */
+    static int tamanoPagina(Catalogo config, Map<String, String> query) {
+        String text = query.getOrDefault("page_size", "").strip();
+        boolean rango =
+                config.filters().containsKey("desde")
+                        && !query.getOrDefault("desde", "").isBlank()
+                        && !query.getOrDefault("hasta", "").isBlank();
+        if (text.isEmpty() || !rango) return PAGINA;
+        long n = positive(text);
+        if (n > PAGINA_MAXIMA)
+            throw ApiError.invalid(
+                    "page_size admite hasta " + PAGINA_MAXIMA + " con desde y hasta");
+        return (int) n;
+    }
+
+    /** Con `desde` y `hasta` a la vez, `desde` no puede ser posterior a `hasta`. */
+    static void validarRango(Map<String, String> query) {
+        String desde = query.getOrDefault("desde", "").strip();
+        String hasta = query.getOrDefault("hasta", "").strip();
+        if (desde.isEmpty() || hasta.isEmpty()) return;
+        if (fecha("desde", desde).isAfter(fecha("hasta", hasta)))
+            throw ApiError.invalid("desde no puede ser posterior a hasta");
+    }
+
+    static LocalDate fecha(String campo, String text) {
+        try {
+            return LocalDate.parse(text);
+        } catch (java.time.format.DateTimeParseException e) {
+            throw ApiError.invalid(campo + " debe ser una fecha AAAA-MM-DD");
+        }
     }
 
     String link(String url, Map<String, String> query, long page) {
