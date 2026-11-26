@@ -1,6 +1,7 @@
 package pe.edu.pucp.areasverdes.mod01.datos;
 
 import java.util.Map;
+import java.util.Optional;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -43,14 +44,23 @@ public class AparienciaRepository {
                 .orElse(null);
     }
 
-    public void guardar(long usuarioId, Apariencia apariencia) {
+    /**
+     * Guarda tema y acento. El diseño nuevo solo se toca si {@code disenoNuevo} no es {@code null}
+     * (el campo vino en la petición): vacío lo deja «sin elegir» y un valor lo fija. Si el campo
+     * faltó, se conserva lo guardado, para que un cliente anterior no pise la elección.
+     */
+    public void guardar(long usuarioId, String tema, String acento, Optional<Boolean> disenoNuevo) {
         jdbc.update(
                 "UPDATE core_usuario SET apariencia_tema = :tema, apariencia_acento = :acento,"
-                        + " apariencia_diseno_nuevo = :disenoNuevo WHERE id = :id",
+                        + " apariencia_diseno_nuevo = CASE WHEN :tocar THEN CAST(:disenoNuevo AS"
+                        + " boolean) ELSE apariencia_diseno_nuevo END WHERE id = :id",
                 new MapSqlParameterSource()
                         .addValue("id", usuarioId)
-                        .addValue("tema", apariencia.tema())
-                        .addValue("acento", apariencia.acento())
-                        .addValue("disenoNuevo", apariencia.disenoNuevo()));
+                        .addValue("tema", tema)
+                        .addValue("acento", acento)
+                        .addValue("tocar", disenoNuevo != null)
+                        .addValue(
+                                "disenoNuevo",
+                                disenoNuevo == null ? null : disenoNuevo.orElse(null)));
     }
 }

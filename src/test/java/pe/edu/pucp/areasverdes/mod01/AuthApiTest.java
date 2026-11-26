@@ -1,5 +1,6 @@
 package pe.edu.pucp.areasverdes.mod01;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -8,6 +9,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import jakarta.servlet.http.Cookie;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -235,41 +237,71 @@ class AuthApiTest extends ApiCore {
                 .andExpect(jsonPath("$.apariencia").isEmpty());
     }
 
+    private void guardarApariencia(Cookie sesion, String cuerpo) throws Exception {
+        http.perform(escribir(put("/api/v1/core/auth/apariencia/"), sesion, cuerpo))
+                .andExpect(status().isOk());
+    }
+
     @Test
-    void elTemaAmarillentoYElDisenoNuevoTienenTresValores() throws Exception {
+    void elTemaAmarillentoSeAceptaYUnTemaDesconocidoDa400() throws Exception {
         var sesion = sesion("jefe");
         String url = "/api/v1/core/auth/apariencia/";
-        // Cliente actual: sin diseno_nuevo, sigue funcionando y queda sin elegir.
         http.perform(
                         escribir(
                                 put(url),
                                 sesion,
                                 "{\"tema\": \"amarillento\", \"acento\": \"azul\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.tema").value("amarillento"));
-        http.perform(get("/api/v1/core/auth/sesion/").cookie(sesion))
-                .andExpect(jsonPath("$.apariencia.tema").value("amarillento"))
-                .andExpect(jsonPath("$.apariencia.diseno_nuevo").doesNotExist());
+                .andExpect(jsonPath("$.tema").value("amarillento"))
+                .andExpect(jsonPath("$.diseno_nuevo").value(nullValue()));
+        http.perform(escribir(put(url), sesion, "{\"tema\": \"fucsia\", \"acento\": \"azul\"}"))
+                .andExpect(status().isBadRequest());
+    }
 
+    @Test
+    void elDisenoNuevoAdmiteTrueFalseYNullExplicito() throws Exception {
+        var sesion = sesion("jefe");
         for (String valor : new String[] {"true", "false", "null"}) {
-            http.perform(
-                            escribir(
-                                    put(url),
-                                    sesion,
-                                    "{\"tema\": \"amarillento\", \"acento\": \"azul\","
-                                            + " \"diseno_nuevo\": "
-                                            + valor
-                                            + "}"))
-                    .andExpect(status().isOk());
+            guardarApariencia(
+                    sesion,
+                    "{\"tema\": \"claro\", \"acento\": \"azul\", \"diseno_nuevo\": " + valor + "}");
             var lectura = jsonPath("$.apariencia.diseno_nuevo");
             http.perform(get("/api/v1/core/auth/sesion/").cookie(sesion))
                     .andExpect(
                             "null".equals(valor)
-                                    ? lectura.doesNotExist()
+                                    ? lectura.value(nullValue())
                                     : lectura.value(Boolean.parseBoolean(valor)));
         }
-        http.perform(escribir(put(url), sesion, "{\"tema\": \"fucsia\", \"acento\": \"azul\"}"))
+    }
+
+    @Test
+    void unDisenoNuevoQueNoEsBooleanoDa400() throws Exception {
+        http.perform(
+                        escribir(
+                                put("/api/v1/core/auth/apariencia/"),
+                                sesion("jefe"),
+                                "{\"tema\": \"claro\", \"acento\": \"azul\","
+                                        + " \"diseno_nuevo\": \"si\"}"))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void unPutSinDisenoNuevoConservaLoGuardado() throws Exception {
+        var sesion = sesion("jefe");
+        guardarApariencia(
+                sesion, "{\"tema\": \"claro\", \"acento\": \"azul\", \"diseno_nuevo\": false}");
+        // Cliente anterior: solo tema y acento. La respuesta y la sesión siguen diciendo false.
+        http.perform(
+                        escribir(
+                                put("/api/v1/core/auth/apariencia/"),
+                                sesion,
+                                "{\"tema\": \"oscuro\", \"acento\": \"verde\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tema").value("oscuro"))
+                .andExpect(jsonPath("$.diseno_nuevo").value(false));
+        http.perform(get("/api/v1/core/auth/sesion/").cookie(sesion))
+                .andExpect(jsonPath("$.apariencia.tema").value("oscuro"))
+                .andExpect(jsonPath("$.apariencia.diseno_nuevo").value(false));
     }
 
     @Test
